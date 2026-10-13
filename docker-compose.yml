@@ -1,0 +1,21 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: altertrack-postgres
+    restart: always
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-altertrack}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-altertrack_secret_dev}
+      POSTGRES_DB: ${POSTGRES_DB:-altertrack_db}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-altertrack} -d ${POSTGRES_DB:-altertrack_db}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data:

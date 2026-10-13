@@ -1,0 +1,49 @@
+// AlterTrack - Prisma Schema
+// Documentation: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Status {
+  TO_SEND            // À envoyer
+  WAITING_FOR_REPLY  // En attente de réponse
+  TO_FOLLOW_UP       // À relancer
+  TO_CALL            // À appeler
+  REPLY_RECEIVED     // Réponse reçue
+  REFUSED            // Refusé
+  ACCEPTED           // Accepté
+}
+
+model Company {
+  id              String    @id @default(uuid())
+  name            String
+  email           String
+  phone           String?
+  notes           String?
+  status          Status    @default(TO_SEND)
+  firstMailSentAt DateTime?
+  followUpReadyAt DateTime?
+  followUpSentAt  DateTime?
+  lastMailId      String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([status])
+  @@index([email])
+}
+
+model AppConfig {
+  id             String   @id @default(uuid())
+  template       String
+  cvFilePath     String?
+  cvOriginalName String?
+  expoPushToken  String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}

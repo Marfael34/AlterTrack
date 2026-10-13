@@ -1,0 +1,28 @@
+{
+  "name": "altertrack",
+  "version": "1.0.0",
+  "description": "Application Mobile & Serveur d'Automatisation de Candidatures d'Alternance",
+  "private": true,
+  "workspaces": [
+    "apps/*"
+  ],
+  "scripts": {
+    "api:start": "npm --prefix apps/api run start",
+    "api:dev": "npm --prefix apps/api run start:dev",
+    "api:build": "npm --prefix apps/api run build",
+    "api:test": "npm --prefix apps/api run test",
+    "api:lint": "npm --prefix apps/api run lint",
+    "docker:up": "docker compose up -d",
+    "docker:down": "docker compose down"
+  },
+  "keywords": [
+    "nest",
+    "react-native",
+    "expo",
+    "prisma",
+    "postgresql",
+    "automation"
+  ],
+  "author": "Rafael Martinez",
+  "license": "UNLICENSED"
+}
