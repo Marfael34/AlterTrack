@@ -234,6 +234,7 @@ export class CompaniesService {
         name: -1,
         email: -1,
         city: -1,
+        postalCode: -1,
         phone: -1,
         notes: -1,
         status: -1,
@@ -254,6 +255,7 @@ export class CompaniesService {
           name: -1,
           email: -1,
           city: -1,
+          postalCode: -1,
           phone: -1,
           notes: -1,
           status: -1,
@@ -280,7 +282,9 @@ export class CompaniesService {
               norm.includes('organisation') ||
               norm.includes('groupe') ||
               norm.includes('compagnie') ||
-              norm.includes('agence'))
+              norm.includes('agence') ||
+              norm.includes('etablissement') ||
+              norm.includes('client'))
           ) {
             tempMap.name = colIdx;
             score += 10;
@@ -298,16 +302,35 @@ export class CompaniesService {
           } else if (
             tempMap.city === -1 &&
             (norm === 'ville' ||
+              norm === 'villes' ||
               norm === 'city' ||
+              norm === 'cities' ||
               norm.includes('commune') ||
+              norm.includes('localis') ||
               norm.includes('lieu') ||
-              norm.includes('localisation') ||
               norm.includes('secteur') ||
-              norm.includes('adresse physique') ||
-              norm.includes('cp / ville'))
+              norm.includes('bassin') ||
+              norm.includes('site') ||
+              norm.includes('region') ||
+              norm.includes('departement') ||
+              norm.includes('dep') ||
+              norm.includes('adresse') ||
+              norm.includes('cp / ville') ||
+              norm.includes('cp/ville') ||
+              norm.includes('ville/cp') ||
+              norm.includes('ville / cp'))
           ) {
             tempMap.city = colIdx;
-            score += 5;
+            score += 10;
+          } else if (
+            tempMap.postalCode === -1 &&
+            (norm === 'cp' ||
+              norm.includes('code postal') ||
+              norm.includes('codepostal') ||
+              norm.includes('postal'))
+          ) {
+            tempMap.postalCode = colIdx;
+            score += 6;
           } else if (
             tempMap.phone === -1 &&
             (norm.includes('tel') ||
@@ -315,7 +338,8 @@ export class CompaniesService {
               norm.includes('mobile') ||
               norm.includes('portable') ||
               norm.includes('fixe') ||
-              norm.includes('standard'))
+              norm.includes('standard') ||
+              norm.includes('contact tel'))
           ) {
             tempMap.phone = colIdx;
             score += 5;
@@ -336,14 +360,8 @@ export class CompaniesService {
             (norm.includes('note') ||
               norm.includes('comm') ||
               norm.includes('remarqu') ||
-              norm.includes('poste') ||
               norm.includes('desc') ||
-              norm.includes('offre') ||
-              norm.includes('lien') ||
-              norm.includes('url') ||
-              norm.includes('metier') ||
-              norm.includes('ville') ||
-              norm.includes('lieu') ||
+              norm.includes('detail') ||
               norm.includes('info'))
           ) {
             tempMap.notes = colIdx;
@@ -379,13 +397,13 @@ export class CompaniesService {
       const dataStart = bestHeaderIdx !== -1 ? bestHeaderIdx + 1 : 0;
       this.logger.log(
         `Feuille "${sheetName}" : Ligne d'en-tête retenue = ${bestHeaderIdx} (score: ${bestScore}), colonnes: ` +
-          `nom=${bestColMap.name}, email=${bestColMap.email}, tel=${bestColMap.phone}, notes=${bestColMap.notes}, statut=${bestColMap.status}`,
+          `nom=${bestColMap.name}, email=${bestColMap.email}, ville=${bestColMap.city}, cp=${bestColMap.postalCode}, tel=${bestColMap.phone}, notes=${bestColMap.notes}, statut=${bestColMap.status}`,
       );
 
       // Si le nom ou l'email n'a pas été détecté dans l'en-tête, heuristique par contenu
       if (bestColMap.name === -1) {
         for (let c = 0; c < 10; c++) {
-          if (c !== bestColMap.email && c !== bestColMap.phone) {
+          if (c !== bestColMap.email && c !== bestColMap.phone && c !== bestColMap.city) {
             bestColMap.name = c;
             break;
           }
@@ -412,6 +430,38 @@ export class CompaniesService {
         }
       }
 
+      // Heuristique pour la ville si non détectée par l'en-tête
+      if (bestColMap.city === -1) {
+        const FRENCH_ZIP_REGEX = /\b(0[1-9]|[1-8]\d|9[0-8])\d{3}\b/;
+        const KNOWN_CITIES_REGEX =
+          /\b(paris|lyon|marseille|toulouse|bordeaux|nantes|lille|montpellier|perpignan|beziers|béziers|rennes|strasbourg|nice|nimes|nîmes|grenoble|angers|dijon|toulon|reims|brest|le mans|aix|clermont|tours|amiens|limoges|annecy|metz|besancon|besançon|orleans|orléans|mulhouse|caen|rouen|distanciel|teletravail)\b/i;
+
+        for (
+          let i = dataStart;
+          i < Math.min(nonEmptyRows.length, dataStart + 15);
+          i++
+        ) {
+          const row = nonEmptyRows[i];
+          if (!Array.isArray(row)) continue;
+          row.forEach((cell, colIdx) => {
+            if (bestColMap.city !== -1) return;
+            if (
+              colIdx !== bestColMap.name &&
+              colIdx !== bestColMap.email &&
+              colIdx !== bestColMap.phone
+            ) {
+              const strVal = String(cell ?? '').trim();
+              if (
+                FRENCH_ZIP_REGEX.test(strVal) ||
+                KNOWN_CITIES_REGEX.test(strVal)
+              ) {
+                bestColMap.city = colIdx;
+              }
+            }
+          });
+        }
+      }
+
       // 2. Extraction et validation des lignes de données
       for (let i = dataStart; i < nonEmptyRows.length; i++) {
         const row = nonEmptyRows[i];
@@ -428,22 +478,112 @@ export class CompaniesService {
             ? String(row[bestColMap.name] ?? '').trim()
             : '';
         let rawEmail = '';
-        const rawCity =
+        let rawCity =
           bestColMap.city !== -1
             ? String(row[bestColMap.city] ?? '').trim()
+            : '';
+        const rawCp =
+          bestColMap.postalCode !== -1
+            ? String(row[bestColMap.postalCode] ?? '').trim()
             : '';
         const rawPhone =
           bestColMap.phone !== -1
             ? String(row[bestColMap.phone] ?? '').trim()
             : '';
-        let rawNotes =
-          bestColMap.notes !== -1
-            ? String(row[bestColMap.notes] ?? '').trim()
-            : '';
         const rawStatus =
           bestColMap.status !== -1
             ? String(row[bestColMap.status] ?? '').trim()
             : '';
+
+        // Si la ville et le code postal sont dans 2 colonnes séparées, les combiner
+        if (rawCp && rawCity && !rawCity.includes(rawCp)) {
+          rawCity = `${rawCp} ${rawCity}`.trim();
+        } else if (rawCp && !rawCity) {
+          rawCity = rawCp;
+        }
+
+        // Si la ville n'a pas été trouvée, ou s'il n'y a que le code postal numérique :
+        if (!rawCity || /^\d{4,5}$/.test(rawCity)) {
+          for (let colIdx = 0; colIdx < row.length; colIdx++) {
+            if (
+              colIdx === bestColMap.name ||
+              colIdx === bestColMap.email ||
+              colIdx === bestColMap.phone
+            ) {
+              continue;
+            }
+            const cellStr = String(row[colIdx] ?? '').trim();
+            if (!cellStr) continue;
+
+            const colHeader =
+              headerRow && headerRow[colIdx]
+                ? normalizeStr(headerRow[colIdx])
+                : '';
+            const isLocationHeader =
+              colHeader.includes('commune') ||
+              colHeader.includes('ville') ||
+              colHeader.includes('city') ||
+              colHeader.includes('localis') ||
+              colHeader.includes('lieu') ||
+              colHeader.includes('secteur') ||
+              colHeader.includes('adresse');
+
+            if (isLocationHeader && cellStr && cellStr !== rawCity) {
+              if (rawCity && /^\d{4,5}$/.test(rawCity)) {
+                rawCity = `${rawCity} ${cellStr}`.trim();
+              } else {
+                rawCity = cellStr;
+              }
+              break;
+            }
+          }
+        }
+
+        // Récupérer TOUTES les autres données du tableur dans les notes pour ne RIEN perdre
+        const extraDataList: string[] = [];
+        row.forEach((cellVal, colIdx) => {
+          if (
+            colIdx === bestColMap.name ||
+            colIdx === bestColMap.email ||
+            colIdx === bestColMap.phone ||
+            colIdx === bestColMap.status
+          ) {
+            return;
+          }
+
+          const valStr = String(cellVal ?? '').trim();
+          if (!valStr) return;
+
+          // Si la valeur est déjà la ville ou le CP extrait, ne pas la répéter dans les notes
+          if (rawCity && (rawCity === valStr || rawCity.includes(valStr))) {
+            const colHeader =
+              headerRow && headerRow[colIdx]
+                ? normalizeStr(headerRow[colIdx])
+                : '';
+            if (
+              colHeader.includes('ville') ||
+              colHeader.includes('commune') ||
+              colHeader.includes('cp') ||
+              colHeader.includes('postal') ||
+              colHeader.includes('localis')
+            ) {
+              return;
+            }
+          }
+
+          const colHeaderName =
+            headerRow && headerRow[colIdx]
+              ? String(headerRow[colIdx] ?? '').trim()
+              : '';
+
+          if (colHeaderName) {
+            extraDataList.push(`${colHeaderName}: ${valStr}`);
+          } else {
+            extraDataList.push(valStr);
+          }
+        });
+
+        let rawNotes = extraDataList.join('\n');
 
         // Recherche de l'e-mail dans la colonne désignée (texte ou lien hypertexte Excel)
         if (bestColMap.email !== -1) {
@@ -501,7 +641,8 @@ export class CompaniesService {
               !EMAIL_EXTRACT_REGEX.test(s) &&
               !/^[0-9+\s().-]{8,}$/.test(s) &&
               idx !== bestColMap.email &&
-              idx !== bestColMap.phone
+              idx !== bestColMap.phone &&
+              idx !== bestColMap.city
             );
           });
           if (nameCell) {
@@ -509,13 +650,9 @@ export class CompaniesService {
           }
         }
 
-        // Si la ligne n'a toujours pas de nom d'entreprise valide, on la signale
+        // Si le nom est toujours vide, mettre une valeur par défaut au lieu de rejeter la ligne
         if (!rawName) {
-          skippedCount++;
-          errors.push(
-            `Feuille "${sheetName}" Ligne ${rowNum} : Nom de l'entreprise manquant`,
-          );
-          continue;
+          rawName = `Entreprise ${rowNum}`;
         }
 
         // Si aucune adresse e-mail valide n'a été extraite :
@@ -534,38 +671,17 @@ export class CompaniesService {
             headerColName.includes('courriel') ||
             headerColName.includes('mel');
 
-          const isPlaceholderOrIgnored =
-            !colVal ||
-            colVal === '-' ||
-            colVal === '/' ||
-            colVal.toLowerCase() === 'n/a' ||
-            colVal.toLowerCase() === 'na' ||
-            colVal.toLowerCase() === 'aucun' ||
-            colVal.toLowerCase() === 'inconnu' ||
-            colVal.toLowerCase().includes("pas d'email") ||
-            colVal.toLowerCase().includes('a chercher');
-
-          // Si la colonne s'appelle Contact / Interlocuteur (non-mail), conserver la valeur dans les notes
           if (colVal && !isExplicitEmailCol) {
             rawNotes = rawNotes
-              ? `${rawNotes} [Contact: ${colVal}]`
+              ? `${rawNotes}\n[Contact: ${colVal}]`
               : `[Contact: ${colVal}]`;
+          } else if (colVal && isExplicitEmailCol) {
+            rawNotes = rawNotes
+              ? `${rawNotes}\n[Email brut: ${colVal}]`
+              : `[Email brut: ${colVal}]`;
           }
 
-          // Si la colonne était explicitement nommée "Email/Mail" et contenait une valeur invalide
-          if (
-            bestColMap.email !== -1 &&
-            isExplicitEmailCol &&
-            !isPlaceholderOrIgnored
-          ) {
-            skippedCount++;
-            errors.push(
-              `Feuille "${sheetName}" Ligne ${rowNum} (${rawName}) : Adresse e-mail invalide (${colVal})`,
-            );
-            continue;
-          }
-
-          // Attribution d'une adresse de secours pour ne PAS perdre les entreprises du tableur
+          // Attribution d'une adresse de secours unique pour ne jamais rejeter la ligne
           const slug =
             rawName
               .toLowerCase()
@@ -573,34 +689,48 @@ export class CompaniesService {
               .replace(/[\u0300-\u036f]/g, '')
               .replace(/[^a-z0-9]/g, '')
               .slice(0, 15) || 'entreprise';
-          rawEmail = `${slug}.${totalDetectedRows}@sans-email.altertrack`;
+          rawEmail = `${slug}.${rowNum}@sans-email.altertrack`;
           rawNotes = rawNotes
-            ? `${rawNotes} [Email à renseigner]`
+            ? `${rawNotes}\n[Email à renseigner]`
             : '[Email à renseigner]';
         }
 
-        // Dédoublonnage dans le lot d'importation
-        if (seenEmailsInBatch.has(rawEmail)) {
-          skippedCount++;
-          errors.push(
-            `Feuille "${sheetName}" Ligne ${rowNum} (${rawName}) : Doublon dans le fichier (${rawEmail})`,
-          );
+        // Prise en charge intégrale des doublons :
+        // Si une fiche existe déjà avec exactement le même nom ET le même email dans la base, la mettre à jour
+        const rowKey = `${rawName}:::${rawEmail}`;
+        let isUpdated = false;
+
+        if (!seenEmailsInBatch.has(rowKey)) {
+          const existing = await this.prisma.company.findFirst({
+            where: { name: rawName, email: rawEmail },
+          });
+
+          if (existing) {
+            const updated = await this.prisma.company.update({
+              where: { id: existing.id },
+              data: {
+                city: rawCity || existing.city || null,
+                phone: rawPhone || existing.phone || null,
+                notes: rawNotes || existing.notes || null,
+              },
+            });
+            imported.push({
+              id: updated.id,
+              name: updated.name,
+              email: updated.email,
+              city: updated.city,
+              status: updated.status,
+            });
+            seenEmailsInBatch.add(rowKey);
+            isUpdated = true;
+          }
+        }
+
+        if (isUpdated) {
           continue;
         }
-        seenEmailsInBatch.add(rawEmail);
 
-        // Dédoublonnage avec la base existante
-        const existing = await this.prisma.company.findFirst({
-          where: { email: rawEmail },
-        });
-
-        if (existing) {
-          skippedCount++;
-          errors.push(
-            `Feuille "${sheetName}" Ligne ${rowNum} (${rawName}) : ${rawEmail} est déjà enregistrée dans AlterTrack`,
-          );
-          continue;
-        }
+        seenEmailsInBatch.add(rowKey);
 
         // Résolution intelligente du statut
         let parsedStatus: Status = Status.TO_SEND;

@@ -89,9 +89,28 @@ export const CompanyCard: React.FC<CompanyCardProps> = ({
           </View>
 
           <View style={styles.contactRow}>
-            <Ionicons name="mail-outline" size={14} color={Colors.textSecondary} />
-            <Text style={styles.contactText} numberOfLines={1}>
-              {company.email}
+            <Ionicons
+              name="mail-outline"
+              size={14}
+              color={
+                !company.email || company.email.endsWith('@sans-email.altertrack')
+                  ? Colors.textMuted
+                  : Colors.textSecondary
+              }
+            />
+            <Text
+              style={[
+                styles.contactText,
+                (!company.email || company.email.endsWith('@sans-email.altertrack')) && {
+                  color: Colors.textMuted,
+                  fontStyle: 'italic',
+                },
+              ]}
+              numberOfLines={1}
+            >
+              {!company.email || company.email.endsWith('@sans-email.altertrack')
+                ? 'Aucun email renseigné'
+                : company.email}
             </Text>
           </View>
 
@@ -113,7 +132,7 @@ export const CompanyCard: React.FC<CompanyCardProps> = ({
           )}
 
           {company.notes && (
-            <Text style={styles.notesPreview} numberOfLines={2}>
+            <Text style={styles.notesPreview} numberOfLines={3}>
               {company.notes}
             </Text>
           )}

@@ -164,7 +164,7 @@ describe('CompaniesService', () => {
       expect(result.imported[1].status).toBe(Status.WAITING_FOR_REPLY);
     });
 
-    it('should skip rows with invalid email or duplicate email', async () => {
+    it('should support duplicate emails and fallback emails without skipping', async () => {
       const csvContent =
         'Nom,Email\nValidCorp,valid@corp.fr\nBadEmailCorp,not-an-email\nValidCorpDup,valid@corp.fr';
       const buffer = Buffer.from(csvContent, 'utf-8');
@@ -176,9 +176,42 @@ describe('CompaniesService', () => {
 
       const result = await service.importFromSpreadsheet(buffer);
 
-      expect(result.importedCount).toBe(1);
-      expect(result.skippedCount).toBe(2);
-      expect(result.errors.length).toBe(2);
+      expect(result.importedCount).toBe(3);
+      expect(result.skippedCount).toBe(0);
+      expect(result.errors.length).toBe(0);
+    });
+
+    it('should assign null or defaults for empty cells and import without error', async () => {
+      const csvContent =
+        'Nom,Email,Ville,Telephone,Notes\n' +
+        ',test@emptyname.com,,,\n' + // Pas de nom, ville/tel/notes vides
+        'SoloCompany,,,,\n'; // Juste un nom, pas d'email, ville/tel/notes vides
+      const buffer = Buffer.from(csvContent, 'utf-8');
+
+      const createdEntries: any[] = [];
+      prisma.company.findFirst.mockResolvedValue(null);
+      prisma.company.create.mockImplementation(({ data }: any) => {
+        createdEntries.push(data);
+        return Promise.resolve({ id: 'id-test', ...data });
+      });
+
+      const result = await service.importFromSpreadsheet(buffer);
+
+      expect(result.importedCount).toBe(2);
+      expect(result.skippedCount).toBe(0);
+      expect(result.errors.length).toBe(0);
+
+      // Première ligne : nom par défaut "Entreprise 2", email valide, champs vides à null
+      expect(createdEntries[0].name).toBe('Entreprise 2');
+      expect(createdEntries[0].email).toBe('test@emptyname.com');
+      expect(createdEntries[0].city).toBeNull();
+      expect(createdEntries[0].phone).toBeNull();
+
+      // Deuxième ligne : nom préservé, email fallback par défaut, champs vides à null
+      expect(createdEntries[1].name).toBe('SoloCompany');
+      expect(createdEntries[1].email).toMatch(/solocompany\.3@sans-email\.altertrack/);
+      expect(createdEntries[1].city).toBeNull();
+      expect(createdEntries[1].phone).toBeNull();
     });
   });
 });

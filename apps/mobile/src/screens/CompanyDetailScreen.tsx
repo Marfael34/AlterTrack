@@ -40,7 +40,11 @@ export const CompanyDetailScreen: React.FC<CompanyDetailScreenProps> = ({
   const [company, setCompany] = useState<Company>(initialCompany);
   const [name, setName] = useState(initialCompany.name);
   const [city, setCity] = useState(initialCompany.city || '');
-  const [email, setEmail] = useState(initialCompany.email);
+  const [email, setEmail] = useState(
+    initialCompany.email?.endsWith('@sans-email.altertrack')
+      ? ''
+      : initialCompany.email || '',
+  );
   const [phone, setPhone] = useState(initialCompany.phone || '');
   const [notes, setNotes] = useState(initialCompany.notes || '');
   const [status, setStatus] = useState<Status>(initialCompany.status);
@@ -74,17 +78,18 @@ export const CompanyDetailScreen: React.FC<CompanyDetailScreenProps> = ({
       Alert.alert('Validation', "Le nom de l'entreprise est obligatoire");
       return;
     }
-    if (!email.trim()) {
-      Alert.alert('Validation', "L'adresse email est obligatoire");
-      return;
-    }
+
+    const emailToSave =
+      email.trim() ||
+      company.email ||
+      `contact.${company.id.slice(0, 8)}@sans-email.altertrack`;
 
     setSaving(true);
     try {
       const updated = await ApiService.updateCompany(company.id, {
         name: name.trim(),
         city: city.trim() || undefined,
-        email: email.trim(),
+        email: emailToSave,
         phone: phone.trim() || undefined,
         notes: notes.trim() || undefined,
       });
