@@ -22,6 +22,14 @@ export class QueryCompanyDto {
   status?: Status;
 
   @IsOptional()
+  @IsString()
+  sortBy?: string;
+
+  @IsOptional()
+  @IsString()
+  sortOrder?: 'asc' | 'desc';
+
+  @IsOptional()
   @Type(() => Number)
   @IsInt()
   @Min(1)

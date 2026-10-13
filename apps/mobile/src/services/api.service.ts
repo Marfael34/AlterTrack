@@ -54,6 +54,8 @@ export const ApiService = {
     search?: string;
     status?: Status;
     city?: string;
+    sortBy?: string;
+    sortOrder?: 'asc' | 'desc';
   }): Promise<{
     items: Company[];
     total: number;
@@ -62,6 +64,8 @@ export const ApiService = {
     if (query?.search) params.append('search', query.search);
     if (query?.status) params.append('status', query.status);
     if (query?.city) params.append('city', query.city);
+    if (query?.sortBy) params.append('sortBy', query.sortBy);
+    if (query?.sortOrder) params.append('sortOrder', query.sortOrder);
 
     const queryString = params.toString() ? `?${params.toString()}` : '';
     return this.request(`/companies${queryString}`);

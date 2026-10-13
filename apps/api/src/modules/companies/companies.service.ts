@@ -47,12 +47,19 @@ export class CompaniesService {
       ];
     }
 
+    const allowedSortFields = ['updatedAt', 'name', 'city', 'createdAt', 'status'];
+    const sortField =
+      query.sortBy && allowedSortFields.includes(query.sortBy)
+        ? query.sortBy
+        : 'updatedAt';
+    const sortDir = query.sortOrder === 'asc' ? 'asc' : 'desc';
+
     const [items, total] = await Promise.all([
       this.prisma.company.findMany({
         where,
         take: query.limit,
         skip: query.offset,
-        orderBy: { updatedAt: 'desc' },
+        orderBy: { [sortField]: sortDir },
       }),
       this.prisma.company.count({ where }),
     ]);

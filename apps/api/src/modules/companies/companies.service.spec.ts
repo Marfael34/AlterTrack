@@ -102,6 +102,15 @@ describe('CompaniesService', () => {
         }),
       );
     });
+
+    it('should sort by name ascending when requested', async () => {
+      await service.findAll({ sortBy: 'name', sortOrder: 'asc', limit: 50, offset: 0 });
+      expect(prisma.company.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          orderBy: { name: 'asc' },
+        }),
+      );
+    });
   });
 
   describe('getCities', () => {

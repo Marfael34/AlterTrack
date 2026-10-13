@@ -7,6 +7,7 @@ import {
   FlatList,
   Image,
   RefreshControl,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -14,11 +15,11 @@ import {
   View,
 } from 'react-native';
 import { CompanyCard } from '../components/CompanyCard';
-import { FilterTabs } from '../components/FilterTabs';
-import { CityFilterBar, CityItem } from '../components/CityFilterBar';
+import { FiltersModal } from '../components/FiltersModal';
+import { CityItem } from '../components/CityFilterBar';
 import { Colors } from '../constants/colors';
 import { ApiService } from '../services/api.service';
-import { Company, CompanyStats, Status } from '../types/company';
+import { Company, CompanyStats, STATUS_LABELS, Status } from '../types/company';
 
 interface HomeScreenProps {
   onSelectCompany: (company: Company) => void;
@@ -37,6 +38,9 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   const [totalCount, setTotalCount] = useState<number>(0);
   const [selectedStatus, setSelectedStatus] = useState<Status | 'ALL'>('ALL');
   const [selectedCity, setSelectedCity] = useState<string | 'ALL'>('ALL');
+  const [sortBy, setSortBy] = useState<'updatedAt' | 'name' | 'city'>('updatedAt');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+  const [isFiltersModalOpen, setIsFiltersModalOpen] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [loading, setLoading] = useState<boolean>(true);
   const [refreshing, setRefreshing] = useState<boolean>(false);
@@ -46,6 +50,11 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [deletingBatch, setDeletingBatch] = useState<boolean>(false);
 
+  const activeFiltersCount =
+    (selectedStatus !== 'ALL' ? 1 : 0) +
+    (selectedCity !== 'ALL' ? 1 : 0) +
+    (sortBy !== 'updatedAt' ? 1 : 0);
+
   const loadData = useCallback(async () => {
     try {
       const [companiesRes, statsRes, citiesRes] = await Promise.all([
@@ -53,6 +62,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           status: selectedStatus === 'ALL' ? undefined : selectedStatus,
           city: selectedCity === 'ALL' ? undefined : selectedCity,
           search: searchQuery.trim() || undefined,
+          sortBy,
+          sortOrder,
         }),
         ApiService.getCompanyStats(),
         ApiService.getCities(),
@@ -68,7 +79,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
       setLoading(false);
       setRefreshing(false);
     }
-  }, [selectedStatus, selectedCity, searchQuery]);
+  }, [selectedStatus, selectedCity, searchQuery, sortBy, sortOrder]);
 
   useEffect(() => {
     void loadData();
@@ -327,37 +338,138 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         </View>
       </View>
 
-      {/* Barre de recherche */}
-      <View style={styles.searchContainer}>
-        <Ionicons name="search-outline" size={18} color={Colors.textSecondary} />
-        <TextInput
-          style={styles.searchInput}
-          placeholder="Rechercher une entreprise, une ville..."
-          placeholderTextColor={Colors.textMuted}
-          value={searchQuery}
-          onChangeText={setSearchQuery}
-          clearButtonMode="while-editing"
-        />
-        {searchQuery.length > 0 && (
-          <TouchableOpacity onPress={() => setSearchQuery('')}>
-            <Ionicons name="close-circle" size={18} color={Colors.textMuted} />
-          </TouchableOpacity>
-        )}
+      {/* Barre de recherche avec bouton Filtres */}
+      <View style={styles.searchRow}>
+        <View style={styles.searchContainer}>
+          <Ionicons name="search-outline" size={18} color={Colors.textSecondary} />
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Rechercher une entreprise, une ville..."
+            placeholderTextColor={Colors.textMuted}
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            clearButtonMode="while-editing"
+          />
+          {searchQuery.length > 0 && (
+            <TouchableOpacity onPress={() => setSearchQuery('')}>
+              <Ionicons name="close-circle" size={18} color={Colors.textMuted} />
+            </TouchableOpacity>
+          )}
+        </View>
+
+        <TouchableOpacity
+          style={[
+            styles.filterButton,
+            activeFiltersCount > 0 && styles.filterButtonActive,
+          ]}
+          onPress={() => setIsFiltersModalOpen(true)}
+          activeOpacity={0.7}
+        >
+          <Ionicons
+            name="options-outline"
+            size={20}
+            color={activeFiltersCount > 0 ? '#FFFFFF' : Colors.text}
+          />
+          {activeFiltersCount > 0 && (
+            <View style={styles.filterBadge}>
+              <Text style={styles.filterBadgeText}>{activeFiltersCount}</Text>
+            </View>
+          )}
+        </TouchableOpacity>
       </View>
 
-      {/* Onglets de filtrage par statut */}
-      <FilterTabs
-        selectedStatus={selectedStatus}
-        onSelectStatus={setSelectedStatus}
-        stats={stats}
-        totalCount={totalCount}
-      />
+      {/* Puces de filtres actifs avec suppression rapide */}
+      {activeFiltersCount > 0 && (
+        <View style={styles.activeFiltersRow}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.activeFiltersScroll}
+          >
+            {selectedStatus !== 'ALL' && (
+              <TouchableOpacity
+                style={styles.activeFilterChip}
+                onPress={() => setSelectedStatus('ALL')}
+                activeOpacity={0.7}
+              >
+                <View
+                  style={[
+                    styles.activeFilterDot,
+                    { backgroundColor: Colors.status[selectedStatus] },
+                  ]}
+                />
+                <Text style={styles.activeFilterText}>
+                  {STATUS_LABELS[selectedStatus]}
+                </Text>
+                <Ionicons name="close" size={14} color={Colors.textSecondary} />
+              </TouchableOpacity>
+            )}
 
-      {/* Barre de filtrage par ville */}
-      <CityFilterBar
+            {selectedCity !== 'ALL' && (
+              <TouchableOpacity
+                style={[styles.activeFilterChip, styles.activeFilterChipCity]}
+                onPress={() => setSelectedCity('ALL')}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="location-sharp" size={12} color={Colors.accent} />
+                <Text style={[styles.activeFilterText, { color: Colors.accent }]}>
+                  {selectedCity}
+                </Text>
+                <Ionicons name="close" size={14} color={Colors.accent} />
+              </TouchableOpacity>
+            )}
+
+            {sortBy !== 'updatedAt' && (
+              <TouchableOpacity
+                style={[styles.activeFilterChip, styles.activeFilterChipSort]}
+                onPress={() => {
+                  setSortBy('updatedAt');
+                  setSortOrder('desc');
+                }}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="swap-vertical" size={12} color={Colors.brandGreen} />
+                <Text style={[styles.activeFilterText, { color: Colors.brandGreen }]}>
+                  Tri: {sortBy === 'name' ? 'Nom A-Z' : 'Ville A-Z'}
+                </Text>
+                <Ionicons name="close" size={14} color={Colors.brandGreen} />
+              </TouchableOpacity>
+            )}
+
+            <TouchableOpacity
+              style={styles.clearAllFiltersBtn}
+              onPress={() => {
+                setSelectedStatus('ALL');
+                setSelectedCity('ALL');
+                setSortBy('updatedAt');
+                setSortOrder('desc');
+              }}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.clearAllFiltersText}>Effacer tout</Text>
+            </TouchableOpacity>
+          </ScrollView>
+        </View>
+      )}
+
+      {/* Page / Modal dédiée regroupant tous les filtres */}
+      <FiltersModal
+        visible={isFiltersModalOpen}
+        onClose={() => setIsFiltersModalOpen(false)}
+        filters={{
+          status: selectedStatus,
+          city: selectedCity,
+          sortBy,
+          sortOrder,
+        }}
+        onApply={(newFilters) => {
+          setSelectedStatus(newFilters.status);
+          setSelectedCity(newFilters.city);
+          setSortBy(newFilters.sortBy);
+          setSortOrder(newFilters.sortOrder);
+        }}
+        stats={stats}
         cities={cities}
-        selectedCity={selectedCity}
-        onSelectCity={setSelectedCity}
         totalCount={totalCount}
       />
 
@@ -609,18 +721,106 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: Colors.border,
   },
+  searchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    marginTop: 8,
+    gap: 8,
+  },
   searchContainer: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: Colors.cardBackground,
-    marginHorizontal: 16,
-    marginTop: 8,
     paddingHorizontal: 12,
     paddingVertical: 10,
     borderRadius: 12,
     borderWidth: 1,
     borderColor: Colors.border,
     gap: 8,
+  },
+  filterButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: Colors.cardBackground,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: Colors.border,
+    position: 'relative',
+  },
+  filterButtonActive: {
+    backgroundColor: Colors.primary,
+    borderColor: Colors.primary,
+  },
+  filterBadge: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    backgroundColor: Colors.accent,
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1.5,
+    borderColor: Colors.background,
+  },
+  filterBadgeText: {
+    color: '#0B0F19',
+    fontSize: 10,
+    fontWeight: '800',
+  },
+  activeFiltersRow: {
+    marginTop: 8,
+  },
+  activeFiltersScroll: {
+    paddingHorizontal: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  activeFilterChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: `${Colors.primary}20`,
+    borderColor: Colors.primary,
+    borderWidth: 1,
+    paddingVertical: 5,
+    paddingHorizontal: 10,
+    borderRadius: 16,
+    gap: 6,
+  },
+  activeFilterChipCity: {
+    backgroundColor: `${Colors.accent}20`,
+    borderColor: Colors.accent,
+  },
+  activeFilterChipSort: {
+    backgroundColor: `${Colors.brandGreen}20`,
+    borderColor: Colors.brandGreen,
+  },
+  activeFilterDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 3.5,
+  },
+  activeFilterText: {
+    color: Colors.text,
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  clearAllFiltersBtn: {
+    paddingVertical: 5,
+    paddingHorizontal: 8,
+    borderRadius: 12,
+    backgroundColor: Colors.surface,
+  },
+  clearAllFiltersText: {
+    color: Colors.textMuted,
+    fontSize: 11,
+    fontWeight: '600',
   },
   searchInput: {
     flex: 1,
