@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   StyleSheet,
@@ -31,6 +31,14 @@ export const CompanyMapView: React.FC<CompanyMapViewProps> = ({
   const webViewRef = useRef<WebView>(null);
   const [selectedCompanyId, setSelectedCompanyId] = useState<string | null>(null);
   const [isMapReady, setIsMapReady] = useState<boolean>(false);
+
+  // Sécurité : masquer l'overlay de chargement après 2.5s maximum
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setIsMapReady(true);
+    }, 2500);
+    return () => clearTimeout(timer);
+  }, []);
 
   // Filtrer les entreprises qui ont des coordonnées GPS valides
   const geolocatedCompanies = useMemo(() => {
@@ -86,16 +94,16 @@ export const CompanyMapView: React.FC<CompanyMapViewProps> = ({
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <title>AlterTrack Map</title>
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    html, body, #map { width: 100%; height: 100%; background: #0F0E17; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+    html, body, #map { width: 100%; height: 100%; background: #0B0F19; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; overflow: hidden; }
     
     /* Style personnalisé des tuiles sombres */
-    .leaflet-container { background: #0F0E17; }
+    .leaflet-container { background: #0B0F19 !important; }
     .leaflet-bar { border: 1px solid rgba(255,255,255,0.15) !important; box-shadow: none !important; border-radius: 8px !important; overflow: hidden; }
-    .leaflet-bar a { background-color: #1A1A2E !important; color: #FFFFFE !important; border-bottom: 1px solid rgba(255,255,255,0.1) !important; }
-    .leaflet-bar a:hover { background-color: #252440 !important; }
+    .leaflet-bar a { background-color: #131B2E !important; color: #FFFFFF !important; border-bottom: 1px solid rgba(255,255,255,0.1) !important; }
+    .leaflet-bar a:hover { background-color: #1A233A !important; }
     
     /* Marqueurs personnalisés */
     .pin-home {
@@ -104,19 +112,19 @@ export const CompanyMapView: React.FC<CompanyMapViewProps> = ({
       justify-content: center;
       width: 38px;
       height: 38px;
-      background: #FF8906;
+      background: #00D2C4;
       border: 3px solid #FFFFFF;
       border-radius: 50%;
-      box-shadow: 0 4px 12px rgba(255, 137, 6, 0.6);
+      box-shadow: 0 4px 12px rgba(0, 210, 196, 0.6);
       color: #FFFFFF;
       font-size: 18px;
       animation: pulse 2s infinite;
     }
     
     @keyframes pulse {
-      0% { box-shadow: 0 0 0 0 rgba(255, 137, 6, 0.7); }
-      70% { box-shadow: 0 0 0 16px rgba(255, 137, 6, 0); }
-      100% { box-shadow: 0 0 0 0 rgba(255, 137, 6, 0); }
+      0% { box-shadow: 0 0 0 0 rgba(0, 210, 196, 0.7); }
+      70% { box-shadow: 0 0 0 16px rgba(0, 210, 196, 0); }
+      100% { box-shadow: 0 0 0 0 rgba(0, 210, 196, 0); }
     }
     
     .pin-company {
@@ -129,7 +137,7 @@ export const CompanyMapView: React.FC<CompanyMapViewProps> = ({
       border: 2px solid #FFFFFF;
       color: #FFFFFF;
       font-weight: bold;
-      font-size: 12px;
+      font-size: 13px;
       box-shadow: 0 3px 8px rgba(0,0,0,0.5);
       transition: transform 0.2s;
       cursor: pointer;
@@ -142,23 +150,23 @@ export const CompanyMapView: React.FC<CompanyMapViewProps> = ({
 
     /* Style Popups */
     .leaflet-popup-content-wrapper {
-      background: #1A1A2E !important;
-      color: #FFFFFE !important;
-      border: 1px solid #FF8906;
+      background: #131B2E !important;
+      color: #FFFFFF !important;
+      border: 1px solid #00D2C4;
       border-radius: 12px !important;
       padding: 4px;
       box-shadow: 0 6px 18px rgba(0,0,0,0.6) !important;
     }
-    .leaflet-popup-tip { background: #1A1A2E !important; }
-    .popup-title { font-size: 14px; font-weight: 700; color: #FFFFFE; margin-bottom: 2px; }
+    .leaflet-popup-tip { background: #131B2E !important; }
+    .popup-title { font-size: 14px; font-weight: 700; color: #FFFFFF; margin-bottom: 2px; }
     .popup-sub { font-size: 11px; color: #A7A9BE; margin-bottom: 6px; }
-    .popup-dist { font-size: 11px; font-weight: 700; color: #FF8906; display: inline-block; margin-bottom: 6px; }
+    .popup-dist { font-size: 11px; font-weight: 700; color: #00D2C4; display: inline-block; margin-bottom: 6px; }
     .popup-btn {
       display: block;
-      background: #E53170;
+      background: #0066FF;
       color: #FFFFFF;
       text-align: center;
-      padding: 5px 10px;
+      padding: 6px 10px;
       border-radius: 6px;
       font-size: 11px;
       font-weight: 700;
@@ -169,103 +177,147 @@ export const CompanyMapView: React.FC<CompanyMapViewProps> = ({
 </head>
 <body>
   <div id="map"></div>
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
   <script>
-    const data = ${mapDataJson};
-    
-    // Initialisation de la carte
-    const map = L.map('map', {
-      zoomControl: true,
-      attributionControl: false
-    });
-
-    // Tuiles CartoDB Dark Matter (haute lisibilité, sombre et élégant)
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
-      maxZoom: 19,
-      subdomains: 'abcd'
-    }).addTo(map);
-
-    const markersGroup = L.featureGroup().addTo(map);
-    const markerElements = {};
-
-    // 1. Ajouter le point de repère (Domicile / Adresse fixe)
-    if (data.refPoint) {
-      const homeIcon = L.divIcon({
-        className: 'custom-icon',
-        html: '<div class="pin-home">' + (data.refPoint.isGps ? '🎯' : '🏠') + '</div>',
-        iconSize: [38, 38],
-        iconAnchor: [19, 19],
-        popupAnchor: [0, -20]
-      });
-
-      const homeMarker = L.marker([data.refPoint.latitude, data.refPoint.longitude], {
-        icon: homeIcon,
-        zIndexOffset: 1000
-      }).addTo(markersGroup);
-
-      homeMarker.bindPopup(
-        '<div class="popup-title">' + (data.refPoint.isGps ? 'Position GPS actuelle' : 'Mon adresse fixe') + '</div>' +
-        '<div class="popup-sub">' + data.refPoint.label + '</div>'
-      );
-
-      // Cercles de rayon (ex: 15 km et 30 km)
-      L.circle([data.refPoint.latitude, data.refPoint.longitude], {
-        radius: 15000,
-        color: '#FF8906',
-        weight: 1,
-        fillColor: '#FF8906',
-        fillOpacity: 0.04,
-        dashArray: '5, 8'
-      }).addTo(map);
-
-      L.circle([data.refPoint.latitude, data.refPoint.longitude], {
-        radius: 30000,
-        color: '#E53170',
-        weight: 1,
-        fillColor: '#E53170',
-        fillOpacity: 0.02,
-        dashArray: '4, 10'
-      }).addTo(map);
-    }
-
-    // 2. Ajouter les entreprises
-    data.companies.forEach(function(comp) {
-      const icon = L.divIcon({
-        className: 'custom-icon',
-        html: '<div class="pin-company" id="pin-' + comp.id + '" style="background:' + comp.color + '">🏢</div>',
-        iconSize: [32, 32],
-        iconAnchor: [16, 16],
-        popupAnchor: [0, -18]
-      });
-
-      const marker = L.marker([comp.latitude, comp.longitude], { icon: icon }).addTo(markersGroup);
-      markerElements[comp.id] = marker;
-
-      let popupHtml = '<div class="popup-title">' + comp.name + '</div>';
-      if (comp.city || comp.address) {
-        popupHtml += '<div class="popup-sub">' + (comp.address ? comp.address + ' • ' : '') + comp.city + '</div>';
+    // Capturer les erreurs pour les remonter
+    window.onerror = function(msg, url, line, col) {
+      if (window.ReactNativeWebView) {
+        window.ReactNativeWebView.postMessage(JSON.stringify({
+          type: 'MAP_ERROR',
+          message: String(msg) + ' (' + line + ':' + col + ')'
+        }));
       }
-      if (comp.distanceText) {
-        popupHtml += '<div class="popup-dist">🧭 ' + comp.distanceText + '</div>';
+    };
+
+    var mapInstance = null;
+    var markersGroup = null;
+
+    function initMap() {
+      if (typeof L === 'undefined' || typeof L.map !== 'function') {
+        setTimeout(initMap, 80);
+        return;
       }
-      popupHtml += '<a class="popup-btn" href="javascript:void(0)" onclick="selectCompany(\\'' + comp.id + '\\')">Ouvrir la fiche</a>';
+      if (mapInstance) return;
 
-      marker.bindPopup(popupHtml);
+      try {
+        var data = ${mapDataJson};
 
-      marker.on('click', function() {
-        if (window.ReactNativeWebView) {
-          window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'SELECT_PIN', companyId: comp.id }));
+        mapInstance = L.map('map', {
+          zoomControl: true,
+          attributionControl: false
+        });
+
+        // Tuiles CartoDB Dark Matter adaptées à la charte AlterTrack
+        var darkLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+          maxZoom: 19,
+          subdomains: 'abcd',
+          attribution: '&copy; CARTO'
+        }).addTo(mapInstance);
+
+        // Fallback OpenStreetMap en cas de souci de chargement des tuiles
+        darkLayer.on('tileerror', function() {
+          if (!mapInstance._osmFallbackAdded) {
+            mapInstance._osmFallbackAdded = true;
+            L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+              maxZoom: 19
+            }).addTo(mapInstance);
+          }
+        });
+
+        markersGroup = L.featureGroup().addTo(mapInstance);
+
+        // 1. Ajouter le point de repère (Adresse fixe de référence)
+        if (data.refPoint) {
+          var homeIcon = L.divIcon({
+            className: 'custom-icon',
+            html: '<div class="pin-home">' + (data.refPoint.isGps ? '🎯' : '🏠') + '</div>',
+            iconSize: [38, 38],
+            iconAnchor: [19, 19],
+            popupAnchor: [0, -20]
+          });
+
+          var homeMarker = L.marker([data.refPoint.latitude, data.refPoint.longitude], {
+            icon: homeIcon,
+            zIndexOffset: 1000
+          }).addTo(markersGroup);
+
+          homeMarker.bindPopup(
+            '<div class="popup-title">' + (data.refPoint.isGps ? 'Position GPS actuelle' : 'Mon adresse fixe') + '</div>' +
+            '<div class="popup-sub">' + data.refPoint.label + '</div>'
+          );
+
+          // Cercles de rayon (15 km et 30 km)
+          L.circle([data.refPoint.latitude, data.refPoint.longitude], {
+            radius: 15000,
+            color: '#00D2C4',
+            weight: 1.5,
+            fillColor: '#00D2C4',
+            fillOpacity: 0.05,
+            dashArray: '5, 8'
+          }).addTo(mapInstance);
+
+          L.circle([data.refPoint.latitude, data.refPoint.longitude], {
+            radius: 30000,
+            color: '#0066FF',
+            weight: 1.5,
+            fillColor: '#0066FF',
+            fillOpacity: 0.03,
+            dashArray: '4, 10'
+          }).addTo(mapInstance);
         }
-      });
-    });
 
-    // Ajuster la vue
-    if (markersGroup.getLayers().length > 0) {
-      map.fitBounds(markersGroup.getBounds(), { padding: [40, 40], maxZoom: 13 });
-    } else if (data.refPoint) {
-      map.setView([data.refPoint.latitude, data.refPoint.longitude], 11);
-    } else {
-      map.setView([46.603354, 1.888334], 6); // Centre de la France
+        // 2. Ajouter les entreprises
+        data.companies.forEach(function(comp) {
+          var icon = L.divIcon({
+            className: 'custom-icon',
+            html: '<div class="pin-company" id="pin-' + comp.id + '" style="background:' + comp.color + '">🏢</div>',
+            iconSize: [32, 32],
+            iconAnchor: [16, 16],
+            popupAnchor: [0, -18]
+          });
+
+          var marker = L.marker([comp.latitude, comp.longitude], { icon: icon }).addTo(markersGroup);
+
+          var popupHtml = '<div class="popup-title">' + comp.name + '</div>';
+          if (comp.city || comp.address) {
+            popupHtml += '<div class="popup-sub">' + (comp.address ? comp.address + ' • ' : '') + comp.city + '</div>';
+          }
+          if (comp.distanceText) {
+            popupHtml += '<div class="popup-dist">🧭 ' + comp.distanceText + '</div>';
+          }
+          popupHtml += '<a class="popup-btn" href="javascript:void(0)" onclick="selectCompany(\\'' + comp.id + '\\')">Ouvrir la fiche</a>';
+
+          marker.bindPopup(popupHtml);
+
+          marker.on('click', function() {
+            if (window.ReactNativeWebView) {
+              window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'SELECT_PIN', companyId: comp.id }));
+            }
+          });
+        });
+
+        // 3. Ajuster la vue
+        if (markersGroup.getLayers().length > 0) {
+          mapInstance.fitBounds(markersGroup.getBounds(), { padding: [40, 40], maxZoom: 13 });
+        } else if (data.refPoint) {
+          mapInstance.setView([data.refPoint.latitude, data.refPoint.longitude], 11);
+        } else {
+          mapInstance.setView([46.603354, 1.888334], 6); // Centre de la France
+        }
+
+        // Forcer le redimensionnement Leaflet pour éviter l'écran gris/vide
+        setTimeout(function() { if (mapInstance) mapInstance.invalidateSize(); }, 200);
+        setTimeout(function() { if (mapInstance) mapInstance.invalidateSize(); }, 600);
+        setTimeout(function() { if (mapInstance) mapInstance.invalidateSize(); }, 1200);
+
+        if (window.ReactNativeWebView) {
+          window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'MAP_READY' }));
+        }
+      } catch (err) {
+        if (window.ReactNativeWebView) {
+          window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'MAP_ERROR', message: err.message }));
+        }
+      }
     }
 
     function selectCompany(id) {
@@ -275,16 +327,36 @@ export const CompanyMapView: React.FC<CompanyMapViewProps> = ({
     }
 
     window.centerOnHome = function() {
-      if (data.refPoint) {
-        map.setView([data.refPoint.latitude, data.refPoint.longitude], 12, { animate: true });
+      var data = ${mapDataJson};
+      if (mapInstance && data.refPoint) {
+        mapInstance.setView([data.refPoint.latitude, data.refPoint.longitude], 12, { animate: true });
       }
     };
 
     window.fitAll = function() {
-      if (markersGroup.getLayers().length > 0) {
-        map.fitBounds(markersGroup.getBounds(), { padding: [40, 40], maxZoom: 13 });
+      if (mapInstance && markersGroup && markersGroup.getLayers().length > 0) {
+        mapInstance.fitBounds(markersGroup.getBounds(), { padding: [40, 40], maxZoom: 13 });
       }
     };
+
+    // Charger Leaflet depuis CDN principal avec fallback CDN secondaire
+    function loadScript(src, fallbackSrc, done) {
+      var s = document.createElement('script');
+      s.src = src;
+      s.onload = done;
+      s.onerror = function() {
+        if (fallbackSrc) {
+          loadScript(fallbackSrc, null, done);
+        }
+      };
+      document.head.appendChild(s);
+    }
+
+    loadScript(
+      'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js',
+      'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js',
+      initMap
+    );
   </script>
 </body>
 </html>`;
@@ -294,16 +366,22 @@ export const CompanyMapView: React.FC<CompanyMapViewProps> = ({
     try {
       const data = JSON.parse(event.nativeEvent.data) as {
         type: string;
-        companyId: string;
+        companyId?: string;
+        message?: string;
       };
 
-      if (data.type === 'SELECT_PIN') {
+      if (data.type === 'MAP_READY') {
+        setIsMapReady(true);
+      } else if (data.type === 'SELECT_PIN' && data.companyId) {
         setSelectedCompanyId(data.companyId);
-      } else if (data.type === 'OPEN_COMPANY') {
+      } else if (data.type === 'OPEN_COMPANY' && data.companyId) {
         const found = companies.find((c) => c.id === data.companyId);
         if (found) {
           onSelectCompany(found);
         }
+      } else if (data.type === 'MAP_ERROR') {
+        console.warn('Leaflet map error:', data.message);
+        setIsMapReady(true); // Retirer l'overlay même en cas d'erreur
       }
     } catch {
       // Ignore parse error
@@ -328,10 +406,16 @@ export const CompanyMapView: React.FC<CompanyMapViewProps> = ({
       <WebView
         ref={webViewRef}
         originWhitelist={['*']}
-        source={{ html: htmlContent }}
+        source={{
+          html: htmlContent,
+          baseUrl: 'https://unpkg.com',
+        }}
         style={styles.webView}
         javaScriptEnabled={true}
         domStorageEnabled={true}
+        allowFileAccess={true}
+        allowUniversalAccessFromFileURLs={true}
+        mixedContentMode="always"
         onMessage={handleMessage}
         onLoadEnd={() => setIsMapReady(true)}
       />
