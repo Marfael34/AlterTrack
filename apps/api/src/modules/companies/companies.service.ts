@@ -31,7 +31,9 @@ export class CompaniesService {
   async findAll(query: QueryCompanyDto) {
     const where: Prisma.CompanyWhereInput = {};
 
-    if (query.status) {
+    if (query.statuses && query.statuses.length > 0) {
+      where.status = { in: query.statuses };
+    } else if (query.status) {
       where.status = query.status;
     }
 

@@ -36,7 +36,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   const [stats, setStats] = useState<CompanyStats | undefined>(undefined);
   const [cities, setCities] = useState<CityItem[]>([]);
   const [totalCount, setTotalCount] = useState<number>(0);
-  const [selectedStatus, setSelectedStatus] = useState<Status | 'ALL'>('ALL');
+  const [selectedStatuses, setSelectedStatuses] = useState<Status[]>([]);
   const [selectedCity, setSelectedCity] = useState<string | 'ALL'>('ALL');
   const [sortBy, setSortBy] = useState<'updatedAt' | 'name' | 'city'>('updatedAt');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
@@ -51,7 +51,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   const [deletingBatch, setDeletingBatch] = useState<boolean>(false);
 
   const activeFiltersCount =
-    (selectedStatus !== 'ALL' ? 1 : 0) +
+    (selectedStatuses.length > 0 ? selectedStatuses.length : 0) +
     (selectedCity !== 'ALL' ? 1 : 0) +
     (sortBy !== 'updatedAt' ? 1 : 0);
 
@@ -59,7 +59,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
     try {
       const [companiesRes, statsRes, citiesRes] = await Promise.all([
         ApiService.getCompanies({
-          status: selectedStatus === 'ALL' ? undefined : selectedStatus,
+          statuses: selectedStatuses.length > 0 ? selectedStatuses : undefined,
           city: selectedCity === 'ALL' ? undefined : selectedCity,
           search: searchQuery.trim() || undefined,
           sortBy,
@@ -79,7 +79,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
       setLoading(false);
       setRefreshing(false);
     }
-  }, [selectedStatus, selectedCity, searchQuery, sortBy, sortOrder]);
+  }, [selectedStatuses, selectedCity, searchQuery, sortBy, sortOrder]);
 
   useEffect(() => {
     void loadData();
@@ -139,7 +139,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
       allVisibleSelected &&
       companies.length === totalCount &&
       !searchQuery.trim() &&
-      selectedStatus === 'ALL' &&
+      selectedStatuses.length === 0 &&
       selectedCity === 'ALL';
 
     Alert.alert(
@@ -386,24 +386,33 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={styles.activeFiltersScroll}
           >
-            {selectedStatus !== 'ALL' && (
+            {selectedStatuses.map((st) => (
               <TouchableOpacity
-                style={styles.activeFilterChip}
-                onPress={() => setSelectedStatus('ALL')}
+                key={st}
+                style={[
+                  styles.activeFilterChip,
+                  {
+                    backgroundColor: `${Colors.status[st]}20`,
+                    borderColor: Colors.status[st],
+                  },
+                ]}
+                onPress={() =>
+                  setSelectedStatuses((prev) => prev.filter((s) => s !== st))
+                }
                 activeOpacity={0.7}
               >
                 <View
                   style={[
                     styles.activeFilterDot,
-                    { backgroundColor: Colors.status[selectedStatus] },
+                    { backgroundColor: Colors.status[st] },
                   ]}
                 />
                 <Text style={styles.activeFilterText}>
-                  {STATUS_LABELS[selectedStatus]}
+                  {STATUS_LABELS[st]}
                 </Text>
                 <Ionicons name="close" size={14} color={Colors.textSecondary} />
               </TouchableOpacity>
-            )}
+            ))}
 
             {selectedCity !== 'ALL' && (
               <TouchableOpacity
@@ -439,7 +448,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             <TouchableOpacity
               style={styles.clearAllFiltersBtn}
               onPress={() => {
-                setSelectedStatus('ALL');
+                setSelectedStatuses([]);
                 setSelectedCity('ALL');
                 setSortBy('updatedAt');
                 setSortOrder('desc');
@@ -457,13 +466,13 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         visible={isFiltersModalOpen}
         onClose={() => setIsFiltersModalOpen(false)}
         filters={{
-          status: selectedStatus,
+          statuses: selectedStatuses,
           city: selectedCity,
           sortBy,
           sortOrder,
         }}
         onApply={(newFilters) => {
-          setSelectedStatus(newFilters.status);
+          setSelectedStatuses(newFilters.statuses);
           setSelectedCity(newFilters.city);
           setSortBy(newFilters.sortBy);
           setSortOrder(newFilters.sortOrder);
@@ -589,11 +598,11 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
               <Ionicons name="briefcase-outline" size={48} color={Colors.border} />
               <Text style={styles.emptyTitle}>Aucune entreprise trouvée</Text>
               <Text style={styles.emptySubtitle}>
-                {searchQuery || selectedCity !== 'ALL' || selectedStatus !== 'ALL'
+                {searchQuery || selectedCity !== 'ALL' || selectedStatuses.length > 0
                   ? 'Aucun résultat ne correspond aux filtres appliqués.'
                   : 'Ajoutez une entreprise avec le bouton "+" ou importez directement votre tableur.'}
               </Text>
-              {!searchQuery && selectedCity === 'ALL' && selectedStatus === 'ALL' && (
+              {!searchQuery && selectedCity === 'ALL' && selectedStatuses.length === 0 && (
                 <TouchableOpacity
                   style={styles.emptyImportButton}
                   onPress={handleImportSpreadsheet}

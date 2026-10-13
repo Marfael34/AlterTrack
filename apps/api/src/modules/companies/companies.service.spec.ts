@@ -111,6 +111,21 @@ describe('CompaniesService', () => {
         }),
       );
     });
+
+    it('should filter by multiple statuses when statuses array is provided', async () => {
+      await service.findAll({
+        statuses: [Status.TO_SEND, Status.TO_CALL],
+        limit: 50,
+        offset: 0,
+      });
+      expect(prisma.company.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            status: { in: [Status.TO_SEND, Status.TO_CALL] },
+          }),
+        }),
+      );
+    });
   });
 
   describe('getCities', () => {

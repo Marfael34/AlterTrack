@@ -22,6 +22,21 @@ export class QueryCompanyDto {
   status?: Status;
 
   @IsOptional()
+  @Transform(({ value }: { value: unknown }) => {
+    if (typeof value === 'string') {
+      return value
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean);
+    }
+    if (Array.isArray(value)) {
+      return value.map((s) => String(s).trim()).filter(Boolean);
+    }
+    return value;
+  })
+  statuses?: Status[];
+
+  @IsOptional()
   @IsString()
   sortBy?: string;
 

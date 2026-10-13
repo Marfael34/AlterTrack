@@ -53,6 +53,7 @@ export const ApiService = {
   async getCompanies(query?: {
     search?: string;
     status?: Status;
+    statuses?: Status[];
     city?: string;
     sortBy?: string;
     sortOrder?: 'asc' | 'desc';
@@ -62,7 +63,11 @@ export const ApiService = {
   }> {
     const params = new URLSearchParams();
     if (query?.search) params.append('search', query.search);
-    if (query?.status) params.append('status', query.status);
+    if (query?.statuses && query.statuses.length > 0) {
+      params.append('statuses', query.statuses.join(','));
+    } else if (query?.status) {
+      params.append('status', query.status);
+    }
     if (query?.city) params.append('city', query.city);
     if (query?.sortBy) params.append('sortBy', query.sortBy);
     if (query?.sortOrder) params.append('sortOrder', query.sortOrder);

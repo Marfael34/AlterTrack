@@ -14,7 +14,7 @@ import { CompanyStats, STATUS_LABELS, Status } from '../types/company';
 import { CityItem } from './CityFilterBar';
 
 export interface FilterState {
-  status: Status | 'ALL';
+  statuses: Status[];
   city: string | 'ALL';
   sortBy: 'updatedAt' | 'name' | 'city';
   sortOrder: 'asc' | 'desc';
@@ -49,7 +49,9 @@ export const FiltersModal: React.FC<FiltersModalProps> = ({
   cities,
   totalCount,
 }) => {
-  const [draftStatus, setDraftStatus] = useState<Status | 'ALL'>(initialFilters.status);
+  const [draftStatuses, setDraftStatuses] = useState<Status[]>(
+    initialFilters.statuses || [],
+  );
   const [draftCity, setDraftCity] = useState<string | 'ALL'>(initialFilters.city);
   const [draftSortBy, setDraftSortBy] = useState<'updatedAt' | 'name' | 'city'>(
     initialFilters.sortBy,
@@ -61,15 +63,21 @@ export const FiltersModal: React.FC<FiltersModalProps> = ({
   // Synchroniser à l'ouverture
   React.useEffect(() => {
     if (visible) {
-      setDraftStatus(initialFilters.status);
+      setDraftStatuses(initialFilters.statuses || []);
       setDraftCity(initialFilters.city);
       setDraftSortBy(initialFilters.sortBy);
       setDraftSortOrder(initialFilters.sortOrder);
     }
   }, [visible, initialFilters]);
 
+  const handleToggleStatus = (st: Status) => {
+    setDraftStatuses((prev) =>
+      prev.includes(st) ? prev.filter((s) => s !== st) : [...prev, st],
+    );
+  };
+
   const handleReset = () => {
-    setDraftStatus('ALL');
+    setDraftStatuses([]);
     setDraftCity('ALL');
     setDraftSortBy('updatedAt');
     setDraftSortOrder('desc');
@@ -77,7 +85,7 @@ export const FiltersModal: React.FC<FiltersModalProps> = ({
 
   const handleApply = () => {
     onApply({
-      status: draftStatus,
+      statuses: draftStatuses,
       city: draftCity,
       sortBy: draftSortBy,
       sortOrder: draftSortOrder,
@@ -86,7 +94,7 @@ export const FiltersModal: React.FC<FiltersModalProps> = ({
   };
 
   const activeFiltersCount =
-    (draftStatus !== 'ALL' ? 1 : 0) +
+    (draftStatuses.length > 0 ? draftStatuses.length : 0) +
     (draftCity !== 'ALL' ? 1 : 0) +
     (draftSortBy !== 'updatedAt' ? 1 : 0);
 
@@ -121,31 +129,62 @@ export const FiltersModal: React.FC<FiltersModalProps> = ({
           contentContainerStyle={styles.contentContainer}
           showsVerticalScrollIndicator={false}
         >
-          {/* Section 1 : Statuts */}
+          {/* Section 1 : Statuts (Multi-sélection) */}
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
               <View style={styles.sectionTitleRow}>
                 <Ionicons name="flag-outline" size={16} color={Colors.primary} />
-                <Text style={styles.sectionTitle}>Statut de candidature</Text>
+                <Text style={styles.sectionTitle}>Statuts de candidature</Text>
               </View>
-              {draftStatus !== 'ALL' && (
-                <Text style={styles.sectionActiveBadge}>1 sélectionné</Text>
-              )}
+              <View style={styles.sectionHeaderRight}>
+                {draftStatuses.length > 0 ? (
+                  <TouchableOpacity
+                    onPress={() => setDraftStatuses([])}
+                    style={styles.clearMiniBtn}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.clearMiniBtnText}>Tous</Text>
+                  </TouchableOpacity>
+                ) : null}
+                <Text
+                  style={
+                    draftStatuses.length > 0
+                      ? styles.sectionActiveBadge
+                      : styles.sectionMutedBadge
+                  }
+                >
+                  {draftStatuses.length > 0
+                    ? `${draftStatuses.length} sélectionné${draftStatuses.length > 1 ? 's' : ''}`
+                    : 'Tous'}
+                </Text>
+              </View>
             </View>
 
             <View style={styles.chipsGrid}>
+              {/* Option Tous les statuts */}
               <TouchableOpacity
                 style={[
                   styles.statusChip,
-                  draftStatus === 'ALL' && styles.statusChipActiveAll,
+                  draftStatuses.length === 0 && styles.statusChipActiveAll,
                 ]}
-                onPress={() => setDraftStatus('ALL')}
+                onPress={() => setDraftStatuses([])}
                 activeOpacity={0.7}
               >
+                <Ionicons
+                  name={
+                    draftStatuses.length === 0
+                      ? 'checkmark-circle'
+                      : 'ellipse-outline'
+                  }
+                  size={15}
+                  color={
+                    draftStatuses.length === 0 ? Colors.primary : Colors.textMuted
+                  }
+                />
                 <Text
                   style={[
                     styles.chipLabel,
-                    draftStatus === 'ALL' && styles.chipLabelActive,
+                    draftStatuses.length === 0 && styles.chipLabelActive,
                   ]}
                 >
                   Tous les statuts
@@ -153,13 +192,13 @@ export const FiltersModal: React.FC<FiltersModalProps> = ({
                 <View
                   style={[
                     styles.countPill,
-                    draftStatus === 'ALL' && styles.countPillActive,
+                    draftStatuses.length === 0 && styles.countPillActive,
                   ]}
                 >
                   <Text
                     style={[
                       styles.countPillText,
-                      draftStatus === 'ALL' && styles.countPillTextActive,
+                      draftStatuses.length === 0 && styles.countPillTextActive,
                     ]}
                   >
                     {totalCount}
@@ -167,8 +206,9 @@ export const FiltersModal: React.FC<FiltersModalProps> = ({
                 </View>
               </TouchableOpacity>
 
+              {/* Statuts individuels multi-sélectionnables */}
               {ALL_STATUSES.map((st) => {
-                const isSelected = draftStatus === st;
+                const isSelected = draftStatuses.includes(st);
                 const count = stats ? stats[st] || 0 : 0;
                 const color = Colors.status[st];
 
@@ -182,9 +222,14 @@ export const FiltersModal: React.FC<FiltersModalProps> = ({
                         borderColor: color,
                       },
                     ]}
-                    onPress={() => setDraftStatus(st)}
+                    onPress={() => handleToggleStatus(st)}
                     activeOpacity={0.7}
                   >
+                    <Ionicons
+                      name={isSelected ? 'checkbox' : 'square-outline'}
+                      size={16}
+                      color={isSelected ? color : Colors.textMuted}
+                    />
                     <View style={[styles.statusDot, { backgroundColor: color }]} />
                     <Text
                       style={[
@@ -461,11 +506,38 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     letterSpacing: 0.3,
   },
+  sectionHeaderRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  clearMiniBtn: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 6,
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  clearMiniBtnText: {
+    color: Colors.textMuted,
+    fontSize: 11,
+    fontWeight: '600',
+  },
   sectionActiveBadge: {
     color: Colors.primary,
     fontSize: 11,
     fontWeight: '600',
     backgroundColor: `${Colors.primary}20`,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 8,
+  },
+  sectionMutedBadge: {
+    color: Colors.textMuted,
+    fontSize: 11,
+    fontWeight: '600',
+    backgroundColor: Colors.surface,
     paddingHorizontal: 8,
     paddingVertical: 2,
     borderRadius: 8,
