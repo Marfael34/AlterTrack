@@ -3,6 +3,7 @@ import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Keyboard,
   Modal,
   SafeAreaView,
   ScrollView,
@@ -40,7 +41,7 @@ export const ReferencePointModal: React.FC<ReferencePointModalProps> = ({
     }
   }, [visible]);
 
-  // Recherche d'adresses en temps réel avec debounce
+  // Recherche d'adresses en direct avec autocomplétion
   useEffect(() => {
     const q = searchQuery.trim();
     if (q.length < 2) {
@@ -58,10 +59,54 @@ export const ReferencePointModal: React.FC<ReferencePointModalProps> = ({
       } finally {
         setSearching(false);
       }
-    }, 350);
+    }, 300);
 
     return () => clearTimeout(timer);
   }, [searchQuery]);
+
+  const handleSelectResult = async (item: GeocodeResult) => {
+    Keyboard.dismiss();
+    const newPoint: ReferencePoint = {
+      label: item.label,
+      latitude: item.latitude,
+      longitude: item.longitude,
+      isGps: false,
+    };
+    await LocationService.setReferencePoint(newPoint);
+    onSave(newPoint);
+    onClose();
+  };
+
+  const handleSubmitSearch = async () => {
+    if (searchResults.length > 0) {
+      await handleSelectResult(searchResults[0]);
+      return;
+    }
+
+    const q = searchQuery.trim();
+    if (!q) return;
+
+    setSearching(true);
+    try {
+      const coords = await LocationService.geocodeQuery(q);
+      if (coords) {
+        Keyboard.dismiss();
+        const newPoint: ReferencePoint = {
+          label: q,
+          latitude: coords.latitude,
+          longitude: coords.longitude,
+          isGps: false,
+        };
+        await LocationService.setReferencePoint(newPoint);
+        onSave(newPoint);
+        onClose();
+      } else {
+        Alert.alert('Adresse introuvable', "Impossible de localiser cette adresse. Essayez avec un nom de ville ou un numéro et nom de rue.");
+      }
+    } finally {
+      setSearching(false);
+    }
+  };
 
   const handleUseGps = async () => {
     setLocatingGps(true);
@@ -79,18 +124,6 @@ export const ReferencePointModal: React.FC<ReferencePointModalProps> = ({
     } finally {
       setLocatingGps(false);
     }
-  };
-
-  const handleSelectResult = async (item: GeocodeResult) => {
-    const newPoint: ReferencePoint = {
-      label: item.label,
-      latitude: item.latitude,
-      longitude: item.longitude,
-      isGps: false,
-    };
-    await LocationService.setReferencePoint(newPoint);
-    onSave(newPoint);
-    onClose();
   };
 
   const handleClear = async () => {
@@ -112,8 +145,8 @@ export const ReferencePointModal: React.FC<ReferencePointModalProps> = ({
             {/* Header */}
             <View style={styles.header}>
               <View style={styles.titleRow}>
-                <Ionicons name="compass" size={22} color={Colors.accent} />
-                <Text style={styles.title}>Point de référence & Distance</Text>
+                <Ionicons name="home" size={22} color={Colors.accent} />
+                <Text style={styles.title}>Adresse fixe de référence</Text>
               </View>
               <TouchableOpacity style={styles.closeBtn} onPress={onClose} activeOpacity={0.7}>
                 <Ionicons name="close" size={22} color={Colors.text} />
@@ -121,21 +154,26 @@ export const ReferencePointModal: React.FC<ReferencePointModalProps> = ({
             </View>
 
             <Text style={styles.subtitle}>
-              Définissez votre domicile ou école pour afficher la distance en km vers chaque entreprise.
+              Définissez votre domicile, école ou lieu de formation. La distance en km sera calculée vers chaque entreprise sur l'accueil et sur leur fiche.
             </Text>
 
-            {/* Point de repère actuellement actif */}
+            {/* Adresse fixe actuellement active */}
             {currentPoint && (
               <View style={styles.activePointCard}>
                 <View style={styles.activePointHeader}>
                   <Ionicons
                     name={currentPoint.isGps ? 'navigate' : 'home'}
-                    size={18}
-                    color={Colors.primary}
+                    size={20}
+                    color={Colors.accent}
                   />
-                  <Text style={styles.activePointTitle} numberOfLines={1}>
-                    {currentPoint.label}
-                  </Text>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.activePointBadge}>
+                      {currentPoint.isGps ? 'Position GPS active' : 'Adresse fixe active'}
+                    </Text>
+                    <Text style={styles.activePointTitle} numberOfLines={2}>
+                      {currentPoint.label}
+                    </Text>
+                  </View>
                 </View>
                 <TouchableOpacity
                   style={styles.clearBtn}
@@ -147,7 +185,82 @@ export const ReferencePointModal: React.FC<ReferencePointModalProps> = ({
               </View>
             )}
 
-            {/* Bouton GPS */}
+            {/* Saisie d'adresse fixe */}
+            <Text style={styles.inputSectionTitle}>Rechercher votre adresse fixe</Text>
+            <View style={styles.searchContainer}>
+              <Ionicons name="search" size={18} color={Colors.textMuted} />
+              <TextInput
+                style={styles.searchInput}
+                placeholder="Ex : 15 rue de Paris Montpellier, Perpignan..."
+                placeholderTextColor={Colors.textMuted}
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+                onSubmitEditing={handleSubmitSearch}
+                returnKeyType="search"
+                autoCorrect={false}
+              />
+              {searching ? (
+                <ActivityIndicator size="small" color={Colors.accent} />
+              ) : searchQuery.length > 0 ? (
+                <TouchableOpacity onPress={() => setSearchQuery('')}>
+                  <Ionicons name="close-circle" size={18} color={Colors.textMuted} />
+                </TouchableOpacity>
+              ) : null}
+            </View>
+
+            {/* Liste de propositions d'adresses */}
+            {searchResults.length > 0 && (
+              <ScrollView
+                style={styles.resultsList}
+                contentContainerStyle={styles.resultsListContent}
+                keyboardShouldPersistTaps="handled"
+              >
+                {searchResults.map((item, idx) => (
+                  <TouchableOpacity
+                    key={`${item.label}-${idx}`}
+                    style={styles.resultItem}
+                    onPress={() => handleSelectResult(item)}
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons name="location-outline" size={18} color={Colors.accent} />
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.resultLabel} numberOfLines={1}>
+                        {item.label}
+                      </Text>
+                      {item.city && (
+                        <Text style={styles.resultCity}>
+                          {item.postcode ? `${item.postcode} ` : ''}{item.city}
+                        </Text>
+                      )}
+                    </View>
+                    <Ionicons name="chevron-forward" size={16} color={Colors.textMuted} />
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            )}
+
+            {searchQuery.length >= 2 && !searching && searchResults.length === 0 && (
+              <View style={styles.noResultsBox}>
+                <Text style={styles.noResultsText}>
+                  Aucune adresse correspondante trouvée pour "{searchQuery}".
+                </Text>
+                <TouchableOpacity
+                  style={styles.validateCustomBtn}
+                  onPress={handleSubmitSearch}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.validateCustomText}>Valider cette saisie quand même</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+
+            <View style={styles.dividerRow}>
+              <View style={styles.dividerLine} />
+              <Text style={styles.dividerText}>ou utiliser votre position mobile</Text>
+              <View style={styles.dividerLine} />
+            </View>
+
+            {/* Bouton GPS alternatif */}
             <TouchableOpacity
               style={[styles.gpsButton, locatingGps && styles.buttonDisabled]}
               onPress={handleUseGps}
@@ -165,67 +278,6 @@ export const ReferencePointModal: React.FC<ReferencePointModalProps> = ({
                 </>
               )}
             </TouchableOpacity>
-
-            <View style={styles.dividerRow}>
-              <View style={styles.dividerLine} />
-              <Text style={styles.dividerText}>ou recherchez une ville / adresse</Text>
-              <View style={styles.dividerLine} />
-            </View>
-
-            {/* Champ de recherche */}
-            <View style={styles.searchContainer}>
-              <Ionicons name="search" size={18} color={Colors.textMuted} />
-              <TextInput
-                style={styles.searchInput}
-                placeholder="Ex: Montpellier, 10 rue de la Paix Paris..."
-                placeholderTextColor={Colors.textMuted}
-                value={searchQuery}
-                onChangeText={setSearchQuery}
-                autoCorrect={false}
-              />
-              {searching ? (
-                <ActivityIndicator size="small" color={Colors.accent} />
-              ) : searchQuery.length > 0 ? (
-                <TouchableOpacity onPress={() => setSearchQuery('')}>
-                  <Ionicons name="close-circle" size={18} color={Colors.textMuted} />
-                </TouchableOpacity>
-              ) : null}
-            </View>
-
-            {/* Résultats de recherche */}
-            <ScrollView
-              style={styles.resultsList}
-              contentContainerStyle={styles.resultsListContent}
-              keyboardShouldPersistTaps="handled"
-            >
-              {searchResults.map((item, idx) => (
-                <TouchableOpacity
-                  key={`${item.label}-${idx}`}
-                  style={styles.resultItem}
-                  onPress={() => handleSelectResult(item)}
-                  activeOpacity={0.7}
-                >
-                  <Ionicons name="location-outline" size={18} color={Colors.accent} />
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.resultLabel} numberOfLines={1}>
-                      {item.label}
-                    </Text>
-                    {item.city && (
-                      <Text style={styles.resultCity}>
-                        {item.postcode ? `${item.postcode} ` : ''}{item.city}
-                      </Text>
-                    )}
-                  </View>
-                  <Ionicons name="chevron-forward" size={16} color={Colors.textMuted} />
-                </TouchableOpacity>
-              ))}
-
-              {searchQuery.length >= 2 && !searching && searchResults.length === 0 && (
-                <Text style={styles.noResultsText}>
-                  Aucune adresse trouvée pour "{searchQuery}".
-                </Text>
-              )}
-            </ScrollView>
           </View>
         </SafeAreaView>
       </View>
@@ -249,8 +301,8 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 24,
     paddingHorizontal: 20,
     paddingTop: 20,
-    paddingBottom: 30,
-    maxHeight: '90%',
+    paddingBottom: 28,
+    maxHeight: '92%',
     borderWidth: 1,
     borderColor: `${Colors.primary}40`,
   },
@@ -258,7 +310,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: 6,
   },
   titleRow: {
     flexDirection: 'row',
@@ -267,7 +319,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   title: {
-    fontSize: 17,
+    fontSize: 18,
     fontWeight: '700',
     color: Colors.text,
   },
@@ -279,80 +331,58 @@ const styles = StyleSheet.create({
   subtitle: {
     fontSize: 12.5,
     color: Colors.textSecondary,
-    marginBottom: 16,
+    marginBottom: 14,
     lineHeight: 18,
   },
   activePointCard: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: `${Colors.primary}18`,
-    borderColor: Colors.primary,
+    backgroundColor: `${Colors.accent}15`,
+    borderColor: `${Colors.accent}55`,
     borderWidth: 1,
     padding: 12,
     borderRadius: 12,
     marginBottom: 14,
+    gap: 10,
   },
   activePointHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 10,
     flex: 1,
+  },
+  activePointBadge: {
+    color: Colors.accent,
+    fontSize: 11,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   activePointTitle: {
     color: Colors.text,
-    fontSize: 13,
-    fontWeight: '700',
-    flex: 1,
+    fontSize: 13.5,
+    fontWeight: '600',
+    marginTop: 2,
   },
   clearBtn: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
     backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.border,
   },
   clearBtnText: {
     color: Colors.danger,
-    fontSize: 11,
+    fontSize: 11.5,
     fontWeight: '700',
   },
-  gpsButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: Colors.primary,
-    borderRadius: 12,
-    paddingVertical: 13,
-    gap: 8,
-    marginBottom: 14,
-    shadowColor: Colors.primary,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  gpsButtonText: {
-    color: '#FFFFFF',
+  inputSectionTitle: {
+    color: Colors.text,
+    fontSize: 13,
     fontWeight: '700',
-    fontSize: 13.5,
-  },
-  buttonDisabled: {
-    opacity: 0.6,
-  },
-  dividerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginVertical: 10,
-  },
-  dividerLine: {
-    flex: 1,
-    height: 1,
-    backgroundColor: Colors.border,
-  },
-  dividerText: {
-    fontSize: 11,
-    color: Colors.textMuted,
+    marginBottom: 8,
   },
   searchContainer: {
     flexDirection: 'row',
@@ -364,7 +394,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: Colors.border,
     gap: 8,
-    marginBottom: 10,
+    marginBottom: 8,
   },
   searchInput: {
     flex: 1,
@@ -373,11 +403,12 @@ const styles = StyleSheet.create({
     padding: 0,
   },
   resultsList: {
-    maxHeight: 220,
+    maxHeight: 180,
+    marginBottom: 8,
   },
   resultsListContent: {
     gap: 6,
-    paddingBottom: 10,
+    paddingBottom: 4,
   },
   resultItem: {
     flexDirection: 'row',
@@ -399,11 +430,62 @@ const styles = StyleSheet.create({
     fontSize: 11,
     marginTop: 2,
   },
+  noResultsBox: {
+    backgroundColor: Colors.surface,
+    padding: 10,
+    borderRadius: 10,
+    marginBottom: 8,
+    alignItems: 'center',
+  },
   noResultsText: {
     color: Colors.textMuted,
     fontSize: 12,
     textAlign: 'center',
-    marginVertical: 12,
-    fontStyle: 'italic',
+    marginBottom: 6,
+  },
+  validateCustomBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    backgroundColor: `${Colors.primary}25`,
+    borderRadius: 8,
+  },
+  validateCustomText: {
+    color: Colors.primary,
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  dividerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginVertical: 10,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: Colors.border,
+  },
+  dividerText: {
+    fontSize: 11,
+    color: Colors.textMuted,
+  },
+  gpsButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.cardBackground,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: 12,
+    paddingVertical: 11,
+    gap: 8,
+  },
+  gpsButtonText: {
+    color: Colors.text,
+    fontWeight: '600',
+    fontSize: 13,
+  },
+  buttonDisabled: {
+    opacity: 0.6,
   },
 });

@@ -12,17 +12,27 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { ReferencePointModal } from '../components/ReferencePointModal';
 import { Colors } from '../constants/colors';
 import { ApiService } from '../services/api.service';
+import { LocationService, ReferencePoint } from '../services/location.service';
 import { NotificationService } from '../services/notification.service';
 import { StorageService } from '../services/storage.service';
 import { AppConfig } from '../types/config';
 
 interface SettingsScreenProps {
   onBack: () => void;
+  refPoint?: ReferencePoint | null;
+  onUpdateRefPoint?: (point: ReferencePoint | null) => void;
 }
 
-export const SettingsScreen: React.FC<SettingsScreenProps> = ({ onBack }) => {
+export const SettingsScreen: React.FC<SettingsScreenProps> = ({
+  onBack,
+  refPoint: propRefPoint,
+  onUpdateRefPoint,
+}) => {
+  const [refPoint, setRefPoint] = useState<ReferencePoint | null>(propRefPoint || null);
+  const [isRefPointModalOpen, setIsRefPointModalOpen] = useState(false);
   const [serverUrl, setServerUrl] = useState('');
   const [apiKey, setApiKey] = useState('');
   const [template, setTemplate] = useState('');
@@ -37,6 +47,12 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ onBack }) => {
   const [testingConnection, setTestingConnection] = useState(false);
   const [registeringPush, setRegisteringPush] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState<'IDLE' | 'SUCCESS' | 'ERROR'>('IDLE');
+
+  useEffect(() => {
+    if (propRefPoint !== undefined) {
+      setRefPoint(propRefPoint);
+    }
+  }, [propRefPoint]);
 
   useEffect(() => {
     void loadInitialSettings();
@@ -344,6 +360,74 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ onBack }) => {
           </TouchableOpacity>
         </View>
 
+        {/* Section : Adresse fixe de référence (Distance) */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeaderRow}>
+            <Ionicons name="home-outline" size={20} color={Colors.accent} />
+            <Text style={styles.sectionTitle}>Adresse fixe de référence</Text>
+          </View>
+          <Text style={styles.sectionDescription}>
+            Définissez votre domicile, école ou lieu de formation. Les distances en km sont calculées automatiquement vers toutes les entreprises.
+          </Text>
+
+          <View style={styles.cvCard}>
+            <Ionicons
+              name={refPoint?.isGps ? 'navigate' : 'home'}
+              size={26}
+              color={refPoint ? Colors.accent : Colors.textMuted}
+            />
+            <View style={styles.cvInfo}>
+              <Text style={styles.cvStatus}>
+                {refPoint
+                  ? refPoint.isGps
+                    ? 'Position GPS active'
+                    : 'Adresse fixe enregistrée'
+                  : 'Aucune adresse définie'}
+              </Text>
+              <Text style={styles.cvName} numberOfLines={2}>
+                {refPoint ? refPoint.label : 'Définissez votre adresse pour voir les distances'}
+              </Text>
+            </View>
+          </View>
+
+          <View style={{ flexDirection: 'row', gap: 10 }}>
+            <TouchableOpacity
+              style={[styles.cvButton, { flex: 1, backgroundColor: Colors.primary }]}
+              onPress={() => setIsRefPointModalOpen(true)}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="location-outline" size={18} color="#FFFFFF" />
+              <Text style={styles.cvButtonText}>
+                {refPoint ? 'Modifier l’adresse fixe' : 'Définir mon adresse fixe'}
+              </Text>
+            </TouchableOpacity>
+
+            {refPoint && (
+              <TouchableOpacity
+                style={[
+                  styles.cvButton,
+                  {
+                    paddingHorizontal: 16,
+                    backgroundColor: Colors.cardBackground,
+                    borderWidth: 1,
+                    borderColor: Colors.border,
+                  },
+                ]}
+                onPress={async () => {
+                  await LocationService.setReferencePoint(null);
+                  setRefPoint(null);
+                  if (onUpdateRefPoint) {
+                    onUpdateRefPoint(null);
+                  }
+                }}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="trash-outline" size={18} color={Colors.danger} />
+              </TouchableOpacity>
+            )}
+          </View>
+        </View>
+
         {/* Section 3 : Modèle de mail de base (Template Gemini) */}
         <View style={styles.section}>
           <View style={styles.sectionHeaderRow}>
@@ -461,6 +545,19 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ onBack }) => {
           <Text style={styles.footerVersion}>AlterTrack v1.0.0 — Auto-hébergé</Text>
         </View>
       </ScrollView>
+
+      {/* Modal de définition d'adresse fixe */}
+      <ReferencePointModal
+        visible={isRefPointModalOpen}
+        onClose={() => setIsRefPointModalOpen(false)}
+        currentPoint={refPoint}
+        onSave={(point) => {
+          setRefPoint(point);
+          if (onUpdateRefPoint) {
+            onUpdateRefPoint(point);
+          }
+        }}
+      />
     </View>
   );
 };

@@ -11,6 +11,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { ReferencePointModal } from '../components/ReferencePointModal';
 import { StatusBadge } from '../components/StatusBadge';
 import { Colors } from '../constants/colors';
 import { ApiService } from '../services/api.service';
@@ -21,6 +22,8 @@ interface CompanyDetailScreenProps {
   company: Company;
   onBack: () => void;
   onUpdated: () => void;
+  refPoint?: ReferencePoint | null;
+  onUpdateRefPoint?: (point: ReferencePoint | null) => void;
 }
 
 const ALL_STATUSES: Status[] = [
@@ -37,6 +40,8 @@ export const CompanyDetailScreen: React.FC<CompanyDetailScreenProps> = ({
   company: initialCompany,
   onBack,
   onUpdated,
+  refPoint: propRefPoint,
+  onUpdateRefPoint,
 }) => {
   const [company, setCompany] = useState<Company>(initialCompany);
   const [name, setName] = useState(initialCompany.name);
@@ -52,19 +57,42 @@ export const CompanyDetailScreen: React.FC<CompanyDetailScreenProps> = ({
   const [status, setStatus] = useState<Status>(initialCompany.status);
   const [saving, setSaving] = useState(false);
   const [sendingFollowUp, setSendingFollowUp] = useState(false);
-  const [refPoint, setRefPoint] = useState<ReferencePoint | null>(null);
+  const [refPoint, setRefPoint] = useState<ReferencePoint | null>(propRefPoint || null);
+  const [isRefPointModalOpen, setIsRefPointModalOpen] = useState(false);
   const [distanceKm, setDistanceKm] = useState<number | null>(null);
 
   React.useEffect(() => {
+    if (propRefPoint !== undefined) {
+      setRefPoint(propRefPoint);
+    }
+  }, [propRefPoint]);
+
+  React.useEffect(() => {
     void (async () => {
-      const point = await LocationService.getReferencePoint();
-      setRefPoint(point);
-      if (point) {
-        const d = await LocationService.getDistanceToCompany(initialCompany, point);
+      let activePoint = refPoint;
+      if (!activePoint) {
+        activePoint = await LocationService.getReferencePoint();
+        setRefPoint(activePoint);
+      }
+      if (activePoint) {
+        const d = await LocationService.getDistanceToCompany(initialCompany, activePoint);
         setDistanceKm(d);
       }
     })();
-  }, [initialCompany]);
+  }, [initialCompany, refPoint]);
+
+  const handleSaveRefPoint = async (newPoint: ReferencePoint | null) => {
+    setRefPoint(newPoint);
+    if (onUpdateRefPoint) {
+      onUpdateRefPoint(newPoint);
+    }
+    if (newPoint) {
+      const d = await LocationService.getDistanceToCompany(company, newPoint);
+      setDistanceKm(d);
+    } else {
+      setDistanceKm(null);
+    }
+  };
 
   const handleOpenMaps = () => {
     const destination = address || city || company.name;
@@ -277,42 +305,56 @@ export const CompanyDetailScreen: React.FC<CompanyDetailScreenProps> = ({
         )}
 
         {/* Carte Localisation & Distance */}
-        {(address || city || distanceKm !== null) && (
-          <View style={styles.locationCard}>
-            <View style={styles.locationHeaderRow}>
-              <View style={styles.locationIconWrap}>
-                <Ionicons name="location" size={20} color={Colors.accent} />
-              </View>
-              <View style={styles.locationInfoCol}>
-                <Text style={styles.locationAddressText}>
-                  {address ? `${address}` : ''}
-                  {address && city ? ` • ${city}` : city || 'Localisation renseignée'}
-                </Text>
-                {distanceKm !== null && refPoint ? (
-                  <View style={styles.locationDistanceRow}>
-                    <Ionicons name="compass" size={13} color={Colors.accent} />
-                    <Text style={styles.locationDistanceText}>
-                      À {LocationService.formatDistance(distanceKm)} de {refPoint.label}
-                    </Text>
-                  </View>
-                ) : (
-                  <Text style={styles.locationHintText}>
-                    Définissez votre point de repère pour voir la distance exacte
-                  </Text>
-                )}
-              </View>
+        <View style={styles.locationCard}>
+          <View style={styles.locationHeaderRow}>
+            <View style={styles.locationIconWrap}>
+              <Ionicons name="location" size={20} color={Colors.accent} />
             </View>
-
-            <TouchableOpacity
-              style={styles.openMapsButton}
-              onPress={handleOpenMaps}
-              activeOpacity={0.8}
-            >
-              <Ionicons name="map-outline" size={15} color="#FFFFFF" />
-              <Text style={styles.openMapsButtonText}>Ouvrir l'itinéraire (Plans / GPS)</Text>
-            </TouchableOpacity>
+            <View style={styles.locationInfoCol}>
+              <Text style={styles.locationAddressText}>
+                {address ? `${address}` : ''}
+                {address && city ? ` • ${city}` : city || 'Localisation non renseignée'}
+              </Text>
+              {distanceKm !== null && refPoint ? (
+                <TouchableOpacity
+                  style={styles.locationDistanceRow}
+                  onPress={() => setIsRefPointModalOpen(true)}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons
+                    name={refPoint.isGps ? 'navigate' : 'home'}
+                    size={13}
+                    color={Colors.accent}
+                  />
+                  <Text style={styles.locationDistanceText}>
+                    À {LocationService.formatDistance(distanceKm)} de {refPoint.label}
+                  </Text>
+                  <Ionicons name="create-outline" size={13} color={Colors.textMuted} />
+                </TouchableOpacity>
+              ) : (
+                <TouchableOpacity
+                  style={styles.setRefPointBtn}
+                  onPress={() => setIsRefPointModalOpen(true)}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="add-circle-outline" size={14} color={Colors.primary} />
+                  <Text style={styles.setRefPointText}>
+                    Définir mon adresse fixe pour calculer la distance
+                  </Text>
+                </TouchableOpacity>
+              )}
+            </View>
           </View>
-        )}
+
+          <TouchableOpacity
+            style={styles.openMapsButton}
+            onPress={handleOpenMaps}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="map-outline" size={15} color="#FFFFFF" />
+            <Text style={styles.openMapsButtonText}>Ouvrir l'itinéraire (Plans / GPS)</Text>
+          </TouchableOpacity>
+        </View>
 
         {/* Sélecteur de statut */}
         <View style={styles.section}>
@@ -454,6 +496,14 @@ export const CompanyDetailScreen: React.FC<CompanyDetailScreenProps> = ({
           )}
         </TouchableOpacity>
       </ScrollView>
+
+      {/* Modal de définition d'adresse fixe */}
+      <ReferencePointModal
+        visible={isRefPointModalOpen}
+        onClose={() => setIsRefPointModalOpen(false)}
+        currentPoint={refPoint}
+        onSave={handleSaveRefPoint}
+      />
     </View>
   );
 };
@@ -744,4 +794,21 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
   },
+  setRefPointBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: `${Colors.primary}18`,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+    marginTop: 4,
+    alignSelf: 'flex-start',
+  },
+  setRefPointText: {
+    color: Colors.primary,
+    fontSize: 11.5,
+    fontWeight: '600',
+  },
 });
+

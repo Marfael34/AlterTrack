@@ -27,12 +27,16 @@ interface HomeScreenProps {
   onSelectCompany: (company: Company) => void;
   onOpenSettings: () => void;
   onOpenAddCompany: () => void;
+  refPoint?: ReferencePoint | null;
+  onUpdateRefPoint?: (point: ReferencePoint | null) => void;
 }
 
 export const HomeScreen: React.FC<HomeScreenProps> = ({
   onSelectCompany,
   onOpenSettings,
   onOpenAddCompany,
+  refPoint: propRefPoint,
+  onUpdateRefPoint,
 }) => {
   const [companies, setCompanies] = useState<Company[]>([]);
   const [stats, setStats] = useState<CompanyStats | undefined>(undefined);
@@ -40,7 +44,9 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   const [totalCount, setTotalCount] = useState<number>(0);
   const [selectedStatuses, setSelectedStatuses] = useState<Status[]>([]);
   const [selectedCity, setSelectedCity] = useState<string | 'ALL'>('ALL');
-  const [sortBy, setSortBy] = useState<'updatedAt' | 'name' | 'city'>('updatedAt');
+  const [sortBy, setSortBy] = useState<
+    'updatedAt' | 'name' | 'city' | 'distance'
+  >('updatedAt');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [isFiltersModalOpen, setIsFiltersModalOpen] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -51,16 +57,26 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   const [isSelectionMode, setIsSelectionMode] = useState<boolean>(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [deletingBatch, setDeletingBatch] = useState<boolean>(false);
-  const [refPoint, setRefPoint] = useState<ReferencePoint | null>(null);
+  const [refPoint, setRefPoint] = useState<ReferencePoint | null>(propRefPoint || null);
   const [isRefPointModalOpen, setIsRefPointModalOpen] = useState<boolean>(false);
   const [distancesMap, setDistancesMap] = useState<Record<string, number>>({});
 
   useEffect(() => {
+    if (propRefPoint !== undefined) {
+      setRefPoint(propRefPoint);
+    }
+  }, [propRefPoint]);
+
+  useEffect(() => {
     void (async () => {
-      const point = await LocationService.getReferencePoint();
-      setRefPoint(point);
+      if (!propRefPoint) {
+        const point = await LocationService.getReferencePoint();
+        if (point) {
+          setRefPoint(point);
+        }
+      }
     })();
-  }, []);
+  }, [propRefPoint]);
 
   useEffect(() => {
     if (!refPoint || companies.length === 0) {
@@ -68,23 +84,48 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
       return;
     }
 
-    let isMounted = true;
-    void (async () => {
-      const newDistances: Record<string, number> = {};
-      for (const comp of companies) {
-        const d = await LocationService.getDistanceToCompany(comp, refPoint);
-        if (d !== null) {
-          newDistances[comp.id] = d;
-        }
-      }
-      if (isMounted) {
-        setDistancesMap(newDistances);
-      }
-    })();
+    // 1. Calcul instantané (0ms) pour toutes les fiches avec coordonnées existantes
+    const instantMap: Record<string, number> = {};
+    const unlocated: Company[] = [];
 
-    return () => {
-      isMounted = false;
-    };
+    for (const comp of companies) {
+      if (
+        typeof comp.latitude === 'number' &&
+        typeof comp.longitude === 'number' &&
+        !isNaN(comp.latitude) &&
+        !isNaN(comp.longitude)
+      ) {
+        instantMap[comp.id] = LocationService.calculateDistanceKm(
+          refPoint.latitude,
+          refPoint.longitude,
+          comp.latitude,
+          comp.longitude,
+        );
+      } else {
+        unlocated.push(comp);
+      }
+    }
+
+    setDistancesMap(instantMap);
+
+    // 2. Géocodage asynchrone pour les éventuelles entreprises sans coordonnées
+    if (unlocated.length > 0) {
+      let isMounted = true;
+      void (async () => {
+        const fullMap = { ...instantMap };
+        await Promise.all(
+          unlocated.map(async (comp) => {
+            const d = await LocationService.getDistanceToCompany(comp, refPoint);
+            if (d !== null) {
+              fullMap[comp.id] = d;
+            }
+          }),
+        );
+        if (isMounted) {
+          setDistancesMap(fullMap);
+        }
+      })();
+    }
   }, [companies, refPoint]);
 
   const activeFiltersCount =
@@ -92,14 +133,26 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
     (selectedCity !== 'ALL' ? 1 : 0) +
     (sortBy !== 'updatedAt' ? 1 : 0);
 
+  const displayedCompanies = React.useMemo(() => {
+    if (sortBy !== 'distance' || !refPoint) {
+      return companies;
+    }
+    return [...companies].sort((a, b) => {
+      const distA = distancesMap[a.id] ?? 999999;
+      const distB = distancesMap[b.id] ?? 999999;
+      return sortOrder === 'asc' ? distA - distB : distB - distA;
+    });
+  }, [companies, sortBy, sortOrder, distancesMap, refPoint]);
+
   const loadData = useCallback(async () => {
     try {
+      const backendSortBy = sortBy === 'distance' ? 'updatedAt' : sortBy;
       const [companiesRes, statsRes, citiesRes] = await Promise.all([
         ApiService.getCompanies({
           statuses: selectedStatuses.length > 0 ? selectedStatuses : undefined,
           city: selectedCity === 'ALL' ? undefined : selectedCity,
           search: searchQuery.trim() || undefined,
-          sortBy,
+          sortBy: backendSortBy,
           sortOrder,
         }),
         ApiService.getCompanyStats(),
@@ -426,8 +479,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           activeOpacity={0.7}
         >
           <Ionicons
-            name={refPoint?.isGps ? 'navigate' : 'compass'}
-            size={14}
+            name={refPoint?.isGps ? 'navigate' : 'home'}
+            size={15}
             color={refPoint ? Colors.accent : Colors.textMuted}
           />
           <Text
@@ -438,8 +491,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             numberOfLines={1}
           >
             {refPoint
-              ? `Repère : ${refPoint.label}`
-              : 'Définir un point de repère (domicile/GPS) pour voir les distances'}
+              ? `Adresse fixe : ${refPoint.label}`
+              : '📍 Définir mon adresse fixe pour calculer les distances'}
           </Text>
           <Ionicons
             name="chevron-forward"
@@ -558,7 +611,12 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         visible={isRefPointModalOpen}
         onClose={() => setIsRefPointModalOpen(false)}
         currentPoint={refPoint}
-        onSave={(point) => setRefPoint(point)}
+        onSave={(point) => {
+          setRefPoint(point);
+          if (onUpdateRefPoint) {
+            onUpdateRefPoint(point);
+          }
+        }}
       />
 
       {/* Barre d'outils du mode sélection */}
@@ -652,7 +710,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         </View>
       ) : (
         <FlatList
-          data={companies}
+          data={displayedCompanies}
           keyExtractor={(item) => item.id}
           renderItem={({ item }) => (
             <CompanyCard

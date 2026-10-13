@@ -16,7 +16,7 @@ import { CityItem } from './CityFilterBar';
 export interface FilterState {
   statuses: Status[];
   city: string | 'ALL';
-  sortBy: 'updatedAt' | 'name' | 'city';
+  sortBy: 'updatedAt' | 'name' | 'city' | 'distance';
   sortOrder: 'asc' | 'desc';
 }
 
@@ -53,9 +53,9 @@ export const FiltersModal: React.FC<FiltersModalProps> = ({
     initialFilters.statuses || [],
   );
   const [draftCity, setDraftCity] = useState<string | 'ALL'>(initialFilters.city);
-  const [draftSortBy, setDraftSortBy] = useState<'updatedAt' | 'name' | 'city'>(
-    initialFilters.sortBy,
-  );
+  const [draftSortBy, setDraftSortBy] = useState<
+    'updatedAt' | 'name' | 'city' | 'distance'
+  >(initialFilters.sortBy);
   const [draftSortOrder, setDraftSortOrder] = useState<'asc' | 'desc'>(
     initialFilters.sortOrder,
   );
@@ -360,6 +360,12 @@ export const FiltersModal: React.FC<FiltersModalProps> = ({
                   order: 'desc' as const,
                 },
                 {
+                  id: 'distance',
+                  label: 'Distance (Plus proches de mon adresse d’abord)',
+                  icon: 'compass-outline',
+                  order: 'asc' as const,
+                },
+                {
                   id: 'name',
                   label: 'Nom de l’entreprise (A → Z)',
                   icon: 'business-outline',
@@ -382,7 +388,9 @@ export const FiltersModal: React.FC<FiltersModalProps> = ({
                       isSelected && styles.sortOptionActive,
                     ]}
                     onPress={() => {
-                      setDraftSortBy(opt.id as 'updatedAt' | 'name' | 'city');
+                      setDraftSortBy(
+                        opt.id as 'updatedAt' | 'name' | 'city' | 'distance',
+                      );
                       setDraftSortOrder(opt.order);
                     }}
                     activeOpacity={0.7}
