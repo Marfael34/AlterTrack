@@ -12,6 +12,8 @@
     "api:build": "npm --prefix apps/api run build",
     "api:test": "npm --prefix apps/api run test",
     "api:lint": "npm --prefix apps/api run lint",
+    "mobile:start": "npm --prefix apps/mobile run start",
+    "mobile:web": "npm --prefix apps/mobile run web",
     "docker:up": "docker compose up -d",
     "docker:down": "docker compose down"
   },
