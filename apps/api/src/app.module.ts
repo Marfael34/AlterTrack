@@ -5,11 +5,13 @@ import { AllExceptionsFilter } from './common/filters/http-exception.filter';
 import { ApiKeyGuard } from './common/guards/api-key.guard';
 import configuration from './config/configuration';
 import { validateEnvironment } from './config/env.validation';
+import { ScheduleModule } from '@nestjs/schedule';
 import { AppConfigModule } from './modules/app-config/app-config.module';
 import { CompaniesModule } from './modules/companies/companies.module';
 import { GeminiModule } from './modules/gemini/gemini.module';
 import { HealthModule } from './modules/health/health.module';
 import { MailingModule } from './modules/mailing/mailing.module';
+import { SchedulerModule } from './modules/scheduler/scheduler.module';
 import { PrismaModule } from './prisma/prisma.module';
 
 @Module({
@@ -20,12 +22,14 @@ import { PrismaModule } from './prisma/prisma.module';
       validate: validateEnvironment,
       envFilePath: ['.env', '../../.env'],
     }),
+    ScheduleModule.forRoot(),
     PrismaModule,
     HealthModule,
     CompaniesModule,
     AppConfigModule,
     GeminiModule,
     MailingModule,
+    SchedulerModule,
   ],
   providers: [
     {
