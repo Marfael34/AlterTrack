@@ -11,6 +11,13 @@ export class QueryCompanyDto {
   search?: string;
 
   @IsOptional()
+  @IsString()
+  @Transform(({ value }: { value: unknown }) =>
+    typeof value === 'string' ? value.trim() : value,
+  )
+  city?: string;
+
+  @IsOptional()
   @IsEnum(Status)
   status?: Status;
 

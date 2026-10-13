@@ -50,16 +50,25 @@ export const ApiService = {
     return this.request('/health');
   },
 
-  async getCompanies(query?: { search?: string; status?: Status }): Promise<{
+  async getCompanies(query?: {
+    search?: string;
+    status?: Status;
+    city?: string;
+  }): Promise<{
     items: Company[];
     total: number;
   }> {
     const params = new URLSearchParams();
     if (query?.search) params.append('search', query.search);
     if (query?.status) params.append('status', query.status);
+    if (query?.city) params.append('city', query.city);
 
     const queryString = params.toString() ? `?${params.toString()}` : '';
     return this.request(`/companies${queryString}`);
+  },
+
+  async getCities(): Promise<Array<{ city: string; count: number }>> {
+    return this.request('/companies/cities');
   },
 
   async getCompanyStats(): Promise<CompanyStats> {

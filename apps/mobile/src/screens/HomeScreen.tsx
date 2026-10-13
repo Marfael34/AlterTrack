@@ -15,6 +15,7 @@ import {
 } from 'react-native';
 import { CompanyCard } from '../components/CompanyCard';
 import { FilterTabs } from '../components/FilterTabs';
+import { CityFilterBar, CityItem } from '../components/CityFilterBar';
 import { Colors } from '../constants/colors';
 import { ApiService } from '../services/api.service';
 import { Company, CompanyStats, Status } from '../types/company';
@@ -32,8 +33,10 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 }) => {
   const [companies, setCompanies] = useState<Company[]>([]);
   const [stats, setStats] = useState<CompanyStats | undefined>(undefined);
+  const [cities, setCities] = useState<CityItem[]>([]);
   const [totalCount, setTotalCount] = useState<number>(0);
   const [selectedStatus, setSelectedStatus] = useState<Status | 'ALL'>('ALL');
+  const [selectedCity, setSelectedCity] = useState<string | 'ALL'>('ALL');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [loading, setLoading] = useState<boolean>(true);
   const [refreshing, setRefreshing] = useState<boolean>(false);
@@ -45,24 +48,27 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
   const loadData = useCallback(async () => {
     try {
-      const [companiesRes, statsRes] = await Promise.all([
+      const [companiesRes, statsRes, citiesRes] = await Promise.all([
         ApiService.getCompanies({
           status: selectedStatus === 'ALL' ? undefined : selectedStatus,
+          city: selectedCity === 'ALL' ? undefined : selectedCity,
           search: searchQuery.trim() || undefined,
         }),
         ApiService.getCompanyStats(),
+        ApiService.getCities(),
       ]);
 
       setCompanies(companiesRes.items);
       setTotalCount(companiesRes.total);
       setStats(statsRes);
+      setCities(citiesRes);
     } catch (error) {
       // Évite les alertes intempestives en cas de premier lancement hors-ligne
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [selectedStatus, searchQuery]);
+  }, [selectedStatus, selectedCity, searchQuery]);
 
   useEffect(() => {
     void loadData();
@@ -122,7 +128,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
       allVisibleSelected &&
       companies.length === totalCount &&
       !searchQuery.trim() &&
-      selectedStatus === 'ALL';
+      selectedStatus === 'ALL' &&
+      selectedCity === 'ALL';
 
     Alert.alert(
       'Suppression groupée',
@@ -346,6 +353,14 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         totalCount={totalCount}
       />
 
+      {/* Barre de filtrage par ville */}
+      <CityFilterBar
+        cities={cities}
+        selectedCity={selectedCity}
+        onSelectCity={setSelectedCity}
+        totalCount={totalCount}
+      />
+
       {/* Barre d'outils du mode sélection */}
       {isSelectionMode ? (
         <View style={styles.selectionBar}>
@@ -462,11 +477,11 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
               <Ionicons name="briefcase-outline" size={48} color={Colors.border} />
               <Text style={styles.emptyTitle}>Aucune entreprise trouvée</Text>
               <Text style={styles.emptySubtitle}>
-                {searchQuery
-                  ? 'Aucun résultat ne correspond à votre recherche.'
+                {searchQuery || selectedCity !== 'ALL' || selectedStatus !== 'ALL'
+                  ? 'Aucun résultat ne correspond aux filtres appliqués.'
                   : 'Ajoutez une entreprise avec le bouton "+" ou importez directement votre tableur.'}
               </Text>
-              {!searchQuery && (
+              {!searchQuery && selectedCity === 'ALL' && selectedStatus === 'ALL' && (
                 <TouchableOpacity
                   style={styles.emptyImportButton}
                   onPress={handleImportSpreadsheet}

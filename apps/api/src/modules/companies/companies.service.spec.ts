@@ -91,6 +91,35 @@ describe('CompaniesService', () => {
     });
   });
 
+  describe('findAll', () => {
+    it('should filter by city when provided', async () => {
+      await service.findAll({ city: 'Béziers', limit: 50, offset: 0 });
+      expect(prisma.company.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            city: { contains: 'Béziers', mode: 'insensitive' },
+          }),
+        }),
+      );
+    });
+  });
+
+  describe('getCities', () => {
+    it('should return aggregated and sorted cities', async () => {
+      prisma.company.findMany.mockResolvedValueOnce([
+        { city: 'Perpignan' },
+        { city: 'Montpellier' },
+        { city: 'Perpignan' },
+      ]);
+
+      const result = await service.getCities();
+      expect(result).toEqual([
+        { city: 'Perpignan', count: 2 },
+        { city: 'Montpellier', count: 1 },
+      ]);
+    });
+  });
+
   describe('removeBatch', () => {
     it('should delete specified companies by IDs', async () => {
       const result = await service.removeBatch({ ids: ['id-1', 'id-2'] });

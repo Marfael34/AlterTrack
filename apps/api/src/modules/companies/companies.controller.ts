@@ -84,6 +84,11 @@ export class CompaniesController {
     return this.companiesService.getStats();
   }
 
+  @Get('cities')
+  getCities() {
+    return this.companiesService.getCities();
+  }
+
   @Get()
   findAll(@Query() query: QueryCompanyDto) {
     return this.companiesService.findAll(query);

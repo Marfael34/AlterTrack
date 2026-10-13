@@ -35,6 +35,10 @@ export class CompaniesService {
       where.status = query.status;
     }
 
+    if (query.city) {
+      where.city = { contains: query.city, mode: 'insensitive' };
+    }
+
     if (query.search) {
       where.OR = [
         { name: { contains: query.search, mode: 'insensitive' } },
@@ -147,6 +151,29 @@ export class CompaniesService {
     }
 
     return stats;
+  }
+
+  async getCities(): Promise<Array<{ city: string; count: number }>> {
+    const records = await this.prisma.company.findMany({
+      where: {
+        city: { not: null },
+      },
+      select: {
+        city: true,
+      },
+    });
+
+    const cityCountMap = new Map<string, number>();
+    for (const record of records) {
+      const trimmed = record.city ? record.city.trim() : '';
+      if (trimmed) {
+        cityCountMap.set(trimmed, (cityCountMap.get(trimmed) ?? 0) + 1);
+      }
+    }
+
+    return Array.from(cityCountMap.entries())
+      .map(([city, count]) => ({ city, count }))
+      .sort((a, b) => b.count - a.count || a.city.localeCompare(b.city));
   }
 
   private readonly logger = new Logger(CompaniesService.name);
