@@ -7,7 +7,9 @@ import configuration from './config/configuration';
 import { validateEnvironment } from './config/env.validation';
 import { AppConfigModule } from './modules/app-config/app-config.module';
 import { CompaniesModule } from './modules/companies/companies.module';
+import { GeminiModule } from './modules/gemini/gemini.module';
 import { HealthModule } from './modules/health/health.module';
+import { MailingModule } from './modules/mailing/mailing.module';
 import { PrismaModule } from './prisma/prisma.module';
 
 @Module({
@@ -22,6 +24,8 @@ import { PrismaModule } from './prisma/prisma.module';
     HealthModule,
     CompaniesModule,
     AppConfigModule,
+    GeminiModule,
+    MailingModule,
   ],
   providers: [
     {
