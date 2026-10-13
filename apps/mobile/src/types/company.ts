@@ -11,7 +11,10 @@ export interface Company {
   id: string;
   name: string;
   email: string;
+  address?: string | null;
   city?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
   phone?: string | null;
   notes?: string | null;
   status: Status;

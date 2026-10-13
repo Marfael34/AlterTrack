@@ -19,11 +19,25 @@ export class UpdateCompanyDto {
 
   @IsOptional()
   @IsString()
+  @MaxLength(255)
+  @Transform(({ value }: { value: unknown }) =>
+    typeof value === 'string' ? value.trim() : value,
+  )
+  address?: string;
+
+  @IsOptional()
+  @IsString()
   @MaxLength(100)
   @Transform(({ value }: { value: unknown }) =>
     typeof value === 'string' ? value.trim() : value,
   )
   city?: string;
+
+  @IsOptional()
+  latitude?: number;
+
+  @IsOptional()
+  longitude?: number;
 
   @IsOptional()
   @IsString()

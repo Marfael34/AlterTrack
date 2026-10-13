@@ -4,6 +4,7 @@ import { Linking, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
 import { Colors } from '../constants/colors';
 import { Company } from '../types/company';
 import { StatusBadge } from './StatusBadge';
+import { LocationService } from '../services/location.service';
 
 interface CompanyCardProps {
   company: Company;
@@ -12,6 +13,7 @@ interface CompanyCardProps {
   selected?: boolean;
   onToggleSelect?: () => void;
   onLongPress?: () => void;
+  distanceKm?: number | null;
 }
 
 export const CompanyCard: React.FC<CompanyCardProps> = ({
@@ -21,6 +23,7 @@ export const CompanyCard: React.FC<CompanyCardProps> = ({
   selected = false,
   onToggleSelect,
   onLongPress,
+  distanceKm,
 }) => {
   const handleCall = () => {
     if (company.phone) {
@@ -46,6 +49,8 @@ export const CompanyCard: React.FC<CompanyCardProps> = ({
       onPress();
     }
   };
+
+  const formattedDistance = LocationService.formatDistance(distanceKm);
 
   return (
     <TouchableOpacity
@@ -76,17 +81,34 @@ export const CompanyCard: React.FC<CompanyCardProps> = ({
               <Text style={styles.companyName} numberOfLines={2}>
                 {company.name}
               </Text>
-              {company.city && (
-                <View style={styles.cityBadge}>
-                  <Ionicons name="location-sharp" size={11} color={Colors.primary} />
-                  <Text style={styles.cityText} numberOfLines={1}>
-                    {company.city}
-                  </Text>
-                </View>
-              )}
+              <View style={styles.badgesRow}>
+                {company.city && (
+                  <View style={styles.cityBadge}>
+                    <Ionicons name="location-sharp" size={11} color={Colors.accent} />
+                    <Text style={styles.cityText} numberOfLines={1}>
+                      {company.city}
+                    </Text>
+                  </View>
+                )}
+                {formattedDistance && (
+                  <View style={styles.distanceBadge}>
+                    <Ionicons name="compass-outline" size={11} color={Colors.primary} />
+                    <Text style={styles.distanceText}>{formattedDistance}</Text>
+                  </View>
+                )}
+              </View>
             </View>
             <StatusBadge status={company.status} size="small" />
           </View>
+
+          {company.address ? (
+            <View style={styles.addressRow}>
+              <Ionicons name="navigate-outline" size={12} color={Colors.textSecondary} />
+              <Text style={styles.addressText} numberOfLines={1}>
+                {company.address}
+              </Text>
+            </View>
+          ) : null}
 
           <View style={styles.contactRow}>
             <Ionicons
@@ -202,19 +224,53 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: Colors.text,
   },
+  badgesRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
   cityBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: `${Colors.primary}20`,
+    backgroundColor: `${Colors.accent}20`,
     paddingHorizontal: 7,
     paddingVertical: 2,
     borderRadius: 8,
     gap: 3,
   },
   cityText: {
-    color: Colors.primary,
+    color: Colors.accent,
     fontSize: 11,
     fontWeight: '600',
+  },
+  distanceBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: `${Colors.primary}20`,
+    borderColor: `${Colors.primary}60`,
+    borderWidth: 1,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 8,
+    gap: 3,
+  },
+  distanceText: {
+    color: Colors.primary,
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  addressRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    marginTop: 2,
+    marginBottom: 6,
+  },
+  addressText: {
+    color: Colors.textMuted,
+    fontSize: 12,
+    flex: 1,
   },
   contactRow: {
     flexDirection: 'row',

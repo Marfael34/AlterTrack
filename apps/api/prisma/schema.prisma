@@ -24,7 +24,10 @@ model Company {
   id              String    @id @default(uuid())
   name            String
   email           String
+  address         String?
   city            String?
+  latitude        Float?
+  longitude       Float?
   phone           String?
   notes           String?
   status          Status    @default(TO_SEND)

@@ -35,6 +35,7 @@ export const AddCompanyScreen: React.FC<AddCompanyScreenProps> = ({
   onCreated,
 }) => {
   const [name, setName] = useState('');
+  const [address, setAddress] = useState('');
   const [city, setCity] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
@@ -57,6 +58,7 @@ export const AddCompanyScreen: React.FC<AddCompanyScreenProps> = ({
     try {
       await ApiService.createCompany({
         name: name.trim(),
+        address: address.trim() || undefined,
         city: city.trim() || undefined,
         email: email.trim(),
         phone: phone.trim() || undefined,
@@ -195,12 +197,21 @@ export const AddCompanyScreen: React.FC<AddCompanyScreenProps> = ({
           autoFocus
         />
 
-        <Text style={styles.fieldLabel}>Ville ou localisation</Text>
+        <Text style={styles.fieldLabel}>Ville ou commune</Text>
         <TextInput
           style={styles.input}
           value={city}
           onChangeText={setCity}
-          placeholder="Ex: Paris, Lyon, Toulouse, En télétravail..."
+          placeholder="Ex: Montpellier, Paris, Lyon..."
+          placeholderTextColor={Colors.textMuted}
+        />
+
+        <Text style={styles.fieldLabel}>Adresse postale (facultatif)</Text>
+        <TextInput
+          style={styles.input}
+          value={address}
+          onChangeText={setAddress}
+          placeholder="Ex: 10 rue de la République"
           placeholderTextColor={Colors.textMuted}
         />
 

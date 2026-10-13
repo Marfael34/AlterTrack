@@ -14,6 +14,7 @@ import {
 import { StatusBadge } from '../components/StatusBadge';
 import { Colors } from '../constants/colors';
 import { ApiService } from '../services/api.service';
+import { LocationService, ReferencePoint } from '../services/location.service';
 import { STATUS_LABELS, Company, Status } from '../types/company';
 
 interface CompanyDetailScreenProps {
@@ -39,6 +40,7 @@ export const CompanyDetailScreen: React.FC<CompanyDetailScreenProps> = ({
 }) => {
   const [company, setCompany] = useState<Company>(initialCompany);
   const [name, setName] = useState(initialCompany.name);
+  const [address, setAddress] = useState(initialCompany.address || '');
   const [city, setCity] = useState(initialCompany.city || '');
   const [email, setEmail] = useState(
     initialCompany.email?.endsWith('@sans-email.altertrack')
@@ -50,6 +52,29 @@ export const CompanyDetailScreen: React.FC<CompanyDetailScreenProps> = ({
   const [status, setStatus] = useState<Status>(initialCompany.status);
   const [saving, setSaving] = useState(false);
   const [sendingFollowUp, setSendingFollowUp] = useState(false);
+  const [refPoint, setRefPoint] = useState<ReferencePoint | null>(null);
+  const [distanceKm, setDistanceKm] = useState<number | null>(null);
+
+  React.useEffect(() => {
+    void (async () => {
+      const point = await LocationService.getReferencePoint();
+      setRefPoint(point);
+      if (point) {
+        const d = await LocationService.getDistanceToCompany(initialCompany, point);
+        setDistanceKm(d);
+      }
+    })();
+  }, [initialCompany]);
+
+  const handleOpenMaps = () => {
+    const destination = address || city || company.name;
+    if (!destination) return;
+    const encoded = encodeURIComponent(destination);
+    const url = `https://www.google.com/maps/search/?api=1&query=${encoded}`;
+    Linking.openURL(url).catch(() => {
+      Alert.alert('Erreur', "Impossible d'ouvrir l'application de cartographie");
+    });
+  };
 
   const isReplyReceived = status === 'REPLY_RECEIVED';
 
@@ -88,6 +113,7 @@ export const CompanyDetailScreen: React.FC<CompanyDetailScreenProps> = ({
     try {
       const updated = await ApiService.updateCompany(company.id, {
         name: name.trim(),
+        address: address.trim() || undefined,
         city: city.trim() || undefined,
         email: emailToSave,
         phone: phone.trim() || undefined,
@@ -250,6 +276,44 @@ export const CompanyDetailScreen: React.FC<CompanyDetailScreenProps> = ({
           </TouchableOpacity>
         )}
 
+        {/* Carte Localisation & Distance */}
+        {(address || city || distanceKm !== null) && (
+          <View style={styles.locationCard}>
+            <View style={styles.locationHeaderRow}>
+              <View style={styles.locationIconWrap}>
+                <Ionicons name="location" size={20} color={Colors.accent} />
+              </View>
+              <View style={styles.locationInfoCol}>
+                <Text style={styles.locationAddressText}>
+                  {address ? `${address}` : ''}
+                  {address && city ? ` • ${city}` : city || 'Localisation renseignée'}
+                </Text>
+                {distanceKm !== null && refPoint ? (
+                  <View style={styles.locationDistanceRow}>
+                    <Ionicons name="compass" size={13} color={Colors.accent} />
+                    <Text style={styles.locationDistanceText}>
+                      À {LocationService.formatDistance(distanceKm)} de {refPoint.label}
+                    </Text>
+                  </View>
+                ) : (
+                  <Text style={styles.locationHintText}>
+                    Définissez votre point de repère pour voir la distance exacte
+                  </Text>
+                )}
+              </View>
+            </View>
+
+            <TouchableOpacity
+              style={styles.openMapsButton}
+              onPress={handleOpenMaps}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="map-outline" size={15} color="#FFFFFF" />
+              <Text style={styles.openMapsButtonText}>Ouvrir l'itinéraire (Plans / GPS)</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
         {/* Sélecteur de statut */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Statut actuel</Text>
@@ -298,12 +362,21 @@ export const CompanyDetailScreen: React.FC<CompanyDetailScreenProps> = ({
             placeholderTextColor={Colors.textMuted}
           />
 
-          <Text style={styles.fieldLabel}>Ville ou localisation</Text>
+          <Text style={styles.fieldLabel}>Ville ou commune</Text>
           <TextInput
             style={styles.input}
             value={city}
             onChangeText={setCity}
-            placeholder="Ex: Paris, Lyon, Toulouse, En télétravail..."
+            placeholder="Ex: Montpellier, Paris, Lyon..."
+            placeholderTextColor={Colors.textMuted}
+          />
+
+          <Text style={styles.fieldLabel}>Adresse postale précise (facultatif)</Text>
+          <TextInput
+            style={styles.input}
+            value={address}
+            onChangeText={setAddress}
+            placeholder="Ex: 10 rue de la République"
             placeholderTextColor={Colors.textMuted}
           />
 
@@ -609,5 +682,66 @@ const styles = StyleSheet.create({
   },
   buttonDisabled: {
     opacity: 0.6,
+  },
+  locationCard: {
+    backgroundColor: '#1E1B38',
+    borderRadius: 14,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: `${Colors.primary}60`,
+    marginBottom: 20,
+    gap: 12,
+  },
+  locationHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+  },
+  locationIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: `${Colors.accent}20`,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  locationInfoCol: {
+    flex: 1,
+    gap: 3,
+  },
+  locationAddressText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: Colors.text,
+  },
+  locationDistanceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 2,
+  },
+  locationDistanceText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: Colors.accent,
+  },
+  locationHintText: {
+    fontSize: 11,
+    color: Colors.textMuted,
+    fontStyle: 'italic',
+  },
+  openMapsButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.brandBlue,
+    paddingVertical: 10,
+    borderRadius: 10,
+    gap: 8,
+  },
+  openMapsButtonText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '700',
   },
 });

@@ -15,12 +15,45 @@ import { UpdateCompanyDto } from './dto/update-company.dto';
 export class CompaniesService {
   constructor(private readonly prisma: PrismaService) {}
 
+  async geocodeAddress(text?: string): Promise<{ latitude: number; longitude: number } | null> {
+    if (!text || text.trim().length < 2) return null;
+    try {
+      const url = `https://api-adresse.data.gouv.fr/search/?q=${encodeURIComponent(text.trim())}&limit=1`;
+      const res = await fetch(url);
+      if (!res.ok) return null;
+      const data = (await res.json()) as {
+        features?: Array<{ geometry: { coordinates: [number, number] } }>;
+      };
+      if (data.features && data.features.length > 0) {
+        const [lon, lat] = data.features[0].geometry.coordinates;
+        return { latitude: lat, longitude: lon };
+      }
+    } catch {
+      // Ignorer silencieusement si API inaccessible
+    }
+    return null;
+  }
+
   async create(createDto: CreateCompanyDto) {
+    let lat = createDto.latitude;
+    let lon = createDto.longitude;
+
+    if ((lat === undefined || lon === undefined) && (createDto.address || createDto.city)) {
+      const geo = await this.geocodeAddress(createDto.address || createDto.city);
+      if (geo) {
+        lat = geo.latitude;
+        lon = geo.longitude;
+      }
+    }
+
     return this.prisma.company.create({
       data: {
         name: createDto.name,
         email: createDto.email,
+        address: createDto.address,
         city: createDto.city,
+        latitude: lat,
+        longitude: lon,
         phone: createDto.phone,
         notes: createDto.notes,
         status: createDto.status ?? Status.TO_SEND,
@@ -44,6 +77,7 @@ export class CompaniesService {
     if (query.search) {
       where.OR = [
         { name: { contains: query.search, mode: 'insensitive' } },
+        { address: { contains: query.search, mode: 'insensitive' } },
         { city: { contains: query.search, mode: 'insensitive' } },
         { email: { contains: query.search, mode: 'insensitive' } },
       ];
@@ -89,9 +123,25 @@ export class CompaniesService {
   async update(id: string, updateDto: UpdateCompanyDto) {
     await this.findOne(id);
 
+    let lat = updateDto.latitude;
+    let lon = updateDto.longitude;
+
+    const newQuery = updateDto.address || updateDto.city;
+    if (lat === undefined && lon === undefined && newQuery) {
+      const geo = await this.geocodeAddress(newQuery);
+      if (geo) {
+        lat = geo.latitude;
+        lon = geo.longitude;
+      }
+    }
+
     return this.prisma.company.update({
       where: { id },
-      data: updateDto,
+      data: {
+        ...updateDto,
+        ...(lat !== undefined ? { latitude: lat } : {}),
+        ...(lon !== undefined ? { longitude: lon } : {}),
+      },
     });
   }
 
@@ -269,6 +319,7 @@ export class CompaniesService {
       let bestColMap = {
         name: -1,
         email: -1,
+        address: -1,
         city: -1,
         postalCode: -1,
         phone: -1,
@@ -290,6 +341,7 @@ export class CompaniesService {
         const tempMap = {
           name: -1,
           email: -1,
+          address: -1,
           city: -1,
           postalCode: -1,
           phone: -1,
@@ -336,6 +388,15 @@ export class CompaniesService {
             tempMap.email = colIdx;
             score += 10;
           } else if (
+            tempMap.address === -1 &&
+            (norm.includes('adresse') ||
+              norm === 'rue' ||
+              norm.includes('voie') ||
+              norm.includes('numero'))
+          ) {
+            tempMap.address = colIdx;
+            score += 9;
+          } else if (
             tempMap.city === -1 &&
             (norm === 'ville' ||
               norm === 'villes' ||
@@ -350,7 +411,6 @@ export class CompaniesService {
               norm.includes('region') ||
               norm.includes('departement') ||
               norm.includes('dep') ||
-              norm.includes('adresse') ||
               norm.includes('cp / ville') ||
               norm.includes('cp/ville') ||
               norm.includes('ville/cp') ||
@@ -514,6 +574,10 @@ export class CompaniesService {
             ? String(row[bestColMap.name] ?? '').trim()
             : '';
         let rawEmail = '';
+        let rawAddress =
+          bestColMap.address !== -1
+            ? String(row[bestColMap.address] ?? '').trim()
+            : '';
         let rawCity =
           bestColMap.city !== -1
             ? String(row[bestColMap.city] ?? '').trim()
@@ -745,6 +809,7 @@ export class CompaniesService {
             const updated = await this.prisma.company.update({
               where: { id: existing.id },
               data: {
+                address: rawAddress || existing.address || null,
                 city: rawCity || existing.city || null,
                 phone: rawPhone || existing.phone || null,
                 notes: rawNotes || existing.notes || null,
@@ -815,6 +880,7 @@ export class CompaniesService {
           data: {
             name: rawName,
             email: rawEmail,
+            address: rawAddress || null,
             city: rawCity || null,
             phone: rawPhone || null,
             notes: rawNotes || null,

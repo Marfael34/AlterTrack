@@ -16,9 +16,11 @@ import {
 } from 'react-native';
 import { CompanyCard } from '../components/CompanyCard';
 import { FiltersModal } from '../components/FiltersModal';
+import { ReferencePointModal } from '../components/ReferencePointModal';
 import { CityItem } from '../components/CityFilterBar';
 import { Colors } from '../constants/colors';
 import { ApiService } from '../services/api.service';
+import { LocationService, ReferencePoint } from '../services/location.service';
 import { Company, CompanyStats, STATUS_LABELS, Status } from '../types/company';
 
 interface HomeScreenProps {
@@ -49,6 +51,41 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   const [isSelectionMode, setIsSelectionMode] = useState<boolean>(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [deletingBatch, setDeletingBatch] = useState<boolean>(false);
+  const [refPoint, setRefPoint] = useState<ReferencePoint | null>(null);
+  const [isRefPointModalOpen, setIsRefPointModalOpen] = useState<boolean>(false);
+  const [distancesMap, setDistancesMap] = useState<Record<string, number>>({});
+
+  useEffect(() => {
+    void (async () => {
+      const point = await LocationService.getReferencePoint();
+      setRefPoint(point);
+    })();
+  }, []);
+
+  useEffect(() => {
+    if (!refPoint || companies.length === 0) {
+      setDistancesMap({});
+      return;
+    }
+
+    let isMounted = true;
+    void (async () => {
+      const newDistances: Record<string, number> = {};
+      for (const comp of companies) {
+        const d = await LocationService.getDistanceToCompany(comp, refPoint);
+        if (d !== null) {
+          newDistances[comp.id] = d;
+        }
+      }
+      if (isMounted) {
+        setDistancesMap(newDistances);
+      }
+    })();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [companies, refPoint]);
 
   const activeFiltersCount =
     (selectedStatuses.length > 0 ? selectedStatuses.length : 0) +
@@ -378,6 +415,40 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         </TouchableOpacity>
       </View>
 
+      {/* Barre Point de repère (Distance) */}
+      <View style={styles.refPointBar}>
+        <TouchableOpacity
+          style={[
+            styles.refPointButton,
+            refPoint && styles.refPointButtonActive,
+          ]}
+          onPress={() => setIsRefPointModalOpen(true)}
+          activeOpacity={0.7}
+        >
+          <Ionicons
+            name={refPoint?.isGps ? 'navigate' : 'compass'}
+            size={14}
+            color={refPoint ? Colors.accent : Colors.textMuted}
+          />
+          <Text
+            style={[
+              styles.refPointText,
+              refPoint && styles.refPointTextActive,
+            ]}
+            numberOfLines={1}
+          >
+            {refPoint
+              ? `Repère : ${refPoint.label}`
+              : 'Définir un point de repère (domicile/GPS) pour voir les distances'}
+          </Text>
+          <Ionicons
+            name="chevron-forward"
+            size={13}
+            color={refPoint ? Colors.accent : Colors.textMuted}
+          />
+        </TouchableOpacity>
+      </View>
+
       {/* Puces de filtres actifs avec suppression rapide */}
       {activeFiltersCount > 0 && (
         <View style={styles.activeFiltersRow}>
@@ -482,6 +553,14 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         totalCount={totalCount}
       />
 
+      {/* Modal de définition du point de repère géographique */}
+      <ReferencePointModal
+        visible={isRefPointModalOpen}
+        onClose={() => setIsRefPointModalOpen(false)}
+        currentPoint={refPoint}
+        onSave={(point) => setRefPoint(point)}
+      />
+
       {/* Barre d'outils du mode sélection */}
       {isSelectionMode ? (
         <View style={styles.selectionBar}>
@@ -583,6 +662,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
               selected={selectedIds.has(item.id)}
               onToggleSelect={() => handleToggleSelect(item.id)}
               onLongPress={() => handleLongPressCard(item.id)}
+              distanceKm={distancesMap[item.id]}
             />
           )}
           contentContainerStyle={styles.listContent}
@@ -1088,5 +1168,34 @@ const styles = StyleSheet.create({
     color: Colors.primary,
     fontSize: 12,
     fontWeight: '700',
+  },
+  refPointBar: {
+    paddingHorizontal: 16,
+    marginTop: 8,
+  },
+  refPointButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.cardBackground,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    gap: 8,
+  },
+  refPointButtonActive: {
+    backgroundColor: `${Colors.accent}12`,
+    borderColor: `${Colors.accent}55`,
+  },
+  refPointText: {
+    fontSize: 12,
+    color: Colors.textSecondary,
+    flex: 1,
+    fontWeight: '500',
+  },
+  refPointTextActive: {
+    color: Colors.accent,
+    fontWeight: '600',
   },
 });

@@ -91,7 +91,10 @@ export const ApiService = {
   async createCompany(data: {
     name: string;
     email: string;
+    address?: string;
     city?: string;
+    latitude?: number;
+    longitude?: number;
     phone?: string;
     notes?: string;
     status?: Status;
@@ -107,7 +110,10 @@ export const ApiService = {
     data: {
       name?: string;
       email?: string;
+      address?: string;
       city?: string;
+      latitude?: number;
+      longitude?: number;
       phone?: string;
       notes?: string;
     },

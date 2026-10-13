@@ -1,0 +1,4 @@
+-- AlterTable
+ALTER TABLE "Company" ADD COLUMN "address" TEXT;
+ALTER TABLE "Company" ADD COLUMN "latitude" DOUBLE PRECISION;
+ALTER TABLE "Company" ADD COLUMN "longitude" DOUBLE PRECISION;
