@@ -5,6 +5,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { AppConfigService } from '../app-config/app-config.service';
 import { EmailNature } from '../gemini/dto/generate-email.dto';
 import { GeminiService } from '../gemini/gemini.service';
+import { PushNotificationService } from '../notifications/push-notification.service';
 import { EmailService } from './email.service';
 import { ImapService } from './imap.service';
 import { MailingService } from './mailing.service';
@@ -91,6 +92,10 @@ describe('MailingService', () => {
         { provide: EmailService, useValue: emailService },
         { provide: ImapService, useValue: imapService },
         { provide: AppConfigService, useValue: appConfigService },
+        {
+          provide: PushNotificationService,
+          useValue: { sendPushNotification: jest.fn().mockResolvedValue(true) },
+        },
       ],
     }).compile();
 

@@ -16,6 +16,38 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+    networks:
+      - altertrack-net
+
+  api:
+    build:
+      context: ./apps/api
+      dockerfile: Dockerfile
+    container_name: altertrack-api
+    restart: always
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      DATABASE_URL: postgresql://${POSTGRES_USER:-altertrack}:${POSTGRES_PASSWORD:-altertrack_secret_dev}@postgres:5432/${POSTGRES_DB:-altertrack_db}?schema=public
+      API_KEY: ${API_KEY}
+      UPLOAD_DIR: /app/uploads
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
+      GMAIL_USER: ${GMAIL_USER}
+      GMAIL_APP_PASSWORD: ${GMAIL_APP_PASSWORD}
+    ports:
+      - "${PORT:-3000}:3000"
+    volumes:
+      - api_uploads:/app/uploads
+    networks:
+      - altertrack-net
 
 volumes:
   postgres_data:
+  api_uploads:
+
+networks:
+  altertrack-net:
+    driver: bridge

@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { Prisma, Status } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { MailingService } from '../mailing/mailing.service';
+import { PushNotificationService } from '../notifications/push-notification.service';
 import { SchedulerService } from './scheduler.service';
 
 describe('SchedulerService', () => {
@@ -43,6 +44,10 @@ describe('SchedulerService', () => {
         SchedulerService,
         { provide: PrismaService, useValue: prisma },
         { provide: MailingService, useValue: mailingService },
+        {
+          provide: PushNotificationService,
+          useValue: { sendPushNotification: jest.fn().mockResolvedValue(true) },
+        },
       ],
     }).compile();
 

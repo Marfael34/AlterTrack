@@ -155,4 +155,11 @@ export const ApiService = {
       method: 'POST',
     });
   },
+
+  async updatePushToken(expoPushToken: string): Promise<AppConfig> {
+    return this.request('/config/push-token', {
+      method: 'PATCH',
+      body: JSON.stringify({ expoPushToken }),
+    });
+  },
 };

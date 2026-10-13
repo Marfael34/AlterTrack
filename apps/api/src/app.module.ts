@@ -11,6 +11,7 @@ import { CompaniesModule } from './modules/companies/companies.module';
 import { GeminiModule } from './modules/gemini/gemini.module';
 import { HealthModule } from './modules/health/health.module';
 import { MailingModule } from './modules/mailing/mailing.module';
+import { NotificationsModule } from './modules/notifications/notifications.module';
 import { SchedulerModule } from './modules/scheduler/scheduler.module';
 import { PrismaModule } from './prisma/prisma.module';
 
@@ -29,6 +30,7 @@ import { PrismaModule } from './prisma/prisma.module';
     AppConfigModule,
     GeminiModule,
     MailingModule,
+    NotificationsModule,
     SchedulerModule,
   ],
   providers: [

@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import { Colors } from '../constants/colors';
 import { ApiService } from '../services/api.service';
+import { NotificationService } from '../services/notification.service';
 import { StorageService } from '../services/storage.service';
 import { AppConfig } from '../types/config';
 
@@ -26,11 +27,13 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ onBack }) => {
   const [template, setTemplate] = useState('');
   const [activeCvName, setActiveCvName] = useState<string | null>(null);
   const [hasCv, setHasCv] = useState(false);
+  const [pushToken, setPushToken] = useState<string | null>(null);
 
   const [loadingConfig, setLoadingConfig] = useState(true);
   const [savingTemplate, setSavingTemplate] = useState(false);
   const [uploadingCv, setUploadingCv] = useState(false);
   const [testingConnection, setTestingConnection] = useState(false);
+  const [registeringPush, setRegisteringPush] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState<'IDLE' | 'SUCCESS' | 'ERROR'>('IDLE');
 
   useEffect(() => {
@@ -52,6 +55,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ onBack }) => {
         setTemplate(config.template);
         setHasCv(config.hasCv);
         setActiveCvName(config.cvOriginalName || null);
+        setPushToken(config.expoPushToken || null);
       } catch {
         // Serveur pas encore joignable ou pas encore configuré
       }
@@ -74,11 +78,12 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ onBack }) => {
         `Serveur AlterTrack joignable !\nStatut : ${health.status}\nBase de données : ${health.database}`,
       );
 
-      // Recharger le template et CV
+      // Recharger le template, CV et token push
       const config = await ApiService.getConfig();
       setTemplate(config.template);
       setHasCv(config.hasCv);
       setActiveCvName(config.cvOriginalName || null);
+      setPushToken(config.expoPushToken || null);
     } catch (err) {
       setConnectionStatus('ERROR');
       Alert.alert(
@@ -89,6 +94,32 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ onBack }) => {
       );
     } finally {
       setTestingConnection(false);
+    }
+  };
+
+  const handleRegisterPush = async () => {
+    setRegisteringPush(true);
+    try {
+      const token = await NotificationService.registerForPushNotificationsAsync();
+      if (token) {
+        setPushToken(token);
+        Alert.alert(
+          'Notifications Push ✅',
+          'Token Expo Push synchronisé avec succès avec le serveur ! Vous recevrez des alertes instantanées lors des réponses recruteurs.',
+        );
+      } else {
+        Alert.alert(
+          'Notifications Push ⚠️',
+          'Impossible de récupérer le token Push. Vérifiez que les permissions sont accordées dans les paramètres système de votre appareil.',
+        );
+      }
+    } catch (err) {
+      Alert.alert(
+        'Erreur',
+        err instanceof Error ? err.message : 'Erreur lors de la synchronisation push.',
+      );
+    } finally {
+      setRegisteringPush(false);
     }
   };
 
@@ -294,6 +325,58 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ onBack }) => {
             </>
           )}
         </View>
+
+        {/* Section 4 : Notifications Push */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeaderRow}>
+            <Ionicons
+              name="notifications-outline"
+              size={20}
+              color={Colors.status.REPLY_RECEIVED}
+            />
+            <Text style={styles.sectionTitle}>Notifications Push (Expo)</Text>
+          </View>
+          <Text style={styles.sectionDescription}>
+            Recevez une alerte instantanée sur ce smartphone dès qu'un recruteur
+            répond ou qu'une relance téléphonique est requise (J+15).
+          </Text>
+
+          <View style={styles.cvCard}>
+            <Ionicons
+              name={pushToken ? 'notifications-circle' : 'notifications-off-outline'}
+              size={28}
+              color={pushToken ? Colors.status.REPLY_RECEIVED : Colors.textMuted}
+            />
+            <View style={styles.cvInfo}>
+              <Text style={styles.cvStatus}>
+                {pushToken ? 'Notifications activées' : 'Token non synchronisé'}
+              </Text>
+              <Text style={styles.cvName} numberOfLines={1}>
+                {pushToken || 'Appuyez ci-dessous pour autoriser et lier ce téléphone'}
+              </Text>
+            </View>
+          </View>
+
+          <TouchableOpacity
+            style={[styles.pushButton, registeringPush && styles.buttonDisabled]}
+            onPress={handleRegisterPush}
+            disabled={registeringPush}
+            activeOpacity={0.8}
+          >
+            {registeringPush ? (
+              <ActivityIndicator color="#FFFFFF" size="small" />
+            ) : (
+              <>
+                <Ionicons name="refresh-outline" size={18} color="#FFFFFF" />
+                <Text style={styles.pushButtonText}>
+                  {pushToken
+                    ? 'Re-synchroniser ce téléphone'
+                    : 'Activer les notifications push'}
+                </Text>
+              </>
+            )}
+          </TouchableOpacity>
+        </View>
       </ScrollView>
     </View>
   );
@@ -441,6 +524,21 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   saveTemplateButtonText: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+    fontSize: 13,
+  },
+  pushButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.status.REPLY_RECEIVED,
+    borderRadius: 10,
+    paddingVertical: 12,
+    marginTop: 6,
+    gap: 6,
+  },
+  pushButtonText: {
     color: '#FFFFFF',
     fontWeight: '700',
     fontSize: 13,

@@ -9,6 +9,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { AppConfigService } from '../app-config/app-config.service';
 import { EmailNature } from '../gemini/dto/generate-email.dto';
 import { GeminiService } from '../gemini/gemini.service';
+import { PushNotificationService } from '../notifications/push-notification.service';
 import { EmailService } from './email.service';
 import { ImapService } from './imap.service';
 
@@ -44,6 +45,7 @@ export class MailingService {
     private readonly emailService: EmailService,
     private readonly imapService: ImapService,
     private readonly appConfigService: AppConfigService,
+    private readonly pushService: PushNotificationService,
   ) {}
 
   async sendInitialBatch(companyIds?: string[]) {
@@ -238,6 +240,12 @@ export class MailingService {
             data: {
               status: Status.REPLY_RECEIVED,
             },
+          });
+
+          await this.pushService.sendPushNotification({
+            title: 'Nouvelle réponse reçue !',
+            body: `Nouvelle réponse reçue de ${comp.name} !`,
+            data: { companyId: comp.id, status: Status.REPLY_RECEIVED },
           });
 
           matchedCompanies.push({

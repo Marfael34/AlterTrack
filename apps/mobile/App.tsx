@@ -1,11 +1,12 @@
 import { StatusBar } from 'expo-status-bar';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { SafeAreaView, StyleSheet } from 'react-native';
 import { Colors } from './src/constants/colors';
 import { AddCompanyScreen } from './src/screens/AddCompanyScreen';
 import { CompanyDetailScreen } from './src/screens/CompanyDetailScreen';
 import { HomeScreen } from './src/screens/HomeScreen';
 import { SettingsScreen } from './src/screens/SettingsScreen';
+import { NotificationService } from './src/services/notification.service';
 import { Company } from './src/types/company';
 
 type Screen = 'HOME' | 'DETAIL' | 'ADD' | 'SETTINGS';
@@ -14,6 +15,10 @@ export default function App() {
   const [currentScreen, setCurrentScreen] = useState<Screen>('HOME');
   const [selectedCompany, setSelectedCompany] = useState<Company | null>(null);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
+
+  useEffect(() => {
+    void NotificationService.registerForPushNotificationsAsync();
+  }, []);
 
   const handleOpenDetail = (company: Company) => {
     setSelectedCompany(company);

@@ -3,6 +3,7 @@ import { Cron, CronExpression } from '@nestjs/schedule';
 import { Status } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { MailingService } from '../mailing/mailing.service';
+import { PushNotificationService } from '../notifications/push-notification.service';
 
 @Injectable()
 export class SchedulerService {
@@ -11,6 +12,7 @@ export class SchedulerService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly mailingService: MailingService,
+    private readonly pushService: PushNotificationService,
   ) {}
 
   /**
@@ -153,6 +155,13 @@ export class SchedulerService {
           where: { id: comp.id },
           data: { status: Status.TO_CALL },
         });
+
+        await this.pushService.sendPushNotification({
+          title: 'Candidature à appeler',
+          body: `7 jours sans réponse après relance pour ${comp.name}. Un appel téléphonique est recommandé.`,
+          data: { companyId: comp.id, status: Status.TO_CALL },
+        });
+
         result.transitionedToCallJ15++;
       }
     }
