@@ -223,10 +223,29 @@ export const LocationService = {
       return { latitude: company.latitude, longitude: company.longitude };
     }
 
-    const query = company.address || company.city;
-    if (!query) return null;
+    const cleanAddr = company.address?.trim() || '';
+    const cleanCity = company.city?.trim() || '';
 
-    return this.geocodeQuery(query);
+    // 1. Si on a l'adresse et la ville/commune, combiner les deux pour une géolocalisation exacte
+    if (cleanAddr && cleanCity) {
+      const combined = `${cleanAddr}, ${cleanCity}`;
+      const res = await this.geocodeQuery(combined);
+      if (res) return res;
+      // Repli si l'adresse exacte n'est pas trouvée : géocoder au moins la commune
+      return this.geocodeQuery(cleanCity);
+    }
+
+    // 2. Si on a seulement la ville/commune
+    if (cleanCity) {
+      return this.geocodeQuery(cleanCity);
+    }
+
+    // 3. Si on a seulement l'adresse
+    if (cleanAddr) {
+      return this.geocodeQuery(cleanAddr);
+    }
+
+    return null;
   },
 
   /**

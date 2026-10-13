@@ -15,10 +15,11 @@ import { UpdateCompanyDto } from './dto/update-company.dto';
 export class CompaniesService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async geocodeAddress(text?: string): Promise<{ latitude: number; longitude: number } | null> {
-    if (!text || text.trim().length < 2) return null;
+  async geocodeQuery(queryText: string, type?: 'municipality' | 'housenumber' | 'street'): Promise<{ latitude: number; longitude: number } | null> {
+    if (!queryText || queryText.trim().length < 2) return null;
     try {
-      const url = `https://api-adresse.data.gouv.fr/search/?q=${encodeURIComponent(text.trim())}&limit=1`;
+      const typeParam = type ? `&type=${type}` : '';
+      const url = `https://api-adresse.data.gouv.fr/search/?q=${encodeURIComponent(queryText.trim())}${typeParam}&limit=1`;
       const res = await fetch(url);
       if (!res.ok) return null;
       const data = (await res.json()) as {
@@ -34,12 +35,45 @@ export class CompaniesService {
     return null;
   }
 
+  /**
+   * Géocode en combinant l'adresse ET la ville / commune
+   */
+  async geocodeAddress(address?: string | null, city?: string | null): Promise<{ latitude: number; longitude: number } | null> {
+    const cleanAddr = address?.trim() || '';
+    const cleanCity = city?.trim() || '';
+
+    // 1. Si on a à la fois l'adresse et la commune/ville, combiner les deux pour une précision maximale
+    if (cleanAddr && cleanCity) {
+      const combined = `${cleanAddr}, ${cleanCity}`;
+      const result = await this.geocodeQuery(combined);
+      if (result) return result;
+      // Repli si l'adresse exacte est introuvable : géocoder la commune/ville
+      const cityResult = await this.geocodeQuery(cleanCity, 'municipality');
+      if (cityResult) return cityResult;
+      return this.geocodeQuery(cleanCity);
+    }
+
+    // 2. Si on a seulement la ville/commune
+    if (cleanCity) {
+      const cityResult = await this.geocodeQuery(cleanCity, 'municipality');
+      if (cityResult) return cityResult;
+      return this.geocodeQuery(cleanCity);
+    }
+
+    // 3. Si on a seulement l'adresse
+    if (cleanAddr) {
+      return this.geocodeQuery(cleanAddr);
+    }
+
+    return null;
+  }
+
   async create(createDto: CreateCompanyDto) {
     let lat = createDto.latitude;
     let lon = createDto.longitude;
 
     if ((lat === undefined || lon === undefined) && (createDto.address || createDto.city)) {
-      const geo = await this.geocodeAddress(createDto.address || createDto.city);
+      const geo = await this.geocodeAddress(createDto.address, createDto.city);
       if (geo) {
         lat = geo.latitude;
         lon = geo.longitude;
@@ -121,14 +155,20 @@ export class CompaniesService {
   }
 
   async update(id: string, updateDto: UpdateCompanyDto) {
-    await this.findOne(id);
+    const existing = await this.findOne(id);
 
     let lat = updateDto.latitude;
     let lon = updateDto.longitude;
 
-    const newQuery = updateDto.address || updateDto.city;
-    if (lat === undefined && lon === undefined && newQuery) {
-      const geo = await this.geocodeAddress(newQuery);
+    const finalAddress = updateDto.address !== undefined ? updateDto.address : existing.address;
+    const finalCity = updateDto.city !== undefined ? updateDto.city : existing.city;
+
+    if (
+      lat === undefined &&
+      lon === undefined &&
+      (updateDto.address !== undefined || updateDto.city !== undefined)
+    ) {
+      const geo = await this.geocodeAddress(finalAddress, finalCity);
       if (geo) {
         lat = geo.latitude;
         lon = geo.longitude;
@@ -875,6 +915,17 @@ export class CompaniesService {
           parsedStatus = Status.TO_CALL;
         }
 
+        // Géocodage automatique à l'import combinant adresse ET commune/ville
+        let importLat: number | null = null;
+        let importLon: number | null = null;
+        if (rawAddress || rawCity) {
+          const geo = await this.geocodeAddress(rawAddress, rawCity);
+          if (geo) {
+            importLat = geo.latitude;
+            importLon = geo.longitude;
+          }
+        }
+
         // Enregistrement en base de données
         const created = await this.prisma.company.create({
           data: {
@@ -882,6 +933,8 @@ export class CompaniesService {
             email: rawEmail,
             address: rawAddress || null,
             city: rawCity || null,
+            latitude: importLat,
+            longitude: importLon,
             phone: rawPhone || null,
             notes: rawNotes || null,
             status: parsedStatus,
