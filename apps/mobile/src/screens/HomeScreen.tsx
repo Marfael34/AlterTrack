@@ -15,6 +15,7 @@ import {
   View,
 } from 'react-native';
 import { CompanyCard } from '../components/CompanyCard';
+import { CompanyMapView } from '../components/CompanyMapView';
 import { FiltersModal } from '../components/FiltersModal';
 import { ReferencePointModal } from '../components/ReferencePointModal';
 import { CityItem } from '../components/CityFilterBar';
@@ -48,6 +49,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
     'updatedAt' | 'name' | 'city' | 'distance'
   >('updatedAt');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+  const [viewMode, setViewMode] = useState<'LIST' | 'MAP'>('LIST');
   const [isFiltersModalOpen, setIsFiltersModalOpen] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [loading, setLoading] = useState<boolean>(true);
@@ -502,6 +504,55 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         </TouchableOpacity>
       </View>
 
+      {/* Sélecteur de vue : Liste ou Carte interactive */}
+      <View style={styles.viewModeSegment}>
+        <TouchableOpacity
+          style={[
+            styles.viewModeTab,
+            viewMode === 'LIST' && styles.viewModeTabActive,
+          ]}
+          onPress={() => setViewMode('LIST')}
+          activeOpacity={0.7}
+        >
+          <Ionicons
+            name="list"
+            size={14}
+            color={viewMode === 'LIST' ? Colors.primary : Colors.textSecondary}
+          />
+          <Text
+            style={[
+              styles.viewModeTabText,
+              viewMode === 'LIST' && styles.viewModeTabTextActive,
+            ]}
+          >
+            Liste ({displayedCompanies.length})
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[
+            styles.viewModeTab,
+            viewMode === 'MAP' && styles.viewModeTabActive,
+          ]}
+          onPress={() => setViewMode('MAP')}
+          activeOpacity={0.7}
+        >
+          <Ionicons
+            name="map"
+            size={14}
+            color={viewMode === 'MAP' ? Colors.accent : Colors.textSecondary}
+          />
+          <Text
+            style={[
+              styles.viewModeTabText,
+              viewMode === 'MAP' && styles.viewModeTabTextActive,
+            ]}
+          >
+            Carte interactive 🗺️
+          </Text>
+        </TouchableOpacity>
+      </View>
+
       {/* Puces de filtres actifs avec suppression rapide */}
       {activeFiltersCount > 0 && (
         <View style={styles.activeFiltersRow}>
@@ -619,140 +670,153 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         }}
       />
 
-      {/* Barre d'outils du mode sélection */}
-      {isSelectionMode ? (
-        <View style={styles.selectionBar}>
-          <View style={styles.selectionBarTopRow}>
-            <TouchableOpacity
-              style={styles.selectAllBtn}
-              onPress={handleToggleSelectAll}
-              activeOpacity={0.7}
-            >
-              <Ionicons
-                name={allVisibleSelected ? 'checkbox' : 'square-outline'}
-                size={22}
-                color={Colors.primary}
-              />
-              <Text style={styles.selectAllText}>
-                {allVisibleSelected ? 'Tout désélectionner' : 'Tout sélectionner'}
-              </Text>
-            </TouchableOpacity>
-
-            <View style={styles.selectionCountPill}>
-              <Text style={styles.selectionCountPillText}>
-                {selectedIds.size} / {companies.length}
-              </Text>
-            </View>
-
-            <TouchableOpacity
-              style={styles.cancelSelectionBtn}
-              onPress={() => {
-                setIsSelectionMode(false);
-                setSelectedIds(new Set());
-              }}
-              activeOpacity={0.7}
-            >
-              <Ionicons name="close" size={15} color={Colors.textSecondary} />
-              <Text style={styles.cancelSelectionText}>Fermer</Text>
-            </TouchableOpacity>
-          </View>
-
-          {selectedIds.size > 0 ? (
-            <TouchableOpacity
-              style={[
-                styles.deleteBatchBtnFull,
-                deletingBatch && styles.buttonDisabled,
-              ]}
-              onPress={handleDeleteSelected}
-              disabled={deletingBatch}
-              activeOpacity={0.85}
-            >
-              {deletingBatch ? (
-                <ActivityIndicator size="small" color="#FFFFFF" />
-              ) : (
-                <>
-                  <Ionicons name="trash" size={16} color="#FFFFFF" />
-                  <Text style={styles.deleteBatchBtnFullText}>
-                    Supprimer {selectedIds.size} entreprise{selectedIds.size > 1 ? 's' : ''}
-                  </Text>
-                </>
-              )}
-            </TouchableOpacity>
-          ) : (
-            <Text style={styles.selectionHintText}>
-              Touchez une fiche pour la sélectionner
-            </Text>
-          )}
-        </View>
-      ) : (
-        companies.length > 0 && (
-          <View style={styles.listHeaderBar}>
-            <Text style={styles.listHeaderCount}>
-              {companies.length} fiche{companies.length > 1 ? 's' : ''}
-            </Text>
-            <TouchableOpacity
-              style={styles.selectModeTriggerBtn}
-              onPress={handleToggleSelectionMode}
-              activeOpacity={0.7}
-            >
-              <Ionicons name="checkbox-outline" size={15} color={Colors.primary} />
-              <Text style={styles.selectModeTriggerText}>Sélectionner / Supprimer</Text>
-            </TouchableOpacity>
-          </View>
-        )
-      )}
-
-      {/* Liste des entreprises */}
-      {loading ? (
-        <View style={styles.centerContainer}>
-          <ActivityIndicator size="large" color={Colors.primary} />
-          <Text style={styles.loadingText}>Chargement des fiches...</Text>
-        </View>
-      ) : (
-        <FlatList
-          data={displayedCompanies}
-          keyExtractor={(item) => item.id}
-          renderItem={({ item }) => (
-            <CompanyCard
-              company={item}
-              onPress={() => onSelectCompany(item)}
-              selectable={isSelectionMode}
-              selected={selectedIds.has(item.id)}
-              onToggleSelect={() => handleToggleSelect(item.id)}
-              onLongPress={() => handleLongPressCard(item.id)}
-              distanceKm={distancesMap[item.id]}
-            />
-          )}
-          contentContainerStyle={styles.listContent}
-          refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={onRefresh}
-              tintColor={Colors.primary}
-            />
-          }
-          ListEmptyComponent={
-            <View style={styles.emptyContainer}>
-              <Ionicons name="briefcase-outline" size={48} color={Colors.border} />
-              <Text style={styles.emptyTitle}>Aucune entreprise trouvée</Text>
-              <Text style={styles.emptySubtitle}>
-                {searchQuery || selectedCity !== 'ALL' || selectedStatuses.length > 0
-                  ? 'Aucun résultat ne correspond aux filtres appliqués.'
-                  : 'Ajoutez une entreprise avec le bouton "+" ou importez directement votre tableur.'}
-              </Text>
-              {!searchQuery && selectedCity === 'ALL' && selectedStatuses.length === 0 && (
-                <TouchableOpacity
-                  style={styles.emptyImportButton}
-                  onPress={handleImportSpreadsheet}
-                  disabled={importing}
-                >
-                  <Ionicons name="cloud-upload-outline" size={16} color="#FFFFFF" />
-                  <Text style={styles.emptyImportText}>Importer un tableur (Excel / CSV)</Text>
-                </TouchableOpacity>
-              )}
-            </View>
-          }
+      {/* Affichage : Carte interactive OU Liste */}
+      {viewMode === 'MAP' ? (
+        <CompanyMapView
+          companies={displayedCompanies}
+          refPoint={refPoint}
+          distancesMap={distancesMap}
+          onSelectCompany={onSelectCompany}
+          onOpenRefPointModal={() => setIsRefPointModalOpen(true)}
         />
+      ) : (
+        <>
+          {/* Barre d'outils du mode sélection */}
+          {isSelectionMode ? (
+            <View style={styles.selectionBar}>
+              <View style={styles.selectionBarTopRow}>
+                <TouchableOpacity
+                  style={styles.selectAllBtn}
+                  onPress={handleToggleSelectAll}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons
+                    name={allVisibleSelected ? 'checkbox' : 'square-outline'}
+                    size={22}
+                    color={Colors.primary}
+                  />
+                  <Text style={styles.selectAllText}>
+                    {allVisibleSelected ? 'Tout désélectionner' : 'Tout sélectionner'}
+                  </Text>
+                </TouchableOpacity>
+
+                <View style={styles.selectionCountPill}>
+                  <Text style={styles.selectionCountPillText}>
+                    {selectedIds.size} / {companies.length}
+                  </Text>
+                </View>
+
+                <TouchableOpacity
+                  style={styles.cancelSelectionBtn}
+                  onPress={() => {
+                    setIsSelectionMode(false);
+                    setSelectedIds(new Set());
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="close" size={15} color={Colors.textSecondary} />
+                  <Text style={styles.cancelSelectionText}>Fermer</Text>
+                </TouchableOpacity>
+              </View>
+
+              {selectedIds.size > 0 ? (
+                <TouchableOpacity
+                  style={[
+                    styles.deleteBatchBtnFull,
+                    deletingBatch && styles.buttonDisabled,
+                  ]}
+                  onPress={handleDeleteSelected}
+                  disabled={deletingBatch}
+                  activeOpacity={0.85}
+                >
+                  {deletingBatch ? (
+                    <ActivityIndicator size="small" color="#FFFFFF" />
+                  ) : (
+                    <>
+                      <Ionicons name="trash" size={16} color="#FFFFFF" />
+                      <Text style={styles.deleteBatchBtnFullText}>
+                        Supprimer {selectedIds.size} entreprise{selectedIds.size > 1 ? 's' : ''}
+                      </Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+              ) : (
+                <Text style={styles.selectionHintText}>
+                  Touchez une fiche pour la sélectionner
+                </Text>
+              )}
+            </View>
+          ) : (
+            companies.length > 0 && (
+              <View style={styles.listHeaderBar}>
+                <Text style={styles.listHeaderCount}>
+                  {companies.length} fiche{companies.length > 1 ? 's' : ''}
+                </Text>
+                <TouchableOpacity
+                  style={styles.selectModeTriggerBtn}
+                  onPress={handleToggleSelectionMode}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="checkbox-outline" size={15} color={Colors.primary} />
+                  <Text style={styles.selectModeTriggerText}>Sélectionner / Supprimer</Text>
+                </TouchableOpacity>
+              </View>
+            )
+          )}
+
+          {/* Liste des entreprises */}
+          {loading ? (
+            <View style={styles.centerContainer}>
+              <ActivityIndicator size="large" color={Colors.primary} />
+              <Text style={styles.loadingText}>Chargement des fiches...</Text>
+            </View>
+          ) : (
+            <FlatList
+              data={displayedCompanies}
+              keyExtractor={(item) => item.id}
+              renderItem={({ item }) => (
+                <CompanyCard
+                  company={item}
+                  onPress={() => onSelectCompany(item)}
+                  selectable={isSelectionMode}
+                  selected={selectedIds.has(item.id)}
+                  onToggleSelect={() => handleToggleSelect(item.id)}
+                  onLongPress={() => handleLongPressCard(item.id)}
+                  distanceKm={distancesMap[item.id]}
+                />
+              )}
+              contentContainerStyle={styles.listContent}
+              refreshControl={
+                <RefreshControl
+                  refreshing={refreshing}
+                  onRefresh={onRefresh}
+                  tintColor={Colors.primary}
+                />
+              }
+              ListEmptyComponent={
+                <View style={styles.emptyContainer}>
+                  <Ionicons name="briefcase-outline" size={48} color={Colors.border} />
+                  <Text style={styles.emptyTitle}>Aucune entreprise trouvée</Text>
+                  <Text style={styles.emptySubtitle}>
+                    {searchQuery || selectedCity !== 'ALL' || selectedStatuses.length > 0
+                      ? 'Aucun résultat ne correspond aux filtres appliqués.'
+                      : 'Ajoutez une entreprise avec le bouton "+" ou importez directement votre tableur.'}
+                  </Text>
+                  {!searchQuery && selectedCity === 'ALL' && selectedStatuses.length === 0 && (
+                    <TouchableOpacity
+                      style={styles.emptyImportButton}
+                      onPress={handleImportSpreadsheet}
+                      disabled={importing}
+                    >
+                      <Ionicons name="cloud-upload-outline" size={16} color="#FFFFFF" />
+                      <Text style={styles.emptyImportText}>Importer un tableur (Excel / CSV)</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+              }
+            />
+          )}
+        </>
       )}
 
       {/* Barre d'action flottante de suppression en mode sélection */}
@@ -1256,4 +1320,39 @@ const styles = StyleSheet.create({
     color: Colors.accent,
     fontWeight: '600',
   },
+  viewModeSegment: {
+    flexDirection: 'row',
+    marginHorizontal: 16,
+    marginTop: 8,
+    marginBottom: 4,
+    backgroundColor: Colors.cardBackground,
+    borderRadius: 12,
+    padding: 3,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  viewModeTab: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 7,
+    borderRadius: 9,
+    gap: 6,
+  },
+  viewModeTabActive: {
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.borderLight,
+  },
+  viewModeTabText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: Colors.textSecondary,
+  },
+  viewModeTabTextActive: {
+    color: Colors.text,
+    fontWeight: '700',
+  },
 });
+
