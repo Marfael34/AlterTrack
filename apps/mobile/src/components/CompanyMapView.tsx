@@ -2,6 +2,9 @@ import { Ionicons } from '@expo/vector-icons';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
+  Linking,
+  ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -21,6 +24,8 @@ interface CompanyMapViewProps {
   onOpenRefPointModal: () => void;
 }
 
+type DistanceFilter = 'ALL' | 15 | 30 | 50;
+
 export const CompanyMapView: React.FC<CompanyMapViewProps> = ({
   companies,
   refPoint,
@@ -29,10 +34,12 @@ export const CompanyMapView: React.FC<CompanyMapViewProps> = ({
   onOpenRefPointModal,
 }) => {
   const webViewRef = useRef<WebView>(null);
+  const [activeTab, setActiveTab] = useState<'RADAR' | 'MAP'>('RADAR');
   const [selectedCompanyId, setSelectedCompanyId] = useState<string | null>(null);
+  const [maxRadius, setMaxRadius] = useState<DistanceFilter>('ALL');
   const [isMapReady, setIsMapReady] = useState<boolean>(false);
 
-  // Sécurité : masquer l'overlay de chargement après 2.5s maximum
+  // Masquer l'overlay après 2.5s maximum
   useEffect(() => {
     const timer = setTimeout(() => {
       setIsMapReady(true);
@@ -40,7 +47,7 @@ export const CompanyMapView: React.FC<CompanyMapViewProps> = ({
     return () => clearTimeout(timer);
   }, []);
 
-  // Filtrer les entreprises qui ont des coordonnées GPS valides
+  // Filtrer les entreprises géolocalisées
   const geolocatedCompanies = useMemo(() => {
     return companies.filter(
       (c) =>
@@ -51,12 +58,104 @@ export const CompanyMapView: React.FC<CompanyMapViewProps> = ({
     );
   }, [companies]);
 
+  // Entreprises triées par distance par rapport au point fixe
+  const sortedByDistance = useMemo(() => {
+    return [...companies].sort((a, b) => {
+      const distA = distancesMap[a.id] !== undefined ? distancesMap[a.id] : 999999;
+      const distB = distancesMap[b.id] !== undefined ? distancesMap[b.id] : 999999;
+      return distA - distB;
+    });
+  }, [companies, distancesMap]);
+
+  // Filtrées selon le rayon sélectionné
+  const filteredByRadius = useMemo(() => {
+    if (maxRadius === 'ALL') return sortedByDistance;
+    return sortedByDistance.filter((c) => {
+      const d = distancesMap[c.id];
+      return d !== undefined && d <= maxRadius;
+    });
+  }, [sortedByDistance, maxRadius, distancesMap]);
+
+  // Groupées en zones concentriques pour le mode Radar
+  const radarGroups = useMemo(() => {
+    const zone0_15: Company[] = [];
+    const zone15_30: Company[] = [];
+    const zone30_50: Company[] = [];
+    const zone50_plus: Company[] = [];
+    const zoneUnknown: Company[] = [];
+
+    filteredByRadius.forEach((comp) => {
+      const dist = distancesMap[comp.id];
+      if (dist === undefined) {
+        zoneUnknown.push(comp);
+      } else if (dist <= 15) {
+        zone0_15.push(comp);
+      } else if (dist <= 30) {
+        zone15_30.push(comp);
+      } else if (dist <= 50) {
+        zone30_50.push(comp);
+      } else {
+        zone50_plus.push(comp);
+      }
+    });
+
+    return [
+      {
+        id: 'z1',
+        title: '🎯 Zone Immédiate (< 15 km)',
+        badgeColor: '#00F099',
+        companies: zone0_15,
+      },
+      {
+        id: 'z2',
+        title: '🚗 Zone Proche (15 à 30 km)',
+        badgeColor: '#00D2C4',
+        companies: zone15_30,
+      },
+      {
+        id: 'z3',
+        title: '🛣️ Zone Moyenne (30 à 50 km)',
+        badgeColor: '#0066FF',
+        companies: zone30_50,
+      },
+      {
+        id: 'z4',
+        title: '🚆 Au-delà de 50 km',
+        badgeColor: '#F59E0B',
+        companies: zone50_plus,
+      },
+      ...(zoneUnknown.length > 0 && maxRadius === 'ALL'
+        ? [
+            {
+              id: 'z0',
+              title: '📍 Distance non calculable (adresse à préciser)',
+              badgeColor: Colors.textMuted,
+              companies: zoneUnknown,
+            },
+          ]
+        : []),
+    ];
+  }, [filteredByRadius, distancesMap, maxRadius]);
+
   const selectedCompany = useMemo(() => {
     if (!selectedCompanyId) return null;
     return companies.find((c) => c.id === selectedCompanyId) || null;
   }, [companies, selectedCompanyId]);
 
-  // Données sérialisées de manière sécurisée pour Leaflet
+  // Ouvrir l'application de navigation GPS native du smartphone (Google Maps / Waze) sans aucune clé API
+  const handleOpenGpsNavigation = (lat?: number | null, lng?: number | null, name?: string) => {
+    if (typeof lat !== 'number' || typeof lng !== 'number') {
+      Alert.alert('Coordonnées manquantes', 'Cette entreprise n\'a pas d\'adresse GPS valide.');
+      return;
+    }
+    const label = encodeURIComponent(name || 'Entreprise');
+    const url = `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}&destination_place_id=${label}`;
+    Linking.openURL(url).catch(() => {
+      Alert.alert('Erreur', 'Impossible d\'ouvrir l\'application GPS.');
+    });
+  };
+
+  // Données sérialisées pour la vue Leaflet 2D (100% sans clé API)
   const mapDataJson = useMemo(() => {
     const payload = {
       refPoint: refPoint
@@ -86,7 +185,7 @@ export const CompanyMapView: React.FC<CompanyMapViewProps> = ({
     return JSON.stringify(payload);
   }, [geolocatedCompanies, refPoint, distancesMap]);
 
-  // Page HTML complète autonome embarquant Leaflet et le thème sombre CartoDB
+  // HTML autonome Leaflet sans AUCUNE clé API (ESRI Dark Canvas + OpenStreetMap)
   const htmlContent = useMemo(() => {
     return `<!DOCTYPE html>
 <html lang="fr">
@@ -97,98 +196,39 @@ export const CompanyMapView: React.FC<CompanyMapViewProps> = ({
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    html, body, #map { width: 100%; height: 100%; background: #0B0F19; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; overflow: hidden; }
-    
-    /* Style personnalisé des tuiles sombres */
+    html, body, #map { width: 100%; height: 100%; background: #0B0F19; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; overflow: hidden; }
     .leaflet-container { background: #0B0F19 !important; }
-    .leaflet-bar { border: 1px solid rgba(255,255,255,0.15) !important; box-shadow: none !important; border-radius: 8px !important; overflow: hidden; }
-    .leaflet-bar a { background-color: #131B2E !important; color: #FFFFFF !important; border-bottom: 1px solid rgba(255,255,255,0.1) !important; }
-    .leaflet-bar a:hover { background-color: #1A233A !important; }
-    
-    /* Marqueurs personnalisés */
     .pin-home {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      width: 38px;
-      height: 38px;
-      background: #00D2C4;
-      border: 3px solid #FFFFFF;
-      border-radius: 50%;
-      box-shadow: 0 4px 12px rgba(0, 210, 196, 0.6);
-      color: #FFFFFF;
-      font-size: 18px;
-      animation: pulse 2s infinite;
+      display: flex; align-items: center; justify-content: center;
+      width: 38px; height: 38px; background: #00D2C4; border: 3px solid #FFFFFF;
+      border-radius: 50%; box-shadow: 0 4px 12px rgba(0, 210, 196, 0.6);
+      color: #FFFFFF; font-size: 18px;
     }
-    
-    @keyframes pulse {
-      0% { box-shadow: 0 0 0 0 rgba(0, 210, 196, 0.7); }
-      70% { box-shadow: 0 0 0 16px rgba(0, 210, 196, 0); }
-      100% { box-shadow: 0 0 0 0 rgba(0, 210, 196, 0); }
-    }
-    
     .pin-company {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      width: 32px;
-      height: 32px;
-      border-radius: 50%;
-      border: 2px solid #FFFFFF;
-      color: #FFFFFF;
-      font-weight: bold;
-      font-size: 13px;
-      box-shadow: 0 3px 8px rgba(0,0,0,0.5);
-      transition: transform 0.2s;
-      cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      width: 32px; height: 32px; border-radius: 50%; border: 2px solid #FFFFFF;
+      color: #FFFFFF; font-weight: bold; font-size: 13px;
+      box-shadow: 0 3px 8px rgba(0,0,0,0.5); cursor: pointer;
     }
-    .pin-company:hover, .pin-company.active {
-      transform: scale(1.25);
-      border-width: 3px;
-      z-index: 1000 !important;
-    }
-
-    /* Style Popups */
     .leaflet-popup-content-wrapper {
-      background: #131B2E !important;
-      color: #FFFFFF !important;
-      border: 1px solid #00D2C4;
-      border-radius: 12px !important;
-      padding: 4px;
-      box-shadow: 0 6px 18px rgba(0,0,0,0.6) !important;
+      background: #131B2E !important; color: #FFFFFF !important;
+      border: 1px solid #00D2C4; border-radius: 12px !important;
+      padding: 4px; box-shadow: 0 6px 18px rgba(0,0,0,0.6) !important;
     }
     .leaflet-popup-tip { background: #131B2E !important; }
     .popup-title { font-size: 14px; font-weight: 700; color: #FFFFFF; margin-bottom: 2px; }
     .popup-sub { font-size: 11px; color: #A7A9BE; margin-bottom: 6px; }
     .popup-dist { font-size: 11px; font-weight: 700; color: #00D2C4; display: inline-block; margin-bottom: 6px; }
     .popup-btn {
-      display: block;
-      background: #0066FF;
-      color: #FFFFFF;
-      text-align: center;
-      padding: 6px 10px;
-      border-radius: 6px;
-      font-size: 11px;
-      font-weight: 700;
-      text-decoration: none;
-      margin-top: 4px;
+      display: block; background: #0066FF; color: #FFFFFF; text-align: center;
+      padding: 6px 10px; border-radius: 6px; font-size: 11px; font-weight: 700;
+      text-decoration: none; margin-top: 4px;
     }
   </style>
 </head>
 <body>
   <div id="map"></div>
-
   <script>
-    // Capturer les erreurs pour les remonter
-    window.onerror = function(msg, url, line, col) {
-      if (window.ReactNativeWebView) {
-        window.ReactNativeWebView.postMessage(JSON.stringify({
-          type: 'MAP_ERROR',
-          message: String(msg) + ' (' + line + ':' + col + ')'
-        }));
-      }
-    };
-
     var mapInstance = null;
     var markersGroup = null;
 
@@ -201,92 +241,49 @@ export const CompanyMapView: React.FC<CompanyMapViewProps> = ({
 
       try {
         var data = ${mapDataJson};
+        mapInstance = L.map('map', { zoomControl: true, attributionControl: false });
 
-        mapInstance = L.map('map', {
-          zoomControl: true,
-          attributionControl: false
-        });
-
-        // Tuiles CartoDB Dark Matter adaptées à la charte AlterTrack
-        var darkLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-          maxZoom: 19,
-          subdomains: 'abcd',
-          attribution: '&copy; CARTO'
+        // Tuiles ESRI World Dark Gray 100% gratuites sans AUCUNE clé API
+        var esriDark = L.tileLayer('https://services.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}', {
+          maxZoom: 16,
+          attribution: 'Esri, HERE, Garmin, &copy; OpenStreetMap'
         }).addTo(mapInstance);
 
-        // Fallback OpenStreetMap en cas de souci de chargement des tuiles
-        darkLayer.on('tileerror', function() {
-          if (!mapInstance._osmFallbackAdded) {
-            mapInstance._osmFallbackAdded = true;
-            L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
-              maxZoom: 19
-            }).addTo(mapInstance);
+        // Secours OpenStreetMap standard si besoin
+        esriDark.on('tileerror', function() {
+          if (!mapInstance._osmFallback) {
+            mapInstance._osmFallback = true;
+            L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(mapInstance);
           }
         });
 
         markersGroup = L.featureGroup().addTo(mapInstance);
 
-        // 1. Ajouter le point de repère (Adresse fixe de référence)
         if (data.refPoint) {
           var homeIcon = L.divIcon({
             className: 'custom-icon',
             html: '<div class="pin-home">' + (data.refPoint.isGps ? '🎯' : '🏠') + '</div>',
-            iconSize: [38, 38],
-            iconAnchor: [19, 19],
-            popupAnchor: [0, -20]
+            iconSize: [38, 38], iconAnchor: [19, 19], popupAnchor: [0, -20]
           });
+          var homeMarker = L.marker([data.refPoint.latitude, data.refPoint.longitude], { icon: homeIcon, zIndexOffset: 1000 }).addTo(markersGroup);
+          homeMarker.bindPopup('<div class="popup-title">' + (data.refPoint.isGps ? 'Position GPS' : 'Mon adresse fixe') + '</div><div class="popup-sub">' + data.refPoint.label + '</div>');
 
-          var homeMarker = L.marker([data.refPoint.latitude, data.refPoint.longitude], {
-            icon: homeIcon,
-            zIndexOffset: 1000
-          }).addTo(markersGroup);
-
-          homeMarker.bindPopup(
-            '<div class="popup-title">' + (data.refPoint.isGps ? 'Position GPS actuelle' : 'Mon adresse fixe') + '</div>' +
-            '<div class="popup-sub">' + data.refPoint.label + '</div>'
-          );
-
-          // Cercles de rayon (15 km et 30 km)
-          L.circle([data.refPoint.latitude, data.refPoint.longitude], {
-            radius: 15000,
-            color: '#00D2C4',
-            weight: 1.5,
-            fillColor: '#00D2C4',
-            fillOpacity: 0.05,
-            dashArray: '5, 8'
-          }).addTo(mapInstance);
-
-          L.circle([data.refPoint.latitude, data.refPoint.longitude], {
-            radius: 30000,
-            color: '#0066FF',
-            weight: 1.5,
-            fillColor: '#0066FF',
-            fillOpacity: 0.03,
-            dashArray: '4, 10'
-          }).addTo(mapInstance);
+          // Cercles 15km et 30km
+          L.circle([data.refPoint.latitude, data.refPoint.longitude], { radius: 15000, color: '#00D2C4', weight: 1.5, fillColor: '#00D2C4', fillOpacity: 0.05, dashArray: '5, 8' }).addTo(mapInstance);
+          L.circle([data.refPoint.latitude, data.refPoint.longitude], { radius: 30000, color: '#0066FF', weight: 1.5, fillColor: '#0066FF', fillOpacity: 0.03, dashArray: '4, 10' }).addTo(mapInstance);
         }
 
-        // 2. Ajouter les entreprises
         data.companies.forEach(function(comp) {
           var icon = L.divIcon({
             className: 'custom-icon',
             html: '<div class="pin-company" id="pin-' + comp.id + '" style="background:' + comp.color + '">🏢</div>',
-            iconSize: [32, 32],
-            iconAnchor: [16, 16],
-            popupAnchor: [0, -18]
+            iconSize: [32, 32], iconAnchor: [16, 16], popupAnchor: [0, -18]
           });
-
           var marker = L.marker([comp.latitude, comp.longitude], { icon: icon }).addTo(markersGroup);
-
           var popupHtml = '<div class="popup-title">' + comp.name + '</div>';
-          if (comp.city || comp.address) {
-            popupHtml += '<div class="popup-sub">' + (comp.address ? comp.address + ' • ' : '') + comp.city + '</div>';
-          }
-          if (comp.distanceText) {
-            popupHtml += '<div class="popup-dist">🧭 ' + comp.distanceText + '</div>';
-          }
+          if (comp.city || comp.address) popupHtml += '<div class="popup-sub">' + (comp.address ? comp.address + ' • ' : '') + comp.city + '</div>';
+          if (comp.distanceText) popupHtml += '<div class="popup-dist">🧭 ' + comp.distanceText + '</div>';
           popupHtml += '<a class="popup-btn" href="javascript:void(0)" onclick="selectCompany(\\'' + comp.id + '\\')">Ouvrir la fiche</a>';
-
           marker.bindPopup(popupHtml);
 
           marker.on('click', function() {
@@ -296,26 +293,23 @@ export const CompanyMapView: React.FC<CompanyMapViewProps> = ({
           });
         });
 
-        // 3. Ajuster la vue
         if (markersGroup.getLayers().length > 0) {
           mapInstance.fitBounds(markersGroup.getBounds(), { padding: [40, 40], maxZoom: 13 });
         } else if (data.refPoint) {
           mapInstance.setView([data.refPoint.latitude, data.refPoint.longitude], 11);
         } else {
-          mapInstance.setView([46.603354, 1.888334], 6); // Centre de la France
+          mapInstance.setView([46.603354, 1.888334], 6);
         }
 
-        // Forcer le redimensionnement Leaflet pour éviter l'écran gris/vide
-        setTimeout(function() { if (mapInstance) mapInstance.invalidateSize(); }, 200);
-        setTimeout(function() { if (mapInstance) mapInstance.invalidateSize(); }, 600);
-        setTimeout(function() { if (mapInstance) mapInstance.invalidateSize(); }, 1200);
+        setTimeout(function() { if (mapInstance) mapInstance.invalidateSize(); }, 300);
+        setTimeout(function() { if (mapInstance) mapInstance.invalidateSize(); }, 800);
 
         if (window.ReactNativeWebView) {
           window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'MAP_READY' }));
         }
       } catch (err) {
         if (window.ReactNativeWebView) {
-          window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'MAP_ERROR', message: err.message }));
+          window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'MAP_READY' }));
         }
       }
     }
@@ -339,24 +333,14 @@ export const CompanyMapView: React.FC<CompanyMapViewProps> = ({
       }
     };
 
-    // Charger Leaflet depuis CDN principal avec fallback CDN secondaire
     function loadScript(src, fallbackSrc, done) {
       var s = document.createElement('script');
-      s.src = src;
-      s.onload = done;
-      s.onerror = function() {
-        if (fallbackSrc) {
-          loadScript(fallbackSrc, null, done);
-        }
-      };
+      s.src = src; s.onload = done;
+      s.onerror = function() { if (fallbackSrc) loadScript(fallbackSrc, null, done); };
       document.head.appendChild(s);
     }
 
-    loadScript(
-      'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js',
-      'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js',
-      initMap
-    );
+    loadScript('https://unpkg.com/leaflet@1.9.4/dist/leaflet.js', 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js', initMap);
   </script>
 </body>
 </html>`;
@@ -367,9 +351,7 @@ export const CompanyMapView: React.FC<CompanyMapViewProps> = ({
       const data = JSON.parse(event.nativeEvent.data) as {
         type: string;
         companyId?: string;
-        message?: string;
       };
-
       if (data.type === 'MAP_READY') {
         setIsMapReady(true);
       } else if (data.type === 'SELECT_PIN' && data.companyId) {
@@ -379,83 +361,55 @@ export const CompanyMapView: React.FC<CompanyMapViewProps> = ({
         if (found) {
           onSelectCompany(found);
         }
-      } else if (data.type === 'MAP_ERROR') {
-        console.warn('Leaflet map error:', data.message);
-        setIsMapReady(true); // Retirer l'overlay même en cas d'erreur
       }
     } catch {
-      // Ignore parse error
-    }
-  };
-
-  const handleCenterOnHome = () => {
-    if (webViewRef.current) {
-      webViewRef.current.injectJavaScript('window.centerOnHome && window.centerOnHome(); true;');
-    }
-  };
-
-  const handleFitAll = () => {
-    if (webViewRef.current) {
-      webViewRef.current.injectJavaScript('window.fitAll && window.fitAll(); true;');
+      // Ignore
     }
   };
 
   return (
     <View style={styles.container}>
-      {/* Carte Leaflet dans WebView */}
-      <WebView
-        ref={webViewRef}
-        originWhitelist={['*']}
-        source={{
-          html: htmlContent,
-          baseUrl: 'https://unpkg.com',
-        }}
-        style={styles.webView}
-        javaScriptEnabled={true}
-        domStorageEnabled={true}
-        allowFileAccess={true}
-        allowUniversalAccessFromFileURLs={true}
-        mixedContentMode="always"
-        onMessage={handleMessage}
-        onLoadEnd={() => setIsMapReady(true)}
-      />
-
-      {/* Chargement initial */}
-      {!isMapReady && (
-        <View style={styles.loadingOverlay}>
-          <ActivityIndicator size="large" color={Colors.primary} />
-          <Text style={styles.loadingText}>Chargement de la carte interactive...</Text>
-        </View>
-      )}
-
-      {/* Barre supérieure : Compteur et boutons de recentrage */}
-      <View style={styles.topBar}>
-        <View style={styles.counterPill}>
-          <Ionicons name="business" size={13} color={Colors.accent} />
-          <Text style={styles.counterText}>
-            {geolocatedCompanies.length} entreprise{geolocatedCompanies.length > 1 ? 's' : ''} sur la carte
-          </Text>
-        </View>
-
-        <View style={styles.actionsGroup}>
-          {refPoint && (
-            <TouchableOpacity
-              style={styles.actionButton}
-              onPress={handleCenterOnHome}
-              activeOpacity={0.8}
-            >
-              <Ionicons name="home" size={16} color={Colors.accent} />
-            </TouchableOpacity>
-          )}
-
-          <TouchableOpacity
-            style={styles.actionButton}
-            onPress={handleFitAll}
-            activeOpacity={0.8}
+      {/* Sélecteur de mode : Radar Natif (Sans clé API) OU Carte 2D */}
+      <View style={styles.subModeSegment}>
+        <TouchableOpacity
+          style={[styles.subModeTab, activeTab === 'RADAR' && styles.subModeTabActive]}
+          onPress={() => setActiveTab('RADAR')}
+          activeOpacity={0.7}
+        >
+          <Ionicons
+            name="compass"
+            size={14}
+            color={activeTab === 'RADAR' ? Colors.accent : Colors.textSecondary}
+          />
+          <Text
+            style={[
+              styles.subModeTabText,
+              activeTab === 'RADAR' && styles.subModeTabTextActive,
+            ]}
           >
-            <Ionicons name="scan" size={16} color="#FFFFFF" />
-          </TouchableOpacity>
-        </View>
+            🎯 Radar & Distances
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.subModeTab, activeTab === 'MAP' && styles.subModeTabActive]}
+          onPress={() => setActiveTab('MAP')}
+          activeOpacity={0.7}
+        >
+          <Ionicons
+            name="map"
+            size={14}
+            color={activeTab === 'MAP' ? Colors.primary : Colors.textSecondary}
+          />
+          <Text
+            style={[
+              styles.subModeTabText,
+              activeTab === 'MAP' && styles.subModeTabTextActive,
+            ]}
+          >
+            🗺️ Carte 2D (Sans clé API)
+          </Text>
+        </TouchableOpacity>
       </View>
 
       {/* Bannière adresse fixe si non définie */}
@@ -465,57 +419,250 @@ export const CompanyMapView: React.FC<CompanyMapViewProps> = ({
           onPress={onOpenRefPointModal}
           activeOpacity={0.8}
         >
-          <Ionicons name="location" size={14} color={Colors.accent} />
+          <Ionicons name="location" size={15} color={Colors.accent} />
           <Text style={styles.noRefText}>
-            Définir votre adresse fixe pour voir les distances et cercles sur la carte
+            Définissez votre adresse fixe pour calculer les distances autour de chez vous
           </Text>
-          <Ionicons name="chevron-forward" size={13} color={Colors.accent} />
+          <Ionicons name="chevron-forward" size={14} color={Colors.accent} />
         </TouchableOpacity>
       )}
 
-      {/* Fiche flottante de l'entreprise sélectionnée */}
-      {selectedCompany && (
-        <View style={styles.floatingCard}>
-          <View style={styles.floatingHeader}>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.floatingName} numberOfLines={1}>
-                {selectedCompany.name}
-              </Text>
-              <Text style={styles.floatingCity} numberOfLines={1}>
-                {selectedCompany.address
-                  ? `${selectedCompany.address} • ${selectedCompany.city}`
-                  : selectedCompany.city || 'Localisation'}
-              </Text>
-            </View>
-            <TouchableOpacity
-              style={styles.closeCardBtn}
-              onPress={() => setSelectedCompanyId(null)}
-              activeOpacity={0.7}
-            >
-              <Ionicons name="close" size={18} color={Colors.textMuted} />
-            </TouchableOpacity>
-          </View>
-
-          <View style={styles.floatingBadgesRow}>
-            <StatusBadge status={selectedCompany.status} size="small" />
-            {distancesMap[selectedCompany.id] !== undefined && (
-              <View style={styles.distanceBadge}>
-                <Ionicons name="compass-outline" size={12} color={Colors.primary} />
-                <Text style={styles.distanceBadgeText}>
-                  {LocationService.formatDistance(distancesMap[selectedCompany.id])}
+      {/* ========================================================= */}
+      {/* MODE 1 : RADAR PROXIMITÉ NATIF (100% SANS AUCUNE CLÉ API) */}
+      {/* ========================================================= */}
+      {activeTab === 'RADAR' ? (
+        <ScrollView style={styles.radarScroll} contentContainerStyle={styles.radarContent}>
+          {/* En-tête : Point de repère et filtre de rayon */}
+          <View style={styles.radarHeaderCard}>
+            <View style={styles.radarHeaderTop}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.radarTitle}>Rayon de prospection</Text>
+                <Text style={styles.radarSubtitle}>
+                  {refPoint
+                    ? `Autour de : ${refPoint.label}`
+                    : 'Adresse fixe non configurée'}
                 </Text>
               </View>
-            )}
+              <TouchableOpacity
+                style={styles.editAddressBtn}
+                onPress={onOpenRefPointModal}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="pencil" size={13} color={Colors.accent} />
+                <Text style={styles.editAddressText}>Modifier</Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Puces de filtres par rayon */}
+            <View style={styles.radiusChipsRow}>
+              {(['ALL', 15, 30, 50] as const).map((r) => {
+                const isSelected = maxRadius === r;
+                const label = r === 'ALL' ? 'Toutes distances' : `< ${r} km`;
+                return (
+                  <TouchableOpacity
+                    key={String(r)}
+                    style={[
+                      styles.radiusChip,
+                      isSelected && styles.radiusChipActive,
+                    ]}
+                    onPress={() => setMaxRadius(r)}
+                    activeOpacity={0.7}
+                  >
+                    <Text
+                      style={[
+                        styles.radiusChipText,
+                        isSelected && styles.radiusChipTextActive,
+                      ]}
+                    >
+                      {label}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
           </View>
 
-          <TouchableOpacity
-            style={styles.openDetailsBtn}
-            onPress={() => onSelectCompany(selectedCompany)}
-            activeOpacity={0.8}
-          >
-            <Text style={styles.openDetailsText}>Consulter la fiche détaillée</Text>
-            <Ionicons name="arrow-forward" size={14} color="#FFFFFF" />
-          </TouchableOpacity>
+          {/* Groupes de zones concentriques */}
+          {radarGroups.map((group) => {
+            if (group.companies.length === 0) return null;
+            return (
+              <View key={group.id} style={styles.zoneSection}>
+                <View style={styles.zoneHeader}>
+                  <View style={[styles.zoneDot, { backgroundColor: group.badgeColor }]} />
+                  <Text style={styles.zoneTitle}>{group.title}</Text>
+                  <View style={styles.zoneCountPill}>
+                    <Text style={styles.zoneCountText}>{group.companies.length}</Text>
+                  </View>
+                </View>
+
+                {group.companies.map((comp) => {
+                  const dist = distancesMap[comp.id];
+                  const formattedDist = LocationService.formatDistance(dist);
+
+                  return (
+                    <View key={comp.id} style={styles.radarCard}>
+                      <View style={styles.radarCardHeader}>
+                        <View style={{ flex: 1, marginRight: 8 }}>
+                          <Text style={styles.radarCardName} numberOfLines={1}>
+                            {comp.name}
+                          </Text>
+                          <Text style={styles.radarCardCity} numberOfLines={1}>
+                            {comp.address ? `${comp.address} • ` : ''}
+                            {comp.city || 'Ville non renseignée'}
+                          </Text>
+                        </View>
+                        <StatusBadge status={comp.status} size="small" />
+                      </View>
+
+                      <View style={styles.radarCardFooter}>
+                        {formattedDist ? (
+                          <View style={styles.radarDistBadge}>
+                            <Ionicons name="compass" size={13} color={Colors.accent} />
+                            <Text style={styles.radarDistText}>{formattedDist}</Text>
+                          </View>
+                        ) : (
+                          <View style={styles.radarDistBadge}>
+                            <Ionicons name="location-outline" size={13} color={Colors.textMuted} />
+                            <Text style={[styles.radarDistText, { color: Colors.textMuted }]}>
+                              Distance indéterminée
+                            </Text>
+                          </View>
+                        )}
+
+                        <View style={styles.radarActionsRow}>
+                          {typeof comp.latitude === 'number' && typeof comp.longitude === 'number' && (
+                            <TouchableOpacity
+                              style={styles.gpsNavButton}
+                              onPress={() =>
+                                handleOpenGpsNavigation(comp.latitude, comp.longitude, comp.name)
+                              }
+                              activeOpacity={0.8}
+                            >
+                              <Ionicons name="navigate" size={13} color="#FFFFFF" />
+                              <Text style={styles.gpsNavButtonText}>Itinéraire</Text>
+                            </TouchableOpacity>
+                          )}
+
+                          <TouchableOpacity
+                            style={styles.viewSheetButton}
+                            onPress={() => onSelectCompany(comp)}
+                            activeOpacity={0.8}
+                          >
+                            <Text style={styles.viewSheetButtonText}>Fiche</Text>
+                            <Ionicons name="chevron-forward" size={13} color={Colors.primary} />
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+                    </View>
+                  );
+                })}
+              </View>
+            );
+          })}
+
+          {filteredByRadius.length === 0 && (
+            <View style={styles.emptyRadar}>
+              <Ionicons name="compass-outline" size={42} color={Colors.textMuted} />
+              <Text style={styles.emptyRadarTitle}>Aucune entreprise dans ce rayon</Text>
+              <Text style={styles.emptyRadarSub}>
+                Augmentez le filtre de distance pour afficher plus de résultats.
+              </Text>
+            </View>
+          )}
+        </ScrollView>
+      ) : (
+        /* ========================================================= */
+        /* MODE 2 : CARTE 2D LEAFLET (SANS AUCUNE CLÉ API REQUISE)   */
+        /* ========================================================= */
+        <View style={styles.mapContainer}>
+          <WebView
+            ref={webViewRef}
+            originWhitelist={['*']}
+            source={{
+              html: htmlContent,
+              baseUrl: 'https://unpkg.com',
+            }}
+            style={styles.webView}
+            javaScriptEnabled={true}
+            domStorageEnabled={true}
+            allowFileAccess={true}
+            allowUniversalAccessFromFileURLs={true}
+            mixedContentMode="always"
+            onMessage={handleMessage}
+            onLoadEnd={() => setIsMapReady(true)}
+          />
+
+          {!isMapReady && (
+            <View style={styles.loadingOverlay}>
+              <ActivityIndicator size="large" color={Colors.primary} />
+              <Text style={styles.loadingText}>Affichage de la carte...</Text>
+            </View>
+          )}
+
+          {/* Fiche flottante de l'entreprise cliquée */}
+          {selectedCompany && (
+            <View style={styles.floatingCard}>
+              <View style={styles.floatingHeader}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.floatingName} numberOfLines={1}>
+                    {selectedCompany.name}
+                  </Text>
+                  <Text style={styles.floatingCity} numberOfLines={1}>
+                    {selectedCompany.address
+                      ? `${selectedCompany.address} • ${selectedCompany.city}`
+                      : selectedCompany.city || 'Localisation'}
+                  </Text>
+                </View>
+                <TouchableOpacity
+                  style={styles.closeCardBtn}
+                  onPress={() => setSelectedCompanyId(null)}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="close" size={18} color={Colors.textMuted} />
+                </TouchableOpacity>
+              </View>
+
+              <View style={styles.floatingBadgesRow}>
+                <StatusBadge status={selectedCompany.status} size="small" />
+                {distancesMap[selectedCompany.id] !== undefined && (
+                  <View style={styles.distanceBadge}>
+                    <Ionicons name="compass-outline" size={12} color={Colors.accent} />
+                    <Text style={styles.distanceBadgeText}>
+                      {LocationService.formatDistance(distancesMap[selectedCompany.id])}
+                    </Text>
+                  </View>
+                )}
+              </View>
+
+              <View style={styles.floatingButtonsRow}>
+                {typeof selectedCompany.latitude === 'number' && (
+                  <TouchableOpacity
+                    style={styles.gpsFloatingBtn}
+                    onPress={() =>
+                      handleOpenGpsNavigation(
+                        selectedCompany.latitude,
+                        selectedCompany.longitude,
+                        selectedCompany.name,
+                      )
+                    }
+                    activeOpacity={0.8}
+                  >
+                    <Ionicons name="navigate" size={14} color="#FFFFFF" />
+                    <Text style={styles.gpsFloatingBtnText}>GPS</Text>
+                  </TouchableOpacity>
+                )}
+
+                <TouchableOpacity
+                  style={styles.openDetailsBtn}
+                  onPress={() => onSelectCompany(selectedCompany)}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.openDetailsText}>Consulter la fiche</Text>
+                  <Ionicons name="arrow-forward" size={14} color="#FFFFFF" />
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
         </View>
       )}
     </View>
@@ -527,13 +674,264 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Colors.background,
   },
+  subModeSegment: {
+    flexDirection: 'row',
+    backgroundColor: Colors.cardBackground,
+    marginHorizontal: 16,
+    marginTop: 8,
+    marginBottom: 8,
+    borderRadius: 12,
+    padding: 3,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  subModeTab: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 8,
+    borderRadius: 9,
+    gap: 6,
+  },
+  subModeTabActive: {
+    backgroundColor: `${Colors.primary}25`,
+  },
+  subModeTabText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: Colors.textSecondary,
+  },
+  subModeTabTextActive: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+  },
+  noRefBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: `${Colors.accent}15`,
+    marginHorizontal: 16,
+    marginBottom: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: `${Colors.accent}40`,
+    gap: 8,
+  },
+  noRefText: {
+    color: Colors.accent,
+    fontSize: 11.5,
+    fontWeight: '600',
+    flex: 1,
+  },
+  radarScroll: {
+    flex: 1,
+  },
+  radarContent: {
+    paddingHorizontal: 16,
+    paddingBottom: 24,
+    gap: 14,
+  },
+  radarHeaderCard: {
+    backgroundColor: Colors.cardBackground,
+    borderRadius: 14,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    gap: 12,
+  },
+  radarHeaderTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  radarTitle: {
+    color: Colors.text,
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  radarSubtitle: {
+    color: Colors.accent,
+    fontSize: 12,
+    marginTop: 2,
+    fontWeight: '500',
+  },
+  editAddressBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: `${Colors.accent}20`,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+    gap: 4,
+  },
+  editAddressText: {
+    color: Colors.accent,
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  radiusChipsRow: {
+    flexDirection: 'row',
+    gap: 8,
+    flexWrap: 'wrap',
+  },
+  radiusChip: {
+    backgroundColor: `${Colors.primary}15`,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: `${Colors.primary}30`,
+  },
+  radiusChipActive: {
+    backgroundColor: Colors.primary,
+    borderColor: Colors.primary,
+  },
+  radiusChipText: {
+    color: Colors.textSecondary,
+    fontSize: 11.5,
+    fontWeight: '600',
+  },
+  radiusChipTextActive: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+  },
+  zoneSection: {
+    gap: 8,
+  },
+  zoneHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 4,
+  },
+  zoneDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  zoneTitle: {
+    color: Colors.text,
+    fontSize: 13,
+    fontWeight: '700',
+    flex: 1,
+  },
+  zoneCountPill: {
+    backgroundColor: `${Colors.primary}25`,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 10,
+  },
+  zoneCountText: {
+    color: Colors.text,
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  radarCard: {
+    backgroundColor: Colors.cardBackground,
+    borderRadius: 12,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    gap: 10,
+  },
+  radarCardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+  },
+  radarCardName: {
+    color: Colors.text,
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  radarCardCity: {
+    color: Colors.textMuted,
+    fontSize: 12,
+    marginTop: 2,
+  },
+  radarCardFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    borderTopWidth: 1,
+    borderTopColor: `${Colors.border}80`,
+    paddingTop: 8,
+  },
+  radarDistBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: `${Colors.accent}15`,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+    gap: 4,
+  },
+  radarDistText: {
+    color: Colors.accent,
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  radarActionsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  gpsNavButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.brandGreen,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    gap: 4,
+  },
+  gpsNavButtonText: {
+    color: '#FFFFFF',
+    fontSize: 11.5,
+    fontWeight: '700',
+  },
+  viewSheetButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: `${Colors.primary}20`,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    gap: 2,
+  },
+  viewSheetButtonText: {
+    color: Colors.primary,
+    fontSize: 11.5,
+    fontWeight: '700',
+  },
+  emptyRadar: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 40,
+    gap: 8,
+  },
+  emptyRadarTitle: {
+    color: Colors.text,
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  emptyRadarSub: {
+    color: Colors.textMuted,
+    fontSize: 12,
+    textAlign: 'center',
+  },
+  mapContainer: {
+    flex: 1,
+  },
   webView: {
     flex: 1,
-    backgroundColor: '#0F0E17',
+    backgroundColor: '#0B0F19',
   },
   loadingOverlay: {
     ...StyleSheet.absoluteFill,
-    backgroundColor: '#0F0E17',
+    backgroundColor: '#0B0F19',
     justifyContent: 'center',
     alignItems: 'center',
     gap: 12,
@@ -543,79 +941,6 @@ const styles = StyleSheet.create({
     color: Colors.textSecondary,
     fontSize: 13,
     fontWeight: '500',
-  },
-  topBar: {
-    position: 'absolute',
-    top: 12,
-    left: 12,
-    right: 12,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    zIndex: 20,
-    pointerEvents: 'box-none',
-  },
-  counterPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: `${Colors.cardBackground}EE`,
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    gap: 6,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  counterText: {
-    color: Colors.text,
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  actionsGroup: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  actionButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: `${Colors.cardBackground}EE`,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  noRefBanner: {
-    position: 'absolute',
-    top: 58,
-    left: 12,
-    right: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: `${Colors.accent}20`,
-    borderWidth: 1,
-    borderColor: Colors.accent,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 10,
-    gap: 8,
-    zIndex: 20,
-  },
-  noRefText: {
-    color: Colors.accent,
-    fontSize: 11.5,
-    fontWeight: '600',
-    flex: 1,
   },
   floatingCard: {
     position: 'absolute',
@@ -662,20 +987,41 @@ const styles = StyleSheet.create({
   distanceBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: `${Colors.primary}20`,
+    backgroundColor: `${Colors.accent}20`,
     borderWidth: 1,
-    borderColor: `${Colors.primary}50`,
+    borderColor: `${Colors.accent}50`,
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 8,
     gap: 4,
   },
   distanceBadgeText: {
-    color: Colors.primary,
+    color: Colors.accent,
     fontSize: 11.5,
     fontWeight: '700',
   },
+  floatingButtonsRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 2,
+  },
+  gpsFloatingBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.brandGreen,
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    gap: 6,
+  },
+  gpsFloatingBtnText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '700',
+  },
   openDetailsBtn: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -683,7 +1029,6 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     paddingVertical: 10,
     gap: 6,
-    marginTop: 2,
   },
   openDetailsText: {
     color: '#FFFFFF',
