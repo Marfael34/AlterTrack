@@ -15,7 +15,8 @@
     "mobile:start": "npm --prefix apps/mobile run start",
     "mobile:web": "npm --prefix apps/mobile run web",
     "docker:up": "docker compose up -d",
-    "docker:down": "docker compose down"
+    "docker:down": "docker compose down",
+    "tunnel": "node scripts/tunnel.js"
   },
   "keywords": [
     "nest",

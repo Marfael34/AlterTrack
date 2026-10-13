@@ -1,19 +1,32 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
+import tunnelConfig from '../constants/tunnelUrl.json';
 
 const SERVER_URL_KEY = 'altertrack_server_url';
 const API_KEY_KEY = 'altertrack_api_key';
 
 // Sur Web (navigateur sur le PC hôte) : localhost:3000
-// Sur Mobile (Expo Go sur smartphone) : IP Wi-Fi locale du PC hôte
-const DEFAULT_MOBILE_URL = 'http://192.168.1.101:3000';
+// Sur Mobile : Priorité au tunnel HTTPS distant pour accès 4G/5G/partout, ou Wi-Fi local
+const DEFAULT_TUNNEL_URL = tunnelConfig?.url || '';
+const DEFAULT_LOCAL_WIFI_URL = 'http://192.168.1.101:3000';
 const DEFAULT_WEB_URL = 'http://localhost:3000';
 const DEFAULT_API_KEY = 'altertrack_dev_secret_key_2026_super_safe';
 
 export const StorageService = {
+  getTunnelUrl(): string {
+    return DEFAULT_TUNNEL_URL;
+  },
+
+  getLocalWifiUrl(): string {
+    return DEFAULT_LOCAL_WIFI_URL;
+  },
+
   async getServerUrl(): Promise<string> {
     const isWeb = Platform.OS === 'web';
-    const defaultUrl = isWeb ? DEFAULT_WEB_URL : DEFAULT_MOBILE_URL;
+    const defaultUrl = isWeb
+      ? DEFAULT_WEB_URL
+      : DEFAULT_TUNNEL_URL || DEFAULT_LOCAL_WIFI_URL;
+
     try {
       const value = await AsyncStorage.getItem(SERVER_URL_KEY);
       if (

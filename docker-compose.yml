@@ -44,6 +44,16 @@ services:
     networks:
       - altertrack-net
 
+  tunnel:
+    image: cloudflare/cloudflared:latest
+    container_name: altertrack-tunnel
+    restart: unless-stopped
+    depends_on:
+      - api
+    command: tunnel --no-autoupdate --url http://api:3000
+    networks:
+      - altertrack-net
+
 volumes:
   postgres_data:
   api_uploads:
