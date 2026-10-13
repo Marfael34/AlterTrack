@@ -27,13 +27,23 @@ La recherche d'un contrat d'alternance nécessite de contacter un grand volume d
 
 ## 3. Périmètre et Fonctionnalités détaillées
 
-### 3.1 Gestion des fiches Entreprises (CRUD)
-L'utilisateur peut créer, consulter, modifier et supprimer une fiche entreprise contenant :
+### 3.1 Gestion des fiches Entreprises (CRUD & Import Tableur)
+L'utilisateur peut créer, consulter, modifier et supprimer des fiches entreprises.
+
+#### Création unitaire manuelle
+Chaque fiche contient :
 * **Nom de l'entreprise** (Obligatoire)
 * **Adresse e-mail de contact** (Obligatoire pour l'envoi automatisé)
 * **Numéro de téléphone** (Optionnel / requis pour l'étape d'appel)
-* **Statut actuel** (Obligatoire, par défaut : `À envoyer`)
+* **Statut initial** (Sélectionnable parmi les 7 statuts du cycle de vie, par défaut : `À envoyer`)
 * **Note / Description** (Texte libre strictement personnel pour noter des informations sur l'entreprise ; non transmis à l'IA).
+
+#### Importation en masse par tableur (Excel & CSV)
+L'application mobile et le backend intègrent un module d'importation de tableurs :
+* **Formats pris en charge :** Microsoft Excel (`.xlsx`, `.xls`) et fichiers délimités (`.csv`).
+* **Détection intelligente des colonnes :** Analyse souple des en-têtes (ex: Nom / Entreprise / Société, Email / Courriel, Téléphone / Mobile, Notes / Remarques / Poste, Statut).
+* **Validation & Dédoublonnage :** Vérification stricte du format email, élimination des doublons internes au fichier et des emails déjà enregistrés dans la base AlterTrack.
+* **Résultat d'import détaillé :** Compte-rendu immédiat (nombre de fiches créées, fiches ignorées, motifs d'erreur par ligne).
 
 ### 3.2 Gestion du Profil d'envoi (Modèle & CV)
 Depuis un écran « Paramètres » dans l'application mobile :
@@ -128,22 +138,48 @@ stateDiagram-v2
 
 ## 5. Expérience Utilisateur (UX) et Design (UI)
 
-### 5.1 Identité visuelle (Dark Mode à fort contraste)
+### 5.1 Identité visuelle & Charte Graphique Officielle
 
-* **Fond principal :** Gris anthracite très sombre / Noir profond (`#0F172A` ou `#121212`)
-* **Cartes (Fiches entreprises) :** Gris foncé (`#1E293B`) avec bordures subtiles
+L'identité visuelle d'AlterTrack repose sur un thème sombre haute technologie, dynamique et orienté performance :
 
-#### Palette des badges de statut
+#### A. Le Logotype
+* **Monogramme :** Lettre « A » stylisée avec des nœuds de réseau interconnectés et traversée par une **flèche ascendante ↗** (symbolisant la progression des candidatures et le succès).
+* **Typographie du mot-symbole :** 
+  * **Alter :** Blanc pur (`#FFFFFF`) avec contour subtil.
+  * **Track :** Cyan Turquoise vibrant (`#00D2C4`).
+
+#### B. La Palette de Couleurs Officielle
+
+| Rôle dans la charte | Code Hex | Nuance | Usage UI |
+|---|---|---|---|
+| **Fond principal (Primary Dark)** | `#0B0F19` | Noir bleuté profond | Toile de fond globale de l'application |
+| **Surface cartes & formulaires** | `#131B2E` | Navy profond | Cartes d'entreprises, modales, champs |
+| **Primary Blue** | `#0066FF` | Bleu électrique vibrant | Boutons d'action principaux, statut `À envoyer` |
+| **Primary Cyan / Turquoise** | `#00D2C4` | Cyan lumineux | Accentuation de marque (`Track`), statut `Réponse reçue` |
+| **Accent Green** | `#00F099` | Vert menthe fluo | Actions de succès, statut `Accepté` |
+| **Blanc pur** | `#FFFFFF` | Blanc haute luminosité | Titres, textes principaux, boutons secondaires |
+| **Soft White** | `#F0F4F8` | Blanc doux | Surfaces secondaires claires |
+
+#### C. Typographie
+* **Titres & En-têtes :** **Urbanist** (Bold & Medium) — géométrique, moderne et impactant.
+* **Textes courants & Éléments UI :** **Inter** (Regular, Medium, Light) — lisibilité maximale sur écrans mobiles.
+
+#### D. Éléments Graphiques & Boutons UI
+* **Boutons principaux :** Forme pilule arrondie (`borderRadius: 24`), couleur bleu roi `#0066FF` ou dégradé cyan/menthe (`#00D2C4` $\rightarrow$ `#00F099`).
+* **Boutons secondaires :** Bouton pilule blanc (`#FFFFFF`) avec texte sombre (`#0B0F19`).
+* **Courbes & Graphiques :** Lignes de tendance dynamiques cyan et vertes sur fond sombre.
+
+#### E. Palette des badges de statut
 
 | Statut | Code Couleur | Aperçu indicatif | Rôle visuel |
 |---|---|---|---|
-| **À envoyer** | `#3B82F6` | Bleu électrique | Neutre / Prêt |
-| **En attente de réponse** | `#F59E0B` | Jaune ambré | En cours d'attente |
-| **À relancer** | `#F97316` | Orange vif | Attention requise |
-| **Réponse reçue** | `#8B5CF6` | Violet / Indigo lumineux | **Priorité visuelle absolue** |
-| **À appeler** | `#06B6D4` | Cyan | Action téléphonique |
-| **Accepté** | `#10B981` | Vert émeraude | Succès |
-| **Refusé** | `#EF4444` | Rouge corail | Échec / Archivé |
+| **À envoyer** | `#0066FF` | Bleu roi officiel | Prêt à l'expédition (neutre/actif) |
+| **En attente de réponse** | `#F59E0B` | Jaune ambré | Surveillance active (J+0 à J+7) |
+| **À relancer** | `#F97316` | Orange vif | Attention requise (J+7) |
+| **Réponse reçue** | `#00D2C4` | Cyan Turquoise officiel | **Priorité visuelle absolue** |
+| **À appeler** | `#00D2C4` | Cyan lumineux | Action téléphonique directe (J+15) |
+| **Accepté** | `#00F099` | Vert menthe officiel | Succès / Embauche validée |
+| **Refusé** | `#EF4444` | Rouge corail | Candidature non retenue |
 
 ### 5.2 Structure des écrans (React Native)
 

@@ -1,19 +1,32 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Platform } from 'react-native';
 
 const SERVER_URL_KEY = 'altertrack_server_url';
 const API_KEY_KEY = 'altertrack_api_key';
 
-// Par défaut, cible l'adresse locale ou l'émulateur
-const DEFAULT_SERVER_URL = 'http://10.0.2.2:3000';
-const DEFAULT_API_KEY = 'change_this_secret_api_key_min_32_chars';
+// Sur Web (navigateur sur le PC hôte) : localhost:3000
+// Sur Mobile (Expo Go sur smartphone) : IP Wi-Fi locale du PC hôte
+const DEFAULT_MOBILE_URL = 'http://192.168.1.101:3000';
+const DEFAULT_WEB_URL = 'http://localhost:3000';
+const DEFAULT_API_KEY = 'altertrack_dev_secret_key_2026_super_safe';
 
 export const StorageService = {
   async getServerUrl(): Promise<string> {
+    const isWeb = Platform.OS === 'web';
+    const defaultUrl = isWeb ? DEFAULT_WEB_URL : DEFAULT_MOBILE_URL;
     try {
       const value = await AsyncStorage.getItem(SERVER_URL_KEY);
-      return value || DEFAULT_SERVER_URL;
+      if (
+        !value ||
+        (isWeb && value.includes('192.168.1.')) ||
+        (!isWeb && (value.includes('192.168.1.27') || value.includes('localhost') || value.includes('127.0.0.1')))
+      ) {
+        await AsyncStorage.setItem(SERVER_URL_KEY, defaultUrl);
+        return defaultUrl;
+      }
+      return value;
     } catch {
-      return DEFAULT_SERVER_URL;
+      return defaultUrl;
     }
   },
 

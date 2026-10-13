@@ -11,6 +11,7 @@ export interface Company {
   id: string;
   name: string;
   email: string;
+  city?: string | null;
   phone?: string | null;
   notes?: string | null;
   status: Status;

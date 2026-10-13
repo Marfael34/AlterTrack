@@ -8,9 +8,20 @@ import { StatusBadge } from './StatusBadge';
 interface CompanyCardProps {
   company: Company;
   onPress: () => void;
+  selectable?: boolean;
+  selected?: boolean;
+  onToggleSelect?: () => void;
+  onLongPress?: () => void;
 }
 
-export const CompanyCard: React.FC<CompanyCardProps> = ({ company, onPress }) => {
+export const CompanyCard: React.FC<CompanyCardProps> = ({
+  company,
+  onPress,
+  selectable = false,
+  selected = false,
+  onToggleSelect,
+  onLongPress,
+}) => {
   const handleCall = () => {
     if (company.phone) {
       Linking.openURL(`tel:${company.phone}`).catch(() => {});
@@ -28,62 +39,96 @@ export const CompanyCard: React.FC<CompanyCardProps> = ({ company, onPress }) =>
     });
   };
 
+  const handleCardPress = () => {
+    if (selectable && onToggleSelect) {
+      onToggleSelect();
+    } else {
+      onPress();
+    }
+  };
+
   return (
     <TouchableOpacity
       style={[
         styles.card,
         company.status === 'REPLY_RECEIVED' && styles.cardHighlightReply,
         isToCall && styles.cardHighlightCall,
+        selected && styles.cardSelected,
       ]}
-      onPress={onPress}
+      onPress={handleCardPress}
+      onLongPress={onLongPress}
       activeOpacity={0.7}
     >
-      <View style={styles.header}>
-        <Text style={styles.companyName} numberOfLines={1}>
-          {company.name}
-        </Text>
-        <StatusBadge status={company.status} size="small" />
-      </View>
-
-      <View style={styles.contactRow}>
-        <Ionicons name="mail-outline" size={14} color={Colors.textSecondary} />
-        <Text style={styles.contactText} numberOfLines={1}>
-          {company.email}
-        </Text>
-      </View>
-
-      {company.phone && (
-        <View style={styles.phoneRow}>
-          <Ionicons name="call-outline" size={14} color={Colors.textSecondary} />
-          <Text style={styles.contactText}>{company.phone}</Text>
-          {isToCall && (
-            <TouchableOpacity
-              style={styles.callButton}
-              onPress={handleCall}
-              activeOpacity={0.8}
-            >
-              <Ionicons name="call" size={12} color="#FFFFFF" />
-              <Text style={styles.callButtonText}>Appeler</Text>
-            </TouchableOpacity>
-          )}
-        </View>
-      )}
-
-      {company.notes && (
-        <Text style={styles.notesPreview} numberOfLines={2}>
-          {company.notes}
-        </Text>
-      )}
-
-      <View style={styles.footer}>
-        {company.firstMailSentAt ? (
-          <Text style={styles.dateText}>
-            1er contact : {formatDate(company.firstMailSentAt)}
-            {company.followUpSentAt && ` • Relance : ${formatDate(company.followUpSentAt)}`}
-          </Text>
-        ) : (
-          <Text style={styles.dateText}>Non encore contacté</Text>
+      <View style={styles.mainRow}>
+        {selectable && (
+          <View style={styles.checkboxContainer} pointerEvents="none">
+            <Ionicons
+              name={selected ? 'checkbox' : 'square-outline'}
+              size={24}
+              color={selected ? Colors.primary : Colors.textMuted}
+            />
+          </View>
         )}
+
+        <View style={styles.cardContent}>
+          <View style={styles.header}>
+            <View style={styles.titleWithCity}>
+              <Text style={styles.companyName} numberOfLines={2}>
+                {company.name}
+              </Text>
+              {company.city && (
+                <View style={styles.cityBadge}>
+                  <Ionicons name="location-sharp" size={11} color={Colors.primary} />
+                  <Text style={styles.cityText} numberOfLines={1}>
+                    {company.city}
+                  </Text>
+                </View>
+              )}
+            </View>
+            <StatusBadge status={company.status} size="small" />
+          </View>
+
+          <View style={styles.contactRow}>
+            <Ionicons name="mail-outline" size={14} color={Colors.textSecondary} />
+            <Text style={styles.contactText} numberOfLines={1}>
+              {company.email}
+            </Text>
+          </View>
+
+          {company.phone && (
+            <View style={styles.phoneRow}>
+              <Ionicons name="call-outline" size={14} color={Colors.textSecondary} />
+              <Text style={styles.contactText}>{company.phone}</Text>
+              {isToCall && !selectable && (
+                <TouchableOpacity
+                  style={styles.callButton}
+                  onPress={handleCall}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons name="call" size={12} color="#FFFFFF" />
+                  <Text style={styles.callButtonText}>Appeler</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          )}
+
+          {company.notes && (
+            <Text style={styles.notesPreview} numberOfLines={2}>
+              {company.notes}
+            </Text>
+          )}
+
+          <View style={styles.footer}>
+            {company.firstMailSentAt ? (
+              <Text style={styles.dateText}>
+                1er contact : {formatDate(company.firstMailSentAt)}
+                {company.followUpSentAt && ` • Relance : ${formatDate(company.followUpSentAt)}`}
+              </Text>
+            ) : (
+              <Text style={styles.dateText}>Non encore contacté</Text>
+            )}
+          </View>
+        </View>
       </View>
     </TouchableOpacity>
   );
@@ -105,18 +150,52 @@ const styles = StyleSheet.create({
   cardHighlightCall: {
     borderColor: Colors.status.TO_CALL,
   },
+  cardSelected: {
+    borderColor: Colors.primary,
+    backgroundColor: `${Colors.primary}12`,
+  },
+  mainRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+  },
+  checkboxContainer: {
+    marginRight: 12,
+    marginTop: 2,
+  },
+  cardContent: {
+    flex: 1,
+  },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     marginBottom: 10,
+  },
+  titleWithCity: {
+    flex: 1,
+    marginRight: 10,
+    flexDirection: 'column',
+    alignItems: 'flex-start',
+    gap: 4,
   },
   companyName: {
     fontSize: 18,
     fontWeight: '700',
     color: Colors.text,
-    flex: 1,
-    marginRight: 10,
+  },
+  cityBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: `${Colors.primary}20`,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 8,
+    gap: 3,
+  },
+  cityText: {
+    color: Colors.primary,
+    fontSize: 11,
+    fontWeight: '600',
   },
   contactRow: {
     flexDirection: 'row',

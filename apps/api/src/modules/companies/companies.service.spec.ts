@@ -9,10 +9,12 @@ describe('CompaniesService', () => {
   let prisma: {
     company: {
       create: jest.Mock;
+      findFirst: jest.Mock;
       findMany: jest.Mock;
       findUnique: jest.Mock;
       update: jest.Mock;
       delete: jest.Mock;
+      deleteMany: jest.Mock;
       count: jest.Mock;
       groupBy: jest.Mock;
     };
@@ -22,6 +24,7 @@ describe('CompaniesService', () => {
     id: 'comp-uuid-1',
     name: 'Entreprise Test',
     email: 'contact@test.com',
+    city: 'Paris',
     phone: '0601020304',
     notes: 'Note de test',
     status: Status.TO_SEND,
@@ -37,10 +40,12 @@ describe('CompaniesService', () => {
     prisma = {
       company: {
         create: jest.fn().mockResolvedValue(mockCompany),
+        findFirst: jest.fn().mockResolvedValue(null),
         findMany: jest.fn().mockResolvedValue([mockCompany]),
         findUnique: jest.fn().mockResolvedValue(mockCompany),
         update: jest.fn().mockResolvedValue(mockCompany),
         delete: jest.fn().mockResolvedValue(mockCompany),
+        deleteMany: jest.fn().mockResolvedValue({ count: 2 }),
         count: jest.fn().mockResolvedValue(1),
         groupBy: jest
           .fn()
@@ -76,12 +81,29 @@ describe('CompaniesService', () => {
         data: {
           name: 'Entreprise Test',
           email: 'contact@test.com',
+          city: undefined,
           phone: undefined,
           notes: undefined,
           status: Status.TO_SEND,
         },
       });
       expect(result).toEqual(mockCompany);
+    });
+  });
+
+  describe('removeBatch', () => {
+    it('should delete specified companies by IDs', async () => {
+      const result = await service.removeBatch({ ids: ['id-1', 'id-2'] });
+      expect(prisma.company.deleteMany).toHaveBeenCalledWith({
+        where: { id: { in: ['id-1', 'id-2'] } },
+      });
+      expect(result.deletedCount).toBe(2);
+    });
+
+    it('should delete all companies when all is true', async () => {
+      const result = await service.removeBatch({ all: true });
+      expect(prisma.company.deleteMany).toHaveBeenCalledWith({});
+      expect(result.deletedCount).toBe(2);
     });
   });
 
@@ -118,6 +140,45 @@ describe('CompaniesService', () => {
       const stats = await service.getStats();
       expect(stats.TO_SEND).toBe(1);
       expect(stats.ACCEPTED).toBe(0);
+    });
+  });
+
+  describe('importFromSpreadsheet', () => {
+    it('should import valid companies from CSV buffer', async () => {
+      const csvContent =
+        'Nom,Email,Telephone,Notes,Statut\nGoogle,recrutement@google.com,0611223344,Stage alternance,A envoyer\nMicrosoft,jobs@microsoft.com,,Poste dev,En attente';
+      const buffer = Buffer.from(csvContent, 'utf-8');
+
+      prisma.company.findFirst.mockResolvedValue(null);
+      prisma.company.create.mockImplementation(({ data }: any) =>
+        Promise.resolve({ id: 'new-id', ...data }),
+      );
+
+      const result = await service.importFromSpreadsheet(buffer);
+
+      expect(result.importedCount).toBe(2);
+      expect(result.skippedCount).toBe(0);
+      expect(result.imported[0].name).toBe('Google');
+      expect(result.imported[0].status).toBe(Status.TO_SEND);
+      expect(result.imported[1].name).toBe('Microsoft');
+      expect(result.imported[1].status).toBe(Status.WAITING_FOR_REPLY);
+    });
+
+    it('should skip rows with invalid email or duplicate email', async () => {
+      const csvContent =
+        'Nom,Email\nValidCorp,valid@corp.fr\nBadEmailCorp,not-an-email\nValidCorpDup,valid@corp.fr';
+      const buffer = Buffer.from(csvContent, 'utf-8');
+
+      prisma.company.findFirst.mockResolvedValue(null);
+      prisma.company.create.mockImplementation(({ data }: any) =>
+        Promise.resolve({ id: 'id-1', ...data }),
+      );
+
+      const result = await service.importFromSpreadsheet(buffer);
+
+      expect(result.importedCount).toBe(1);
+      expect(result.skippedCount).toBe(2);
+      expect(result.errors.length).toBe(2);
     });
   });
 });

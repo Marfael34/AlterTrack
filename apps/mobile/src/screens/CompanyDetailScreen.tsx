@@ -39,6 +39,7 @@ export const CompanyDetailScreen: React.FC<CompanyDetailScreenProps> = ({
 }) => {
   const [company, setCompany] = useState<Company>(initialCompany);
   const [name, setName] = useState(initialCompany.name);
+  const [city, setCity] = useState(initialCompany.city || '');
   const [email, setEmail] = useState(initialCompany.email);
   const [phone, setPhone] = useState(initialCompany.phone || '');
   const [notes, setNotes] = useState(initialCompany.notes || '');
@@ -82,6 +83,7 @@ export const CompanyDetailScreen: React.FC<CompanyDetailScreenProps> = ({
     try {
       const updated = await ApiService.updateCompany(company.id, {
         name: name.trim(),
+        city: city.trim() || undefined,
         email: email.trim(),
         phone: phone.trim() || undefined,
         notes: notes.trim() || undefined,
@@ -288,6 +290,15 @@ export const CompanyDetailScreen: React.FC<CompanyDetailScreenProps> = ({
             value={name}
             onChangeText={setName}
             placeholder="Ex: Google France"
+            placeholderTextColor={Colors.textMuted}
+          />
+
+          <Text style={styles.fieldLabel}>Ville ou localisation</Text>
+          <TextInput
+            style={styles.input}
+            value={city}
+            onChangeText={setCity}
+            placeholder="Ex: Paris, Lyon, Toulouse, En télétravail..."
             placeholderTextColor={Colors.textMuted}
           />
 

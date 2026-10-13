@@ -27,6 +27,14 @@ export class CreateCompanyDto {
 
   @IsOptional()
   @IsString()
+  @MaxLength(100)
+  @Transform(({ value }: { value: unknown }) =>
+    typeof value === 'string' ? value.trim() : value,
+  )
+  city?: string;
+
+  @IsOptional()
+  @IsString()
   @MaxLength(50)
   @Transform(({ value }: { value: unknown }) =>
     typeof value === 'string' ? value.trim() : value,

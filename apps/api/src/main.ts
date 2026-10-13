@@ -1,21 +1,27 @@
 import { Logger, ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
+import { ExpressAdapter } from '@nestjs/platform-express';
 import helmet from 'helmet';
 import { AppModule } from './app.module';
 
 async function bootstrap() {
   const logger = new Logger('Bootstrap');
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create(AppModule, new ExpressAdapter());
 
-  // Sécurité des en-têtes HTTP
-  app.use(helmet());
+  // Sécurité des en-têtes HTTP (avec autorisation cross-origin pour le client web)
+  app.use(
+    helmet({
+      crossOriginResourcePolicy: { policy: 'cross-origin' },
+    }),
+  );
 
   // Configuration CORS
   app.enableCors({
     origin: true,
     methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'x-api-key'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'x-api-key', 'Accept'],
+    credentials: true,
   });
 
   // Validation globale stricte des entrées
@@ -36,7 +42,7 @@ async function bootstrap() {
   const configService = app.get(ConfigService);
   const port = configService.get<number>('port') || 3000;
 
-  await app.listen(port);
+  await app.listen(port, '0.0.0.0');
   logger.log(`Serveur AlterTrack API démarré sur le port ${port}`);
 }
 

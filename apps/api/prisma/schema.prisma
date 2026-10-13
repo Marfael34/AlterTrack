@@ -24,6 +24,7 @@ model Company {
   id              String    @id @default(uuid())
   name            String
   email           String
+  city            String?
   phone           String?
   notes           String?
   status          Status    @default(TO_SEND)

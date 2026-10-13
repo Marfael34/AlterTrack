@@ -4,6 +4,7 @@ import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Image,
   ScrollView,
   StyleSheet,
   Text,
@@ -109,8 +110,8 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ onBack }) => {
         );
       } else {
         Alert.alert(
-          'Notifications Push ⚠️',
-          'Impossible de récupérer le token Push. Vérifiez que les permissions sont accordées dans les paramètres système de votre appareil.',
+          'Notifications Push (Expo Go)',
+          'Dans l’application Expo Go, Google et Expo désactivent les notifications push distantes (qui nécessitent un build autonome APK pour FCM). Vos candidatures, modèles IA, relances et CV fonctionnent quant à eux à 100% !',
         );
       }
     } catch (err) {
@@ -154,7 +155,11 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ onBack }) => {
       const file = result.assets[0];
       setUploadingCv(true);
 
-      const updated = await ApiService.uploadCv(file.uri, file.name);
+      const updated = await ApiService.uploadCv(
+        file.uri,
+        file.name,
+        (file as unknown as { file?: unknown }).file,
+      );
       setHasCv(true);
       setActiveCvName(updated.cvOriginalName || file.name);
 
@@ -349,10 +354,18 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ onBack }) => {
             />
             <View style={styles.cvInfo}>
               <Text style={styles.cvStatus}>
-                {pushToken ? 'Notifications activées' : 'Token non synchronisé'}
+                {pushToken
+                  ? 'Notifications activées'
+                  : NotificationService.isExpoGo
+                    ? 'Mode Expo Go (Actif sur APK)'
+                    : 'Token non synchronisé'}
               </Text>
               <Text style={styles.cvName} numberOfLines={1}>
-                {pushToken || 'Appuyez ci-dessous pour autoriser et lier ce téléphone'}
+                {pushToken
+                  ? pushToken
+                  : NotificationService.isExpoGo
+                    ? 'Push distants désactivés par Expo Go. Candidatures 100% actives.'
+                    : 'Appuyez ci-dessous pour autoriser et lier ce téléphone'}
               </Text>
             </View>
           </View>
@@ -376,6 +389,16 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ onBack }) => {
               </>
             )}
           </TouchableOpacity>
+        </View>
+
+        {/* Footer Brand */}
+        <View style={styles.footerBrand}>
+          <Image
+            source={require('../../assets/logo.png')}
+            style={styles.footerLogo}
+            resizeMode="contain"
+          />
+          <Text style={styles.footerVersion}>AlterTrack v1.0.0 — Auto-hébergé</Text>
         </View>
       </ScrollView>
     </View>
@@ -542,6 +565,22 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontWeight: '700',
     fontSize: 13,
+  },
+  footerBrand: {
+    alignItems: 'center',
+    marginTop: 10,
+    marginBottom: 20,
+    gap: 6,
+  },
+  footerLogo: {
+    width: 120,
+    height: 32,
+    opacity: 0.85,
+  },
+  footerVersion: {
+    fontSize: 11,
+    color: Colors.textMuted,
+    fontWeight: '500',
   },
   buttonDisabled: {
     opacity: 0.6,

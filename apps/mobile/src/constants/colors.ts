@@ -1,30 +1,42 @@
 export const Colors = {
-  background: '#0F172A',
-  cardBackground: '#1E293B',
-  surface: '#1E293B',
-  surfaceHighlight: '#273549',
-  border: '#334155',
-  borderLight: '#475569',
-  text: '#F8FAFC',
-  textSecondary: '#94A3B8',
-  textMuted: '#64748B',
+  // Palette officielle AlterTrack
+  background: '#0B0F19', // Dark Navy background officiel
+  cardBackground: '#131B2E', // Surface carte profonde
+  surface: '#1A233A', // Surface surélevée
+  surfaceHighlight: '#22304E', // Surface hover / active
+  border: '#1E2D4A', // Bordure sobre
+  borderLight: '#2C3E63',
+
+  // Textes
+  text: '#FFFFFF', // Blanc pur officiel
+  textSecondary: '#A0AEC0', // Gris clair
+  textMuted: '#64748B', // Gris discret
+  textDark: '#0B0F19', // Texte foncé sur fond blanc
+
+  // Couleurs de marque officielles
+  brandBlue: '#0066FF', // Primary Blue
+  brandCyan: '#00D2C4', // Cyan Turquoise
+  brandGreen: '#00F099', // Accent Green
+  brandWhite: '#FFFFFF',
+  brandSoftWhite: '#F0F4F8',
 
   // Statuts métier
   status: {
-    TO_SEND: '#3B82F6',            // Bleu électrique
-    WAITING_FOR_REPLY: '#F59E0B',  // Jaune ambré
-    TO_FOLLOW_UP: '#F97316',       // Orange vif
-    REPLY_RECEIVED: '#8B5CF6',     // Violet lumineux (Priorité)
-    TO_CALL: '#06B6D4',            // Cyan
-    ACCEPTED: '#10B981',           // Vert émeraude
-    REFUSED: '#EF4444',            // Rouge corail
+    TO_SEND: '#0066FF', // Primary Blue officiel
+    WAITING_FOR_REPLY: '#F59E0B', // Jaune ambré
+    TO_FOLLOW_UP: '#F97316', // Orange vif
+    REPLY_RECEIVED: '#00D2C4', // Cyan Turquoise officiel (prioritaire)
+    TO_CALL: '#00D2C4', // Cyan officiel
+    ACCEPTED: '#00F099', // Accent Green officiel
+    REFUSED: '#EF4444', // Rouge corail
   },
 
   // Actions
-  primary: '#3B82F6',
-  primaryHover: '#2563EB',
-  accent: '#8B5CF6',
-  success: '#10B981',
+  primary: '#0066FF', // Primary Blue officiel
+  primaryHover: '#0052CC',
+  accent: '#00D2C4', // Cyan Turquoise officiel
+  accentGreen: '#00F099', // Accent Green officiel
+  success: '#00F099', // Vert marque officiel
   danger: '#EF4444',
   warning: '#F59E0B',
 };
