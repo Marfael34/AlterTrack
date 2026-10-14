@@ -16,6 +16,9 @@ export interface GeocodeResult {
   label: string;
   city: string;
   postcode?: string;
+  name?: string;
+  type?: 'housenumber' | 'street' | 'municipality' | 'locality' | string;
+  context?: string;
   latitude: number;
   longitude: number;
 }
@@ -156,18 +159,29 @@ export const LocationService = {
   /**
    * Recherche d'adresses et de villes via l'API Adresse officielle française
    */
-  async searchAddress(query: string): Promise<GeocodeResult[]> {
+  async searchAddress(
+    query: string,
+    type?: 'municipality' | 'housenumber' | 'street',
+  ): Promise<GeocodeResult[]> {
     const q = query.trim();
     if (q.length < 2) return [];
 
     try {
-      const url = `https://api-adresse.data.gouv.fr/search/?q=${encodeURIComponent(q)}&limit=5`;
+      const typeParam = type ? `&type=${type}` : '';
+      const url = `https://api-adresse.data.gouv.fr/search/?q=${encodeURIComponent(q)}${typeParam}&limit=5`;
       const res = await fetch(url);
       if (!res.ok) return [];
 
       const data = (await res.json()) as {
         features?: Array<{
-          properties: { label: string; city: string; postcode?: string };
+          properties: {
+            label: string;
+            city: string;
+            postcode?: string;
+            name?: string;
+            type?: string;
+            context?: string;
+          };
           geometry: { coordinates: [number, number] };
         }>;
       };
@@ -176,8 +190,11 @@ export const LocationService = {
 
       return data.features.map((f) => ({
         label: f.properties.label,
+        name: f.properties.name,
         city: f.properties.city,
         postcode: f.properties.postcode,
+        type: f.properties.type,
+        context: f.properties.context,
         longitude: f.geometry.coordinates[0],
         latitude: f.geometry.coordinates[1],
       }));
@@ -189,19 +206,23 @@ export const LocationService = {
   /**
    * Géocode un texte (adresse ou ville) avec mise en cache
    */
-  async geocodeQuery(query: string): Promise<{ latitude: number; longitude: number } | null> {
+  async geocodeQuery(
+    query: string,
+    type?: 'municipality' | 'housenumber' | 'street',
+  ): Promise<{ latitude: number; longitude: number } | null> {
     const q = query.trim().toLowerCase();
     if (!q) return null;
 
+    const cacheKey = type ? `${q}__${type}` : q;
     await loadCache();
-    if (memoryGeoCache[q]) {
-      return memoryGeoCache[q];
+    if (memoryGeoCache[cacheKey]) {
+      return memoryGeoCache[cacheKey];
     }
 
-    const results = await this.searchAddress(query);
+    const results = await this.searchAddress(query, type);
     if (results.length > 0) {
       const coords = { latitude: results[0].latitude, longitude: results[0].longitude };
-      await saveToCache(q, coords);
+      await saveToCache(cacheKey, coords);
       return coords;
     }
 
@@ -224,20 +245,30 @@ export const LocationService = {
     }
 
     const cleanAddr = company.address?.trim() || '';
-    const cleanCity = company.city?.trim() || '';
+    let cleanCity = company.city?.trim() || '';
 
-    // 1. Si on a l'adresse et la ville/commune, combiner les deux pour une géolocalisation exacte
-    if (cleanAddr && cleanCity) {
-      const combined = `${cleanAddr}, ${cleanCity}`;
-      const res = await this.geocodeQuery(combined);
-      if (res) return res;
-      // Repli si l'adresse exacte n'est pas trouvée : géocoder au moins la commune
-      return this.geocodeQuery(cleanCity);
+    // Détecter les faux noms de ville (ex: "Toute la france", "Remote", etc.)
+    const INVALID_CITY_REGEX =
+      /^(toute\s+la\s+france|france\s+enti[eè]re|partout|t[eé]l[eé]travail|remote|full\s*remote|distanciel|en\s+ligne|n\/?a|inconnu)$/i;
+    if (INVALID_CITY_REGEX.test(cleanCity)) {
+      if (!cleanAddr) return null;
+      cleanCity = '';
     }
 
-    // 2. Si on a seulement la ville/commune
-    if (cleanCity) {
-      return this.geocodeQuery(cleanCity);
+    const parsedCity = cleanCity ? cleanCity.split(/[\/,]/)[0].trim() : '';
+
+    // 1. Si on a l'adresse et la ville/commune, combiner les deux pour une géolocalisation exacte
+    if (cleanAddr && parsedCity) {
+      const combined = `${cleanAddr}, ${parsedCity}`;
+      const res = await this.geocodeQuery(combined);
+      if (res) return res;
+      // Repli si l'adresse exacte n'est pas trouvée : géocoder au moins la commune avec type=municipality
+      return this.geocodeQuery(parsedCity, 'municipality');
+    }
+
+    // 2. Si on a seulement la ville/commune : forcer type=municipality pour éviter de tomber sur une rue du même nom ailleurs
+    if (parsedCity) {
+      return this.geocodeQuery(parsedCity, 'municipality');
     }
 
     // 3. Si on a seulement l'adresse

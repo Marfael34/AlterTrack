@@ -1,9 +1,12 @@
 import { Ionicons } from '@expo/vector-icons';
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Keyboard,
+  KeyboardAvoidingView,
   Linking,
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -11,6 +14,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { AddressFieldAssistant } from '../components/AddressFieldAssistant';
 import { ReferencePointModal } from '../components/ReferencePointModal';
 import { StatusBadge } from '../components/StatusBadge';
 import { Colors } from '../constants/colors';
@@ -47,6 +51,12 @@ export const CompanyDetailScreen: React.FC<CompanyDetailScreenProps> = ({
   const [name, setName] = useState(initialCompany.name);
   const [address, setAddress] = useState(initialCompany.address || '');
   const [city, setCity] = useState(initialCompany.city || '');
+  const [latitude, setLatitude] = useState<number | undefined>(
+    typeof initialCompany.latitude === 'number' ? initialCompany.latitude : undefined,
+  );
+  const [longitude, setLongitude] = useState<number | undefined>(
+    typeof initialCompany.longitude === 'number' ? initialCompany.longitude : undefined,
+  );
   const [email, setEmail] = useState(
     initialCompany.email?.endsWith('@sans-email.altertrack')
       ? ''
@@ -60,6 +70,35 @@ export const CompanyDetailScreen: React.FC<CompanyDetailScreenProps> = ({
   const [refPoint, setRefPoint] = useState<ReferencePoint | null>(propRefPoint || null);
   const [isRefPointModalOpen, setIsRefPointModalOpen] = useState(false);
   const [distanceKm, setDistanceKm] = useState<number | null>(null);
+
+  const scrollViewRef = useRef<ScrollView>(null);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+  const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
+
+  useEffect(() => {
+    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+
+    const showSub = Keyboard.addListener(showEvent, (e) => {
+      setKeyboardHeight(e.endCoordinates.height);
+      setIsKeyboardVisible(true);
+    });
+    const hideSub = Keyboard.addListener(hideEvent, () => {
+      setKeyboardHeight(0);
+      setIsKeyboardVisible(false);
+    });
+
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
+
+  const handleNotesFocus = () => {
+    setTimeout(() => {
+      scrollViewRef.current?.scrollToEnd({ animated: true });
+    }, 200);
+  };
 
   React.useEffect(() => {
     if (propRefPoint !== undefined) {
@@ -80,6 +119,24 @@ export const CompanyDetailScreen: React.FC<CompanyDetailScreenProps> = ({
       }
     })();
   }, [initialCompany, refPoint]);
+
+  useEffect(() => {
+    if (
+      refPoint &&
+      typeof latitude === 'number' &&
+      typeof longitude === 'number' &&
+      !isNaN(latitude) &&
+      !isNaN(longitude)
+    ) {
+      const d = LocationService.calculateDistanceKm(
+        refPoint.latitude,
+        refPoint.longitude,
+        latitude,
+        longitude,
+      );
+      setDistanceKm(d);
+    }
+  }, [refPoint, latitude, longitude]);
 
   const handleSaveRefPoint = async (newPoint: ReferencePoint | null) => {
     setRefPoint(newPoint);
@@ -143,6 +200,8 @@ export const CompanyDetailScreen: React.FC<CompanyDetailScreenProps> = ({
         name: name.trim(),
         address: address.trim() || undefined,
         city: city.trim() || undefined,
+        latitude,
+        longitude,
         email: emailToSave,
         phone: phone.trim() || undefined,
         notes: notes.trim() || undefined,
@@ -227,7 +286,20 @@ export const CompanyDetailScreen: React.FC<CompanyDetailScreenProps> = ({
         </TouchableOpacity>
       </View>
 
-      <ScrollView contentContainerStyle={styles.scrollContent}>
+      <KeyboardAvoidingView
+        style={styles.keyboardAvoid}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 88 : 0}
+      >
+        <ScrollView
+          ref={scrollViewRef}
+          contentContainerStyle={[
+            styles.scrollContent,
+            { paddingBottom: isKeyboardVisible ? keyboardHeight + 80 : 40 },
+          ]}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
+        >
         {/* BANNIÈRE CONTEXTUELLE : RÉPONSE REÇUE (Section 3.7 du CDC) */}
         {isReplyReceived && (
           <View style={styles.replyBanner}>
@@ -404,22 +476,18 @@ export const CompanyDetailScreen: React.FC<CompanyDetailScreenProps> = ({
             placeholderTextColor={Colors.textMuted}
           />
 
-          <Text style={styles.fieldLabel}>Ville ou commune</Text>
-          <TextInput
-            style={styles.input}
-            value={city}
-            onChangeText={setCity}
-            placeholder="Ex: Montpellier, Paris, Lyon..."
-            placeholderTextColor={Colors.textMuted}
-          />
-
-          <Text style={styles.fieldLabel}>Adresse postale précise (facultatif)</Text>
-          <TextInput
-            style={styles.input}
-            value={address}
-            onChangeText={setAddress}
-            placeholder="Ex: 10 rue de la République"
-            placeholderTextColor={Colors.textMuted}
+          <AddressFieldAssistant
+            address={address}
+            city={city}
+            latitude={latitude}
+            longitude={longitude}
+            onChangeAddress={setAddress}
+            onChangeCity={setCity}
+            onChangeCoordinates={({ latitude: lat, longitude: lng }) => {
+              setLatitude(lat);
+              setLongitude(lng);
+            }}
+            refPoint={refPoint}
           />
 
           <Text style={styles.fieldLabel}>Adresse e-mail de contact *</Text>
@@ -448,6 +516,7 @@ export const CompanyDetailScreen: React.FC<CompanyDetailScreenProps> = ({
             style={[styles.input, styles.textArea]}
             value={notes}
             onChangeText={setNotes}
+            onFocus={handleNotesFocus}
             placeholder="Notes internes, nom du responsable RH, détails de l'offre..."
             placeholderTextColor={Colors.textMuted}
             multiline
@@ -496,6 +565,21 @@ export const CompanyDetailScreen: React.FC<CompanyDetailScreenProps> = ({
           )}
         </TouchableOpacity>
       </ScrollView>
+    </KeyboardAvoidingView>
+
+      {/* Barre d'action rapide pour fermer le clavier */}
+      {isKeyboardVisible && (
+        <View style={styles.keyboardAccessoryBar}>
+          <TouchableOpacity
+            style={styles.dismissKeyBtn}
+            onPress={() => Keyboard.dismiss()}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="chevron-down" size={16} color={Colors.primary} />
+            <Text style={styles.dismissKeyText}>Fermer le clavier</Text>
+          </TouchableOpacity>
+        </View>
+      )}
 
       {/* Modal de définition d'adresse fixe */}
       <ReferencePointModal
@@ -809,6 +893,33 @@ const styles = StyleSheet.create({
     color: Colors.primary,
     fontSize: 11.5,
     fontWeight: '600',
+  },
+  keyboardAvoid: {
+    flex: 1,
+  },
+  keyboardAccessoryBar: {
+    backgroundColor: '#131B2E',
+    borderTopWidth: 1,
+    borderTopColor: Colors.border,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    alignItems: 'center',
+  },
+  dismissKeyBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    backgroundColor: `${Colors.primary}18`,
+  },
+  dismissKeyText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: Colors.primary,
   },
 });
 

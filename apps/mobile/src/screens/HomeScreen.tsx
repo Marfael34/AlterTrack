@@ -21,6 +21,7 @@ import { ReferencePointModal } from '../components/ReferencePointModal';
 import { CityItem } from '../components/CityFilterBar';
 import { Colors } from '../constants/colors';
 import { ApiService } from '../services/api.service';
+import { FilterStorageService } from '../services/filterStorage.service';
 import { LocationService, ReferencePoint } from '../services/location.service';
 import { Company, CompanyStats, STATUS_LABELS, Status } from '../types/company';
 
@@ -30,6 +31,7 @@ interface HomeScreenProps {
   onOpenAddCompany: () => void;
   refPoint?: ReferencePoint | null;
   onUpdateRefPoint?: (point: ReferencePoint | null) => void;
+  refreshTrigger?: number;
 }
 
 export const HomeScreen: React.FC<HomeScreenProps> = ({
@@ -38,20 +40,40 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   onOpenAddCompany,
   refPoint: propRefPoint,
   onUpdateRefPoint,
+  refreshTrigger,
 }) => {
   const [companies, setCompanies] = useState<Company[]>([]);
   const [stats, setStats] = useState<CompanyStats | undefined>(undefined);
   const [cities, setCities] = useState<CityItem[]>([]);
   const [totalCount, setTotalCount] = useState<number>(0);
-  const [selectedStatuses, setSelectedStatuses] = useState<Status[]>([]);
-  const [selectedCity, setSelectedCity] = useState<string | 'ALL'>('ALL');
+
+  // Initialisation instantanée depuis la mémoire pour préserver les filtres lors des navigations
+  const initialFilters = FilterStorageService.getFiltersSync();
+  const [selectedStatuses, setSelectedStatuses] = useState<Status[]>(
+    initialFilters.selectedStatuses,
+  );
+  const [selectedCities, setSelectedCities] = useState<string[]>(
+    initialFilters.selectedCities ||
+      (initialFilters.selectedCity && initialFilters.selectedCity !== 'ALL'
+        ? [initialFilters.selectedCity]
+        : []),
+  );
   const [sortBy, setSortBy] = useState<
     'updatedAt' | 'name' | 'city' | 'distance'
-  >('updatedAt');
-  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
-  const [viewMode, setViewMode] = useState<'LIST' | 'MAP'>('LIST');
+  >(initialFilters.sortBy);
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>(
+    initialFilters.sortOrder,
+  );
+  const [viewMode, setViewMode] = useState<'LIST' | 'MAP'>(
+    initialFilters.viewMode,
+  );
   const [isFiltersModalOpen, setIsFiltersModalOpen] = useState<boolean>(false);
-  const [searchQuery, setSearchQuery] = useState<string>('');
+  const [searchQuery, setSearchQuery] = useState<string>(
+    initialFilters.searchQuery || '',
+  );
+  const [isFilterLoaded, setIsFilterLoaded] = useState<boolean>(
+    FilterStorageService.isLoaded(),
+  );
   const [loading, setLoading] = useState<boolean>(true);
   const [refreshing, setRefreshing] = useState<boolean>(false);
   const [sendingBatch, setSendingBatch] = useState<boolean>(false);
@@ -62,6 +84,60 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   const [refPoint, setRefPoint] = useState<ReferencePoint | null>(propRefPoint || null);
   const [isRefPointModalOpen, setIsRefPointModalOpen] = useState<boolean>(false);
   const [distancesMap, setDistancesMap] = useState<Record<string, number>>({});
+
+  // Au premier montage, si la persistance sur disque est encore en cours de lecture
+  useEffect(() => {
+    let mounted = true;
+    if (!FilterStorageService.isLoaded()) {
+      void FilterStorageService.loadFilters().then((loaded) => {
+        if (!mounted) return;
+        setSelectedStatuses(loaded.selectedStatuses);
+        setSelectedCities(
+          loaded.selectedCities ||
+            (loaded.selectedCity && loaded.selectedCity !== 'ALL'
+              ? [loaded.selectedCity]
+              : []),
+        );
+        setSortBy(loaded.sortBy);
+        setSortOrder(loaded.sortOrder);
+        setViewMode(loaded.viewMode);
+        setSearchQuery(loaded.searchQuery || '');
+        setIsFilterLoaded(true);
+      });
+    } else {
+      setIsFilterLoaded(true);
+    }
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  // Sauvegarde automatique dès qu'un filtre, le tri, la recherche ou le mode de vue change
+  useEffect(() => {
+    if (!isFilterLoaded) return;
+    FilterStorageService.saveFilters({
+      selectedStatuses,
+      selectedCities,
+      selectedCity:
+        selectedCities.length === 1
+          ? selectedCities[0]
+          : selectedCities.length > 1
+          ? selectedCities.join(', ')
+          : 'ALL',
+      sortBy,
+      sortOrder,
+      viewMode,
+      searchQuery,
+    });
+  }, [
+    isFilterLoaded,
+    selectedStatuses,
+    selectedCities,
+    sortBy,
+    sortOrder,
+    viewMode,
+    searchQuery,
+  ]);
 
   useEffect(() => {
     if (propRefPoint !== undefined) {
@@ -132,7 +208,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
   const activeFiltersCount =
     (selectedStatuses.length > 0 ? selectedStatuses.length : 0) +
-    (selectedCity !== 'ALL' ? 1 : 0) +
+    (selectedCities.length > 0 ? selectedCities.length : 0) +
     (sortBy !== 'updatedAt' ? 1 : 0);
 
   const displayedCompanies = React.useMemo(() => {
@@ -152,7 +228,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
       const [companiesRes, statsRes, citiesRes] = await Promise.all([
         ApiService.getCompanies({
           statuses: selectedStatuses.length > 0 ? selectedStatuses : undefined,
-          city: selectedCity === 'ALL' ? undefined : selectedCity,
+          cities: selectedCities.length > 0 ? selectedCities : undefined,
           search: searchQuery.trim() || undefined,
           sortBy: backendSortBy,
           sortOrder,
@@ -171,11 +247,11 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
       setLoading(false);
       setRefreshing(false);
     }
-  }, [selectedStatuses, selectedCity, searchQuery, sortBy, sortOrder]);
+  }, [selectedStatuses, selectedCities, searchQuery, sortBy, sortOrder]);
 
   useEffect(() => {
     void loadData();
-  }, [loadData]);
+  }, [loadData, refreshTrigger]);
 
   const onRefresh = () => {
     setRefreshing(true);
@@ -232,7 +308,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
       companies.length === totalCount &&
       !searchQuery.trim() &&
       selectedStatuses.length === 0 &&
-      selectedCity === 'ALL';
+      selectedCities.length === 0;
 
     Alert.alert(
       'Suppression groupée',
@@ -589,19 +665,20 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
               </TouchableOpacity>
             ))}
 
-            {selectedCity !== 'ALL' && (
+            {selectedCities.map((c) => (
               <TouchableOpacity
+                key={c}
                 style={[styles.activeFilterChip, styles.activeFilterChipCity]}
-                onPress={() => setSelectedCity('ALL')}
+                onPress={() => setSelectedCities((prev) => prev.filter((item) => item !== c))}
                 activeOpacity={0.7}
               >
                 <Ionicons name="location-sharp" size={12} color={Colors.accent} />
                 <Text style={[styles.activeFilterText, { color: Colors.accent }]}>
-                  {selectedCity}
+                  {c}
                 </Text>
                 <Ionicons name="close" size={14} color={Colors.accent} />
               </TouchableOpacity>
-            )}
+            ))}
 
             {sortBy !== 'updatedAt' && (
               <TouchableOpacity
@@ -624,9 +701,16 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
               style={styles.clearAllFiltersBtn}
               onPress={() => {
                 setSelectedStatuses([]);
-                setSelectedCity('ALL');
+                setSelectedCities([]);
                 setSortBy('updatedAt');
                 setSortOrder('desc');
+                FilterStorageService.saveFilters({
+                  selectedStatuses: [],
+                  selectedCities: [],
+                  selectedCity: 'ALL',
+                  sortBy: 'updatedAt',
+                  sortOrder: 'desc',
+                });
               }}
               activeOpacity={0.7}
             >
@@ -642,15 +726,28 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         onClose={() => setIsFiltersModalOpen(false)}
         filters={{
           statuses: selectedStatuses,
-          city: selectedCity,
+          cities: selectedCities,
+          city:
+            selectedCities.length === 1
+              ? selectedCities[0]
+              : selectedCities.length > 1
+              ? selectedCities.join(', ')
+              : 'ALL',
           sortBy,
           sortOrder,
         }}
         onApply={(newFilters) => {
           setSelectedStatuses(newFilters.statuses);
-          setSelectedCity(newFilters.city);
+          setSelectedCities(newFilters.cities);
           setSortBy(newFilters.sortBy);
           setSortOrder(newFilters.sortOrder);
+          FilterStorageService.saveFilters({
+            selectedStatuses: newFilters.statuses,
+            selectedCities: newFilters.cities,
+            selectedCity: newFilters.city,
+            sortBy: newFilters.sortBy,
+            sortOrder: newFilters.sortOrder,
+          });
         }}
         stats={stats}
         cities={cities}
@@ -798,11 +895,11 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                   <Ionicons name="briefcase-outline" size={48} color={Colors.border} />
                   <Text style={styles.emptyTitle}>Aucune entreprise trouvée</Text>
                   <Text style={styles.emptySubtitle}>
-                    {searchQuery || selectedCity !== 'ALL' || selectedStatuses.length > 0
+                    {searchQuery || selectedCities.length > 0 || selectedStatuses.length > 0
                       ? 'Aucun résultat ne correspond aux filtres appliqués.'
                       : 'Ajoutez une entreprise avec le bouton "+" ou importez directement votre tableur.'}
                   </Text>
-                  {!searchQuery && selectedCity === 'ALL' && selectedStatuses.length === 0 && (
+                  {!searchQuery && selectedCities.length === 0 && selectedStatuses.length === 0 && (
                     <TouchableOpacity
                       style={styles.emptyImportButton}
                       onPress={handleImportSpreadsheet}

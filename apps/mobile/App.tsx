@@ -7,6 +7,7 @@ import { AddCompanyScreen } from './src/screens/AddCompanyScreen';
 import { CompanyDetailScreen } from './src/screens/CompanyDetailScreen';
 import { HomeScreen } from './src/screens/HomeScreen';
 import { SettingsScreen } from './src/screens/SettingsScreen';
+import { FilterStorageService } from './src/services/filterStorage.service';
 import { LocationService, ReferencePoint } from './src/services/location.service';
 import { Company } from './src/types/company';
 
@@ -20,7 +21,10 @@ export default function App() {
 
   React.useEffect(() => {
     void (async () => {
-      const point = await LocationService.getReferencePoint();
+      const [point] = await Promise.all([
+        LocationService.getReferencePoint(),
+        FilterStorageService.loadFilters(),
+      ]);
       setRefPoint(point);
     })();
   }, []);
@@ -42,6 +46,7 @@ export default function App() {
         {currentScreen === 'HOME' && (
           <HomeScreen
             key={refreshTrigger}
+            refreshTrigger={refreshTrigger}
             onSelectCompany={handleOpenDetail}
             onOpenSettings={() => setCurrentScreen('SETTINGS')}
             onOpenAddCompany={() => setCurrentScreen('ADD')}
@@ -64,6 +69,7 @@ export default function App() {
           <AddCompanyScreen
             onBack={() => setCurrentScreen('HOME')}
             onCreated={handleDataChanged}
+            refPoint={refPoint}
           />
         )}
 

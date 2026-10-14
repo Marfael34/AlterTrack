@@ -2,15 +2,24 @@ import Constants, { ExecutionEnvironment } from 'expo-constants';
 import { Platform } from 'react-native';
 import { ApiService } from './api.service';
 
-const isExpoGo =
-  Constants.executionEnvironment === ExecutionEnvironment.StoreClient;
+function checkIsExpoGo(): boolean {
+  try {
+    return (
+      Constants?.executionEnvironment === ExecutionEnvironment.StoreClient ||
+      !Constants?.expoConfig?.extra?.eas?.projectId
+    );
+  } catch {
+    // Si le runtime natif ou le launcher n'est pas encore prêt, considérer Expo Go par défaut
+    return true;
+  }
+}
 
 // Type helper sans import statique pour éviter le crash au chargement d'Expo Go SDK 53+
 type NotificationsType = typeof import('expo-notifications');
 let notificationsModule: NotificationsType | null = null;
 
 function getNotifications(): NotificationsType | null {
-  if (isExpoGo || Platform.OS === 'web') {
+  if (checkIsExpoGo() || Platform.OS === 'web') {
     return null;
   }
   if (!notificationsModule) {
@@ -34,10 +43,12 @@ function getNotifications(): NotificationsType | null {
 }
 
 export const NotificationService = {
-  isExpoGo,
+  get isExpoGo(): boolean {
+    return checkIsExpoGo();
+  },
 
   async registerForPushNotificationsAsync(): Promise<string | null> {
-    if (isExpoGo) {
+    if (checkIsExpoGo()) {
       console.log(
         '[NotificationService] Mode Expo Go détecté : notifications distantes désactivées par Expo SDK 53+ (nécessitent un build autonome APK).',
       );

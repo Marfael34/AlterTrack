@@ -10,20 +10,47 @@ export interface CityItem {
 
 interface CityFilterBarProps {
   cities: CityItem[];
-  selectedCity: string | 'ALL';
-  onSelectCity: (city: string | 'ALL') => void;
+  selectedCity?: string | 'ALL';
+  selectedCities?: string[];
+  onSelectCity?: (city: string | 'ALL') => void;
+  onToggleCity?: (city: string) => void;
   totalCount?: number;
 }
 
 export const CityFilterBar: React.FC<CityFilterBarProps> = ({
   cities,
-  selectedCity,
+  selectedCity = 'ALL',
+  selectedCities,
   onSelectCity,
+  onToggleCity,
   totalCount = 0,
 }) => {
   if (!cities || cities.length === 0) {
     return null;
   }
+
+  const isMulti = Array.isArray(selectedCities);
+  const activeCities = isMulti ? selectedCities : (selectedCity !== 'ALL' ? [selectedCity] : []);
+  const isAllActive = isMulti ? activeCities.length === 0 : selectedCity === 'ALL';
+
+  const handleSelectCity = (city: string) => {
+    if (onToggleCity) {
+      onToggleCity(city);
+    } else if (onSelectCity) {
+      if (isMulti) {
+        onSelectCity(city);
+      } else {
+        const isSelected = selectedCity.toLowerCase() === city.toLowerCase();
+        onSelectCity(isSelected ? 'ALL' : city);
+      }
+    }
+  };
+
+  const handleClear = () => {
+    if (onSelectCity) {
+      onSelectCity('ALL');
+    }
+  };
 
   return (
     <View style={styles.container}>
@@ -33,10 +60,10 @@ export const CityFilterBar: React.FC<CityFilterBarProps> = ({
           <Text style={styles.sectionLabel}>Villes</Text>
         </View>
 
-        {selectedCity !== 'ALL' && (
+        {!isAllActive && (
           <TouchableOpacity
             style={styles.clearBtn}
-            onPress={() => onSelectCity('ALL')}
+            onPress={handleClear}
             activeOpacity={0.7}
           >
             <Ionicons name="close-circle" size={13} color={Colors.textSecondary} />
@@ -52,14 +79,14 @@ export const CityFilterBar: React.FC<CityFilterBarProps> = ({
       >
         {/* Puce "Toutes" */}
         <TouchableOpacity
-          style={[styles.chip, selectedCity === 'ALL' && styles.chipActive]}
-          onPress={() => onSelectCity('ALL')}
+          style={[styles.chip, isAllActive && styles.chipActive]}
+          onPress={handleClear}
           activeOpacity={0.7}
         >
           <Text
             style={[
               styles.chipText,
-              selectedCity === 'ALL' && styles.chipTextActive,
+              isAllActive && styles.chipTextActive,
             ]}
           >
             Toutes
@@ -68,13 +95,13 @@ export const CityFilterBar: React.FC<CityFilterBarProps> = ({
             <View
               style={[
                 styles.badge,
-                selectedCity === 'ALL' && styles.badgeActive,
+                isAllActive && styles.badgeActive,
               ]}
             >
               <Text
                 style={[
                   styles.badgeText,
-                  selectedCity === 'ALL' && styles.badgeTextActive,
+                  isAllActive && styles.badgeTextActive,
                 ]}
               >
                 {totalCount}
@@ -85,7 +112,9 @@ export const CityFilterBar: React.FC<CityFilterBarProps> = ({
 
         {/* Puces des villes individuelles */}
         {cities.map((item) => {
-          const isSelected = selectedCity.toLowerCase() === item.city.toLowerCase();
+          const isSelected = activeCities.some(
+            (c) => c.toLowerCase() === item.city.toLowerCase()
+          );
 
           return (
             <TouchableOpacity
@@ -94,7 +123,7 @@ export const CityFilterBar: React.FC<CityFilterBarProps> = ({
                 styles.chip,
                 isSelected && styles.chipActiveCity,
               ]}
-              onPress={() => onSelectCity(isSelected ? 'ALL' : item.city)}
+              onPress={() => handleSelectCity(item.city)}
               activeOpacity={0.7}
             >
               <Text

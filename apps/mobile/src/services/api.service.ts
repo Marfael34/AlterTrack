@@ -55,6 +55,7 @@ export const ApiService = {
     status?: Status;
     statuses?: Status[];
     city?: string;
+    cities?: string[];
     sortBy?: string;
     sortOrder?: 'asc' | 'desc';
   }): Promise<{
@@ -68,7 +69,11 @@ export const ApiService = {
     } else if (query?.status) {
       params.append('status', query.status);
     }
-    if (query?.city) params.append('city', query.city);
+    if (query?.cities && query.cities.length > 0) {
+      params.append('cities', query.cities.join(','));
+    } else if (query?.city) {
+      params.append('city', query.city);
+    }
     if (query?.sortBy) params.append('sortBy', query.sortBy);
     if (query?.sortOrder) params.append('sortOrder', query.sortOrder);
 

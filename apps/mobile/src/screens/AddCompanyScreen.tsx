@@ -1,9 +1,12 @@
 import { Ionicons } from '@expo/vector-icons';
 import * as DocumentPicker from 'expo-document-picker';
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Keyboard,
+  KeyboardAvoidingView,
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -11,13 +14,16 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { AddressFieldAssistant } from '../components/AddressFieldAssistant';
 import { Colors } from '../constants/colors';
 import { ApiService } from '../services/api.service';
+import { ReferencePoint } from '../services/location.service';
 import { Status } from '../types/company';
 
 interface AddCompanyScreenProps {
   onBack: () => void;
   onCreated: () => void;
+  refPoint?: ReferencePoint | null;
 }
 
 const STATUS_CHOICES: Array<{ key: Status; label: string; color: string }> = [
@@ -33,16 +39,48 @@ const STATUS_CHOICES: Array<{ key: Status; label: string; color: string }> = [
 export const AddCompanyScreen: React.FC<AddCompanyScreenProps> = ({
   onBack,
   onCreated,
+  refPoint,
 }) => {
   const [name, setName] = useState('');
   const [address, setAddress] = useState('');
   const [city, setCity] = useState('');
+  const [latitude, setLatitude] = useState<number | undefined>(undefined);
+  const [longitude, setLongitude] = useState<number | undefined>(undefined);
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [notes, setNotes] = useState('');
   const [status, setStatus] = useState<Status>('TO_SEND');
   const [loading, setLoading] = useState(false);
   const [importing, setImporting] = useState(false);
+
+  const scrollViewRef = useRef<ScrollView>(null);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+  const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
+
+  useEffect(() => {
+    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+
+    const showSub = Keyboard.addListener(showEvent, (e) => {
+      setKeyboardHeight(e.endCoordinates.height);
+      setIsKeyboardVisible(true);
+    });
+    const hideSub = Keyboard.addListener(hideEvent, () => {
+      setKeyboardHeight(0);
+      setIsKeyboardVisible(false);
+    });
+
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
+
+  const handleNotesFocus = () => {
+    setTimeout(() => {
+      scrollViewRef.current?.scrollToEnd({ animated: true });
+    }, 200);
+  };
 
   const handleCreate = async () => {
     if (!name.trim()) {
@@ -60,6 +98,8 @@ export const AddCompanyScreen: React.FC<AddCompanyScreenProps> = ({
         name: name.trim(),
         address: address.trim() || undefined,
         city: city.trim() || undefined,
+        latitude,
+        longitude,
         email: email.trim(),
         phone: phone.trim() || undefined,
         notes: notes.trim() || undefined,
@@ -153,7 +193,20 @@ export const AddCompanyScreen: React.FC<AddCompanyScreenProps> = ({
         <View style={{ width: 38 }} />
       </View>
 
-      <ScrollView contentContainerStyle={styles.scrollContent}>
+      <KeyboardAvoidingView
+        style={styles.keyboardAvoid}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 88 : 0}
+      >
+        <ScrollView
+          ref={scrollViewRef}
+          contentContainerStyle={[
+            styles.scrollContent,
+            { paddingBottom: isKeyboardVisible ? keyboardHeight + 80 : 40 },
+          ]}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
+        >
         {/* Raccourci import tableur */}
         <TouchableOpacity
           style={[styles.importBanner, importing && styles.buttonDisabled]}
@@ -197,22 +250,18 @@ export const AddCompanyScreen: React.FC<AddCompanyScreenProps> = ({
           autoFocus
         />
 
-        <Text style={styles.fieldLabel}>Ville ou commune</Text>
-        <TextInput
-          style={styles.input}
-          value={city}
-          onChangeText={setCity}
-          placeholder="Ex: Montpellier, Paris, Lyon..."
-          placeholderTextColor={Colors.textMuted}
-        />
-
-        <Text style={styles.fieldLabel}>Adresse postale (facultatif)</Text>
-        <TextInput
-          style={styles.input}
-          value={address}
-          onChangeText={setAddress}
-          placeholder="Ex: 10 rue de la République"
-          placeholderTextColor={Colors.textMuted}
+        <AddressFieldAssistant
+          address={address}
+          city={city}
+          latitude={latitude}
+          longitude={longitude}
+          onChangeAddress={setAddress}
+          onChangeCity={setCity}
+          onChangeCoordinates={({ latitude: lat, longitude: lng }) => {
+            setLatitude(lat);
+            setLongitude(lng);
+          }}
+          refPoint={refPoint}
         />
 
         <Text style={styles.fieldLabel}>Adresse e-mail de contact *</Text>
@@ -278,6 +327,7 @@ export const AddCompanyScreen: React.FC<AddCompanyScreenProps> = ({
           style={[styles.input, styles.textArea]}
           value={notes}
           onChangeText={setNotes}
+          onFocus={handleNotesFocus}
           placeholder="Texte libre strictement personnel (non transmis à l'IA)..."
           placeholderTextColor={Colors.textMuted}
           multiline
@@ -298,6 +348,21 @@ export const AddCompanyScreen: React.FC<AddCompanyScreenProps> = ({
           )}
         </TouchableOpacity>
       </ScrollView>
+    </KeyboardAvoidingView>
+
+      {/* Barre d'action rapide pour fermer le clavier */}
+      {isKeyboardVisible && (
+        <View style={styles.keyboardAccessoryBar}>
+          <TouchableOpacity
+            style={styles.dismissKeyBtn}
+            onPress={() => Keyboard.dismiss()}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="chevron-down" size={16} color={Colors.primary} />
+            <Text style={styles.dismissKeyText}>Fermer le clavier</Text>
+          </TouchableOpacity>
+        </View>
+      )}
     </View>
   );
 };
@@ -450,5 +515,32 @@ const styles = StyleSheet.create({
   },
   buttonDisabled: {
     opacity: 0.6,
+  },
+  keyboardAvoid: {
+    flex: 1,
+  },
+  keyboardAccessoryBar: {
+    backgroundColor: '#131B2E',
+    borderTopWidth: 1,
+    borderTopColor: Colors.border,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    alignItems: 'center',
+  },
+  dismissKeyBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    backgroundColor: `${Colors.primary}18`,
+  },
+  dismissKeyText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: Colors.primary,
   },
 });

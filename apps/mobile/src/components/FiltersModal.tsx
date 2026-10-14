@@ -15,7 +15,8 @@ import { CityItem } from './CityFilterBar';
 
 export interface FilterState {
   statuses: Status[];
-  city: string | 'ALL';
+  city?: string | 'ALL';
+  cities: string[];
   sortBy: 'updatedAt' | 'name' | 'city' | 'distance';
   sortOrder: 'asc' | 'desc';
 }
@@ -52,7 +53,9 @@ export const FiltersModal: React.FC<FiltersModalProps> = ({
   const [draftStatuses, setDraftStatuses] = useState<Status[]>(
     initialFilters.statuses || [],
   );
-  const [draftCity, setDraftCity] = useState<string | 'ALL'>(initialFilters.city);
+  const [draftCities, setDraftCities] = useState<string[]>(
+    initialFilters.cities || (initialFilters.city && initialFilters.city !== 'ALL' ? [initialFilters.city] : []),
+  );
   const [draftSortBy, setDraftSortBy] = useState<
     'updatedAt' | 'name' | 'city' | 'distance'
   >(initialFilters.sortBy);
@@ -64,7 +67,9 @@ export const FiltersModal: React.FC<FiltersModalProps> = ({
   React.useEffect(() => {
     if (visible) {
       setDraftStatuses(initialFilters.statuses || []);
-      setDraftCity(initialFilters.city);
+      setDraftCities(
+        initialFilters.cities || (initialFilters.city && initialFilters.city !== 'ALL' ? [initialFilters.city] : []),
+      );
       setDraftSortBy(initialFilters.sortBy);
       setDraftSortOrder(initialFilters.sortOrder);
     }
@@ -76,9 +81,17 @@ export const FiltersModal: React.FC<FiltersModalProps> = ({
     );
   };
 
+  const handleToggleCity = (cityName: string) => {
+    setDraftCities((prev) =>
+      prev.includes(cityName)
+        ? prev.filter((c) => c !== cityName)
+        : [...prev, cityName],
+    );
+  };
+
   const handleReset = () => {
     setDraftStatuses([]);
-    setDraftCity('ALL');
+    setDraftCities([]);
     setDraftSortBy('updatedAt');
     setDraftSortOrder('desc');
   };
@@ -86,7 +99,8 @@ export const FiltersModal: React.FC<FiltersModalProps> = ({
   const handleApply = () => {
     onApply({
       statuses: draftStatuses,
-      city: draftCity,
+      cities: draftCities,
+      city: draftCities.length === 1 ? draftCities[0] : (draftCities.length > 1 ? draftCities.join(', ') : 'ALL'),
       sortBy: draftSortBy,
       sortOrder: draftSortOrder,
     });
@@ -95,7 +109,7 @@ export const FiltersModal: React.FC<FiltersModalProps> = ({
 
   const activeFiltersCount =
     (draftStatuses.length > 0 ? draftStatuses.length : 0) +
-    (draftCity !== 'ALL' ? 1 : 0) +
+    (draftCities.length > 0 ? draftCities.length : 0) +
     (draftSortBy !== 'updatedAt' ? 1 : 0);
 
   return (
@@ -268,26 +282,45 @@ export const FiltersModal: React.FC<FiltersModalProps> = ({
             <View style={styles.sectionHeader}>
               <View style={styles.sectionTitleRow}>
                 <Ionicons name="location-outline" size={16} color={Colors.accent} />
-                <Text style={styles.sectionTitle}>Localisation / Ville</Text>
+                <Text style={styles.sectionTitle}>Localisation / Villes</Text>
               </View>
-              {draftCity !== 'ALL' && (
-                <Text style={styles.sectionActiveBadgeCity}>{draftCity}</Text>
-              )}
+              <Text
+                style={
+                  draftCities.length > 0
+                    ? styles.sectionActiveBadgeCity
+                    : styles.sectionMutedBadge
+                }
+              >
+                {draftCities.length > 0
+                  ? `${draftCities.length} sélectionnée${draftCities.length > 1 ? 's' : ''}`
+                  : 'Toutes'}
+              </Text>
             </View>
 
             <View style={styles.chipsGrid}>
               <TouchableOpacity
                 style={[
                   styles.cityChip,
-                  draftCity === 'ALL' && styles.cityChipActiveAll,
+                  draftCities.length === 0 && styles.cityChipActiveAll,
                 ]}
-                onPress={() => setDraftCity('ALL')}
+                onPress={() => setDraftCities([])}
                 activeOpacity={0.7}
               >
+                <Ionicons
+                  name={
+                    draftCities.length === 0
+                      ? 'checkmark-circle'
+                      : 'ellipse-outline'
+                  }
+                  size={14}
+                  color={
+                    draftCities.length === 0 ? Colors.accent : Colors.textMuted
+                  }
+                />
                 <Text
                   style={[
                     styles.chipLabel,
-                    draftCity === 'ALL' && styles.chipLabelActive,
+                    draftCities.length === 0 && styles.chipLabelActive,
                   ]}
                 >
                   Toutes les villes
@@ -295,7 +328,9 @@ export const FiltersModal: React.FC<FiltersModalProps> = ({
               </TouchableOpacity>
 
               {cities.map((c) => {
-                const isSelected = draftCity.toLowerCase() === c.city.toLowerCase();
+                const isSelected = draftCities.some(
+                  (item) => item.toLowerCase() === c.city.toLowerCase(),
+                );
 
                 return (
                   <TouchableOpacity
@@ -304,12 +339,12 @@ export const FiltersModal: React.FC<FiltersModalProps> = ({
                       styles.cityChip,
                       isSelected && styles.cityChipActive,
                     ]}
-                    onPress={() => setDraftCity(isSelected ? 'ALL' : c.city)}
+                    onPress={() => handleToggleCity(c.city)}
                     activeOpacity={0.7}
                   >
                     <Ionicons
-                      name="location-sharp"
-                      size={12}
+                      name={isSelected ? 'checkbox' : 'square-outline'}
+                      size={14}
                       color={isSelected ? Colors.accent : Colors.textMuted}
                     />
                     <Text

@@ -13,21 +13,34 @@ import { UpdateCompanyDto } from './dto/update-company.dto';
 
 @Injectable()
 export class CompaniesService {
+  private static readonly cityCache = new Map<string, { latitude: number; longitude: number }>();
+
   constructor(private readonly prisma: PrismaService) {}
 
-  async geocodeQuery(queryText: string, type?: 'municipality' | 'housenumber' | 'street'): Promise<{ latitude: number; longitude: number } | null> {
+  async geocodeQuery(
+    queryText: string,
+    type?: 'municipality' | 'housenumber' | 'street',
+    lat?: number,
+    lon?: number,
+  ): Promise<{ latitude: number; longitude: number; score?: number } | null> {
     if (!queryText || queryText.trim().length < 2) return null;
     try {
       const typeParam = type ? `&type=${type}` : '';
-      const url = `https://api-adresse.data.gouv.fr/search/?q=${encodeURIComponent(queryText.trim())}${typeParam}&limit=1`;
+      const proxParam =
+        typeof lat === 'number' && typeof lon === 'number' ? `&lat=${lat}&lon=${lon}` : '';
+      const url = `https://api-adresse.data.gouv.fr/search/?q=${encodeURIComponent(queryText.trim())}${typeParam}${proxParam}&limit=1`;
       const res = await fetch(url);
       if (!res.ok) return null;
       const data = (await res.json()) as {
-        features?: Array<{ geometry: { coordinates: [number, number] } }>;
+        features?: Array<{
+          properties?: { score?: number; type?: string; city?: string; name?: string };
+          geometry: { coordinates: [number, number] };
+        }>;
       };
       if (data.features && data.features.length > 0) {
-        const [lon, lat] = data.features[0].geometry.coordinates;
-        return { latitude: lat, longitude: lon };
+        const feat = data.features[0];
+        const [featLon, featLat] = feat.geometry.coordinates;
+        return { latitude: featLat, longitude: featLon, score: feat.properties?.score };
       }
     } catch {
       // Ignorer silencieusement si API inaccessible
@@ -36,33 +49,71 @@ export class CompaniesService {
   }
 
   /**
-   * Géocode en combinant l'adresse ET la ville / commune
+   * Géocode en combinant l'adresse ET la ville / commune avec validation stricte
    */
   async geocodeAddress(address?: string | null, city?: string | null): Promise<{ latitude: number; longitude: number } | null> {
     const cleanAddr = address?.trim() || '';
-    const cleanCity = city?.trim() || '';
+    let cleanCity = city?.trim() || '';
+
+    // Détecter les faux noms de ville (ex: "Toute la france", "France entière", "Distanciel", "Télétravail", "Full remote", "Partout")
+    const INVALID_CITY_REGEX =
+      /^(toute\s+la\s+france|france\s+enti[eè]re|partout|t[eé]l[eé]travail|remote|full\s*remote|distanciel|en\s+ligne|n\/?a|inconnu)$/i;
+    if (INVALID_CITY_REGEX.test(cleanCity)) {
+      if (!cleanAddr) return null;
+      cleanCity = '';
+    }
+
+    // Si plusieurs villes sont mentionnées (ex: "Lyon / Paris" ou "Toulouse, Montpellier"), prendre la première
+    const parsedCity = cleanCity ? cleanCity.split(/[\/,]/)[0].trim() : '';
+
+    // Résoudre d'abord les coordonnées de la commune avec mise en cache et type=municipality obligatoire
+    let cityCoords: { latitude: number; longitude: number } | null = null;
+    if (parsedCity) {
+      const cacheKey = parsedCity.toLowerCase();
+      if (CompaniesService.cityCache.has(cacheKey)) {
+        cityCoords = CompaniesService.cityCache.get(cacheKey)!;
+      } else {
+        const res = await this.geocodeQuery(parsedCity, 'municipality');
+        if (res) {
+          cityCoords = { latitude: res.latitude, longitude: res.longitude };
+          CompaniesService.cityCache.set(cacheKey, cityCoords);
+        }
+      }
+    }
 
     // 1. Si on a à la fois l'adresse et la commune/ville, combiner les deux pour une précision maximale
-    if (cleanAddr && cleanCity) {
-      const combined = `${cleanAddr}, ${cleanCity}`;
-      const result = await this.geocodeQuery(combined);
-      if (result) return result;
-      // Repli si l'adresse exacte est introuvable : géocoder la commune/ville
-      const cityResult = await this.geocodeQuery(cleanCity, 'municipality');
-      if (cityResult) return cityResult;
-      return this.geocodeQuery(cleanCity);
+    if (cleanAddr && parsedCity) {
+      // Essayer adresse + ville combinées
+      const combined = `${cleanAddr}, ${parsedCity}`;
+      const direct = await this.geocodeQuery(combined);
+      if (direct && (direct.score === undefined || direct.score >= 0.55)) {
+        return { latitude: direct.latitude, longitude: direct.longitude };
+      }
+
+      // Si échec ou score faible, essayer avec biais géographique autour de la ville
+      if (cityCoords) {
+        const near = await this.geocodeQuery(
+          cleanAddr,
+          undefined,
+          cityCoords.latitude,
+          cityCoords.longitude,
+        );
+        if (near && (near.score === undefined || near.score >= 0.5)) {
+          return { latitude: near.latitude, longitude: near.longitude };
+        }
+        return cityCoords;
+      }
     }
 
-    // 2. Si on a seulement la ville/commune
-    if (cleanCity) {
-      const cityResult = await this.geocodeQuery(cleanCity, 'municipality');
-      if (cityResult) return cityResult;
-      return this.geocodeQuery(cleanCity);
-    }
-
-    // 3. Si on a seulement l'adresse
+    // 2. Si on a seulement l'adresse
     if (cleanAddr) {
-      return this.geocodeQuery(cleanAddr);
+      const addrRes = await this.geocodeQuery(cleanAddr);
+      if (addrRes) return { latitude: addrRes.latitude, longitude: addrRes.longitude };
+    }
+
+    // 3. Si on a seulement la ville/commune
+    if (cityCoords) {
+      return cityCoords;
     }
 
     return null;
@@ -104,17 +155,27 @@ export class CompaniesService {
       where.status = query.status;
     }
 
-    if (query.city) {
-      where.city = { contains: query.city, mode: 'insensitive' };
+    if (query.cities && query.cities.length > 0) {
+      where.OR = query.cities.map((c) => ({
+        city: { contains: c, mode: 'insensitive' as const },
+      }));
+    } else if (query.city) {
+      where.city = { contains: query.city, mode: 'insensitive' as const };
     }
 
     if (query.search) {
-      where.OR = [
-        { name: { contains: query.search, mode: 'insensitive' } },
-        { address: { contains: query.search, mode: 'insensitive' } },
-        { city: { contains: query.search, mode: 'insensitive' } },
-        { email: { contains: query.search, mode: 'insensitive' } },
+      const searchOR: Prisma.CompanyWhereInput[] = [
+        { name: { contains: query.search, mode: 'insensitive' as const } },
+        { address: { contains: query.search, mode: 'insensitive' as const } },
+        { city: { contains: query.search, mode: 'insensitive' as const } },
+        { email: { contains: query.search, mode: 'insensitive' as const } },
       ];
+      if (where.OR) {
+        where.AND = [{ OR: where.OR }, { OR: searchOR }];
+        delete where.OR;
+      } else {
+        where.OR = searchOR;
+      }
     }
 
     const allowedSortFields = ['updatedAt', 'name', 'city', 'createdAt', 'status'];
@@ -157,8 +218,8 @@ export class CompaniesService {
   async update(id: string, updateDto: UpdateCompanyDto) {
     const existing = await this.findOne(id);
 
-    let lat = updateDto.latitude;
-    let lon = updateDto.longitude;
+    let lat: number | null | undefined = updateDto.latitude;
+    let lon: number | null | undefined = updateDto.longitude;
 
     const finalAddress = updateDto.address !== undefined ? updateDto.address : existing.address;
     const finalCity = updateDto.city !== undefined ? updateDto.city : existing.city;
@@ -169,10 +230,8 @@ export class CompaniesService {
       (updateDto.address !== undefined || updateDto.city !== undefined)
     ) {
       const geo = await this.geocodeAddress(finalAddress, finalCity);
-      if (geo) {
-        lat = geo.latitude;
-        lon = geo.longitude;
-      }
+      lat = geo ? geo.latitude : null;
+      lon = geo ? geo.longitude : null;
     }
 
     return this.prisma.company.update({

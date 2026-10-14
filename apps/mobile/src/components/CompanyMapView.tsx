@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { Colors } from '../constants/colors';
+import { FilterStorageService } from '../services/filterStorage.service';
 import { LocationService, ReferencePoint } from '../services/location.service';
 import { Company, STATUS_LABELS } from '../types/company';
 import { StatusBadge } from './StatusBadge';
@@ -34,10 +35,23 @@ export const CompanyMapView: React.FC<CompanyMapViewProps> = ({
   onOpenRefPointModal,
 }) => {
   const webViewRef = useRef<WebView>(null);
-  const [activeTab, setActiveTab] = useState<'RADAR' | 'MAP'>('RADAR');
+  const savedMapFilters = FilterStorageService.getFiltersSync();
+  const [activeTab, setActiveTab] = useState<'RADAR' | 'MAP'>(
+    savedMapFilters.mapTab || 'RADAR',
+  );
   const [selectedCompanyId, setSelectedCompanyId] = useState<string | null>(null);
-  const [maxRadius, setMaxRadius] = useState<DistanceFilter>('ALL');
+  const [maxRadius, setMaxRadius] = useState<DistanceFilter>(
+    savedMapFilters.maxRadius || 'ALL',
+  );
   const [isMapReady, setIsMapReady] = useState<boolean>(false);
+
+  // Mémoriser l'onglet sélectionné et le rayon dans le service de filtres
+  useEffect(() => {
+    FilterStorageService.saveFilters({
+      mapTab: activeTab,
+      maxRadius,
+    });
+  }, [activeTab, maxRadius]);
 
   // Masquer l'overlay après 2.5s maximum
   useEffect(() => {
@@ -205,10 +219,36 @@ export const CompanyMapView: React.FC<CompanyMapViewProps> = ({
       color: #FFFFFF; font-size: 18px;
     }
     .pin-company {
+      position: relative;
       display: flex; align-items: center; justify-content: center;
       width: 32px; height: 32px; border-radius: 50%; border: 2px solid #FFFFFF;
       color: #FFFFFF; font-weight: bold; font-size: 13px;
       box-shadow: 0 3px 8px rgba(0,0,0,0.5); cursor: pointer;
+      transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    }
+    .pin-company:hover, .pin-company:active {
+      transform: scale(1.2);
+      z-index: 999;
+    }
+    .pin-badge {
+      position: absolute;
+      top: -6px;
+      right: -8px;
+      background: #00D2C4;
+      color: #0B0F19;
+      font-size: 9px;
+      font-weight: 800;
+      padding: 1px 4px;
+      border-radius: 8px;
+      border: 1px solid #FFFFFF;
+      line-height: 11px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.4);
+    }
+    .popup-commune-info {
+      font-size: 11px;
+      color: #00D2C4;
+      font-weight: 600;
+      margin-bottom: 4px;
     }
     .leaflet-popup-content-wrapper {
       background: #131B2E !important; color: #FFFFFF !important;
@@ -273,23 +313,75 @@ export const CompanyMapView: React.FC<CompanyMapViewProps> = ({
           L.circle([data.refPoint.latitude, data.refPoint.longitude], { radius: 30000, color: '#0066FF', weight: 1.5, fillColor: '#0066FF', fillOpacity: 0.03, dashArray: '4, 10' }).addTo(mapInstance);
         }
 
+        // Détecter les entreprises partageant les mêmes coordonnées (ex: même commune sans numéro de rue)
+        var coordGroups = {};
         data.companies.forEach(function(comp) {
-          var icon = L.divIcon({
-            className: 'custom-icon',
-            html: '<div class="pin-company" id="pin-' + comp.id + '" style="background:' + comp.color + '">🏢</div>',
-            iconSize: [32, 32], iconAnchor: [16, 16], popupAnchor: [0, -18]
-          });
-          var marker = L.marker([comp.latitude, comp.longitude], { icon: icon }).addTo(markersGroup);
-          var popupHtml = '<div class="popup-title">' + comp.name + '</div>';
-          if (comp.city || comp.address) popupHtml += '<div class="popup-sub">' + (comp.address ? comp.address + ' • ' : '') + comp.city + '</div>';
-          if (comp.distanceText) popupHtml += '<div class="popup-dist">🧭 ' + comp.distanceText + '</div>';
-          popupHtml += '<a class="popup-btn" href="javascript:void(0)" onclick="selectCompany(\\'' + comp.id + '\\')">Ouvrir la fiche</a>';
-          marker.bindPopup(popupHtml);
+          var key = comp.latitude.toFixed(4) + '_' + comp.longitude.toFixed(4);
+          if (!coordGroups[key]) coordGroups[key] = [];
+          coordGroups[key].push(comp);
+        });
 
-          marker.on('click', function() {
-            if (window.ReactNativeWebView) {
-              window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'SELECT_PIN', companyId: comp.id }));
+        // Afficher chaque marqueur avec décalage circulaire élégant si superposés
+        Object.keys(coordGroups).forEach(function(key) {
+          var group = coordGroups[key];
+          var total = group.length;
+
+          if (total > 1) {
+            var centerLat = group[0].latitude;
+            var centerLng = group[0].longitude;
+
+            // Point central discret de la commune
+            L.circleMarker([centerLat, centerLng], {
+              radius: 5,
+              color: '#00D2C4',
+              fillColor: '#00D2C4',
+              fillOpacity: 0.85,
+              weight: 2
+            }).addTo(mapInstance);
+          }
+
+          group.forEach(function(comp, idx) {
+            var markerLat = comp.latitude;
+            var markerLng = comp.longitude;
+
+            if (total > 1) {
+              // Disperser en rosace / cercle élégant (~200m à 350m)
+              var angle = (2 * Math.PI * idx) / total - (Math.PI / 2);
+              var radius = total > 5 ? 0.0036 : 0.0024;
+              markerLat = comp.latitude + radius * Math.cos(angle);
+              markerLng = comp.longitude + (radius * 1.35) * Math.sin(angle);
+
+              // Ligne fine en pointillé reliant l'entreprise au centre de la commune
+              L.polyline([[comp.latitude, comp.longitude], [markerLat, markerLng]], {
+                color: '#00D2C4',
+                weight: 1.5,
+                opacity: 0.45,
+                dashArray: '3, 4'
+              }).addTo(mapInstance);
             }
+
+            var icon = L.divIcon({
+              className: 'custom-icon',
+              html: '<div class="pin-company" id="pin-' + comp.id + '" style="background:' + comp.color + '">' +
+                '🏢' +
+                (total > 1 ? '<span class="pin-badge">' + (idx + 1) + '/' + total + '</span>' : '') +
+                '</div>',
+              iconSize: [34, 34], iconAnchor: [17, 17], popupAnchor: [0, -18]
+            });
+
+            var marker = L.marker([markerLat, markerLng], { icon: icon }).addTo(markersGroup);
+            var popupHtml = '<div class="popup-title">' + comp.name + '</div>';
+            if (comp.city || comp.address) popupHtml += '<div class="popup-sub">' + (comp.address ? comp.address + ' • ' : '') + comp.city + '</div>';
+            if (total > 1) popupHtml += '<div class="popup-commune-info">📍 Entreprise ' + (idx + 1) + ' sur ' + total + ' à ' + (comp.city || 'cette commune') + '</div>';
+            if (comp.distanceText) popupHtml += '<div class="popup-dist">🧭 ' + comp.distanceText + '</div>';
+            popupHtml += '<a class="popup-btn" href="javascript:void(0)" onclick="selectCompany(\\'' + comp.id + '\\')">Ouvrir la fiche</a>';
+            marker.bindPopup(popupHtml);
+
+            marker.on('click', function() {
+              if (window.ReactNativeWebView) {
+                window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'SELECT_PIN', companyId: comp.id }));
+              }
+            });
           });
         });
 
