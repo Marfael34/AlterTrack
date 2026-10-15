@@ -19,9 +19,11 @@ import { CompanyMapView } from '../components/CompanyMapView';
 import { FiltersModal } from '../components/FiltersModal';
 import { ReferencePointModal } from '../components/ReferencePointModal';
 import { CityItem } from '../components/CityFilterBar';
+import { FilterTabs } from '../components/FilterTabs';
 import { Colors } from '../constants/colors';
 import { ApiService } from '../services/api.service';
 import { FilterStorageService } from '../services/filterStorage.service';
+import { StorageService } from '../services/storage.service';
 import { LocationService, ReferencePoint } from '../services/location.service';
 import { Company, CompanyStats, STATUS_LABELS, Status } from '../types/company';
 
@@ -32,6 +34,8 @@ interface HomeScreenProps {
   refPoint?: ReferencePoint | null;
   onUpdateRefPoint?: (point: ReferencePoint | null) => void;
   refreshTrigger?: number;
+  initialViewMode?: 'LIST' | 'MAP';
+  onViewModeChanged?: (mode: 'LIST' | 'MAP') => void;
 }
 
 export const HomeScreen: React.FC<HomeScreenProps> = ({
@@ -41,6 +45,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   refPoint: propRefPoint,
   onUpdateRefPoint,
   refreshTrigger,
+  initialViewMode,
+  onViewModeChanged,
 }) => {
   const [companies, setCompanies] = useState<Company[]>([]);
   const [stats, setStats] = useState<CompanyStats | undefined>(undefined);
@@ -65,8 +71,21 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
     initialFilters.sortOrder,
   );
   const [viewMode, setViewMode] = useState<'LIST' | 'MAP'>(
-    initialFilters.viewMode,
+    initialViewMode || initialFilters.viewMode,
   );
+
+  useEffect(() => {
+    if (initialViewMode && initialViewMode !== viewMode) {
+      setViewMode(initialViewMode);
+    }
+  }, [initialViewMode]);
+
+  const handleSetViewMode = (mode: 'LIST' | 'MAP') => {
+    setViewMode(mode);
+    if (onViewModeChanged) {
+      onViewModeChanged(mode);
+    }
+  };
   const [isFiltersModalOpen, setIsFiltersModalOpen] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState<string>(
     initialFilters.searchQuery || '',
@@ -84,6 +103,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   const [refPoint, setRefPoint] = useState<ReferencePoint | null>(propRefPoint || null);
   const [isRefPointModalOpen, setIsRefPointModalOpen] = useState<boolean>(false);
   const [distancesMap, setDistancesMap] = useState<Record<string, number>>({});
+  const [connectionError, setConnectionError] = useState<boolean>(false);
 
   // Au premier montage, si la persistance sur disque est encore en cours de lecture
   useEffect(() => {
@@ -224,25 +244,50 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
   const loadData = useCallback(async () => {
     try {
+      setConnectionError(false);
       const backendSortBy = sortBy === 'distance' ? 'updatedAt' : sortBy;
-      const [companiesRes, statsRes, citiesRes] = await Promise.all([
-        ApiService.getCompanies({
-          statuses: selectedStatuses.length > 0 ? selectedStatuses : undefined,
-          cities: selectedCities.length > 0 ? selectedCities : undefined,
-          search: searchQuery.trim() || undefined,
-          sortBy: backendSortBy,
-          sortOrder,
-        }),
-        ApiService.getCompanyStats(),
-        ApiService.getCities(),
-      ]);
+      let companiesRes, statsRes, citiesRes;
+
+      try {
+        [companiesRes, statsRes, citiesRes] = await Promise.all([
+          ApiService.getCompanies({
+            statuses: selectedStatuses.length > 0 ? selectedStatuses : undefined,
+            cities: selectedCities.length > 0 ? selectedCities : undefined,
+            search: searchQuery.trim() || undefined,
+            sortBy: backendSortBy,
+            sortOrder,
+          }),
+          ApiService.getCompanyStats(),
+          ApiService.getCities(),
+        ]);
+      } catch (firstErr) {
+        // Fallback automatique : si la première tentative échoue, tenter avec le dernier Tunnel URL Cloudflare
+        const currentStored = await StorageService.getServerUrl();
+        const fallbackTunnel = StorageService.getTunnelUrl();
+        if (fallbackTunnel && currentStored !== fallbackTunnel) {
+          await StorageService.setServerUrl(fallbackTunnel);
+          [companiesRes, statsRes, citiesRes] = await Promise.all([
+            ApiService.getCompanies({
+              statuses: selectedStatuses.length > 0 ? selectedStatuses : undefined,
+              cities: selectedCities.length > 0 ? selectedCities : undefined,
+              search: searchQuery.trim() || undefined,
+              sortBy: backendSortBy,
+              sortOrder,
+            }),
+            ApiService.getCompanyStats(),
+            ApiService.getCities(),
+          ]);
+        } else {
+          throw firstErr;
+        }
+      }
 
       setCompanies(companiesRes.items);
       setTotalCount(companiesRes.total);
       setStats(statsRes);
       setCities(citiesRes);
-    } catch (error) {
-      // Évite les alertes intempestives en cas de premier lancement hors-ligne
+    } catch {
+      setConnectionError(true);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -359,6 +404,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   };
 
   const toSendCount = stats ? stats.TO_SEND : 0;
+  const replyReceivedCount = stats ? stats.REPLY_RECEIVED : 0;
+  const toCallCount = stats ? stats.TO_CALL : 0;
 
   const handleSendBatch = () => {
     if (toSendCount === 0) return;
@@ -546,6 +593,71 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         </TouchableOpacity>
       </View>
 
+      {/* Bannière d'alerte prioritaire : Réponses de recruteurs reçues */}
+      {replyReceivedCount > 0 && (
+        <TouchableOpacity
+          style={styles.priorityBannerReply}
+          onPress={() => {
+            setSelectedStatuses(['REPLY_RECEIVED']);
+            handleSetViewMode('LIST');
+          }}
+          activeOpacity={0.8}
+        >
+          <View style={styles.priorityBannerIconWrapper}>
+            <Ionicons name="sparkles" size={18} color="#0B0F19" />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.priorityBannerTitle}>
+              {replyReceivedCount} réponse{replyReceivedCount > 1 ? 's' : ''} de recruteur reçue{replyReceivedCount > 1 ? 's' : ''} !
+            </Text>
+            <Text style={styles.priorityBannerSubtitle}>
+              Action immédiate requise : ouvrir pour accepter ou refuser
+            </Text>
+          </View>
+          <Ionicons name="chevron-forward" size={16} color={Colors.status.REPLY_RECEIVED} />
+        </TouchableOpacity>
+      )}
+
+      {/* Bannière d'alerte prioritaire : Entreprises à appeler à J+15 */}
+      {toCallCount > 0 && replyReceivedCount === 0 && (
+        <TouchableOpacity
+          style={styles.priorityBannerCall}
+          onPress={() => {
+            setSelectedStatuses(['TO_CALL']);
+            handleSetViewMode('LIST');
+          }}
+          activeOpacity={0.8}
+        >
+          <View style={[styles.priorityBannerIconWrapper, { backgroundColor: Colors.status.TO_CALL }]}>
+            <Ionicons name="call" size={16} color="#FFFFFF" />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.priorityBannerTitleCall}>
+              {toCallCount} entreprise{toCallCount > 1 ? 's' : ''} à appeler (J+15)
+            </Text>
+            <Text style={styles.priorityBannerSubtitle}>
+              Relance téléphonique directe en 1 clic recommandée
+            </Text>
+          </View>
+          <Ionicons name="chevron-forward" size={16} color={Colors.status.TO_CALL} />
+        </TouchableOpacity>
+      )}
+
+      {/* Barre de statuts KPIs interactive avec compteurs en temps réel */}
+      <FilterTabs
+        selectedStatuses={selectedStatuses}
+        onToggleStatus={(status) => {
+          setSelectedStatuses((prev) =>
+            prev.includes(status)
+              ? prev.filter((s) => s !== status)
+              : [status]
+          );
+        }}
+        onSelectAll={() => setSelectedStatuses([])}
+        stats={stats}
+        totalCount={totalCount}
+      />
+
       {/* Barre Point de repère (Distance) */}
       <View style={styles.refPointBar}>
         <TouchableOpacity
@@ -587,7 +699,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             styles.viewModeTab,
             viewMode === 'LIST' && styles.viewModeTabActive,
           ]}
-          onPress={() => setViewMode('LIST')}
+          onPress={() => handleSetViewMode('LIST')}
           activeOpacity={0.7}
         >
           <Ionicons
@@ -610,7 +722,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             styles.viewModeTab,
             viewMode === 'MAP' && styles.viewModeTabActive,
           ]}
-          onPress={() => setViewMode('MAP')}
+          onPress={() => handleSetViewMode('MAP')}
           activeOpacity={0.7}
         >
           <Ionicons
@@ -717,6 +829,33 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
               <Text style={styles.clearAllFiltersText}>Effacer tout</Text>
             </TouchableOpacity>
           </ScrollView>
+        </View>
+      )}
+
+      {/* Bannière de connexion si le serveur est inaccessible */}
+      {connectionError && (
+        <View style={styles.connectionErrorBanner}>
+          <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <Ionicons name="cloud-offline-outline" size={18} color="#FF6B6B" />
+            <Text style={styles.connectionErrorText}>
+              Connexion au serveur perdue
+            </Text>
+          </View>
+          <TouchableOpacity
+            style={styles.reconnectBtn}
+            onPress={async () => {
+              setRefreshing(true);
+              const tunnel = StorageService.getTunnelUrl();
+              if (tunnel) {
+                await StorageService.setServerUrl(tunnel);
+              }
+              await loadData();
+            }}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="refresh" size={13} color="#FFFFFF" />
+            <Text style={styles.reconnectBtnText}>Reconnecter</Text>
+          </TouchableOpacity>
         </View>
       )}
 
@@ -1449,6 +1588,122 @@ const styles = StyleSheet.create({
   },
   viewModeTabTextActive: {
     color: Colors.text,
+    fontWeight: '700',
+  },
+  connectionErrorBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: 'rgba(255, 82, 82, 0.15)',
+    borderWidth: 1,
+    borderColor: '#FF5252',
+    marginHorizontal: 16,
+    marginVertical: 6,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    gap: 8,
+  },
+  connectionErrorText: {
+    color: '#FFD2D2',
+    fontSize: 12,
+    fontWeight: '600',
+    flex: 1,
+  },
+  reconnectBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: Colors.primary,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 7,
+  },
+  reconnectBtnText: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  priorityBannerReply: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: `${Colors.status.REPLY_RECEIVED}20`,
+    borderWidth: 1.5,
+    borderColor: Colors.status.REPLY_RECEIVED,
+    borderRadius: 12,
+    marginHorizontal: 16,
+    marginVertical: 6,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    gap: 10,
+  },
+  priorityBannerCall: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: `${Colors.status.TO_CALL}20`,
+    borderWidth: 1.5,
+    borderColor: Colors.status.TO_CALL,
+    borderRadius: 12,
+    marginHorizontal: 16,
+    marginVertical: 6,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    gap: 10,
+  },
+  priorityBannerIconWrapper: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: Colors.status.REPLY_RECEIVED,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  priorityBannerTitle: {
+    color: Colors.status.REPLY_RECEIVED,
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  priorityBannerTitleCall: {
+    color: Colors.status.TO_CALL,
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  priorityBannerSubtitle: {
+    color: Colors.textSecondary,
+    fontSize: 11,
+    marginTop: 2,
+  },
+  batchSendBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: `${Colors.primary}20`,
+    borderWidth: 1,
+    borderColor: Colors.primary,
+    marginHorizontal: 16,
+    marginVertical: 6,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    gap: 8,
+  },
+  batchSendBarText: {
+    color: Colors.textSecondary,
+    fontSize: 12,
+    flex: 1,
+  },
+  batchSendBarButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: Colors.primary,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+  },
+  batchSendBarButtonText: {
+    color: '#FFFFFF',
+    fontSize: 12,
     fontWeight: '700',
   },
 });

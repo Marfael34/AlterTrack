@@ -32,7 +32,8 @@ export const StorageService = {
       if (
         !value ||
         (isWeb && value.includes('192.168.1.')) ||
-        (!isWeb && (value.includes('192.168.1.27') || value.includes('localhost') || value.includes('127.0.0.1')))
+        (!isWeb && (value.includes('192.168.1.27') || value.includes('localhost') || value.includes('127.0.0.1'))) ||
+        (!isWeb && value.includes('.trycloudflare.com') && DEFAULT_TUNNEL_URL && value !== DEFAULT_TUNNEL_URL)
       ) {
         await AsyncStorage.setItem(SERVER_URL_KEY, defaultUrl);
         return defaultUrl;

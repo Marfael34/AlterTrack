@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import React from 'react';
-import { Linking, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Linking, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Colors } from '../constants/colors';
 import { Company } from '../types/company';
 import { StatusBadge } from './StatusBadge';
@@ -63,6 +63,8 @@ export const CompanyCard: React.FC<CompanyCardProps> = ({
       onPress={handleCardPress}
       onLongPress={onLongPress}
       activeOpacity={0.7}
+      accessibilityRole="button"
+      accessibilityLabel={`Entreprise ${company.name}, statut ${company.status}`}
     >
       <View style={styles.mainRow}>
         {selectable && (
@@ -100,6 +102,25 @@ export const CompanyCard: React.FC<CompanyCardProps> = ({
             </View>
             <StatusBadge status={company.status} size="small" />
           </View>
+
+          {/* Badge informatif accessible pour action requise */}
+          {company.status === 'REPLY_RECEIVED' && (
+            <View style={styles.urgentDecisionBadge}>
+              <Ionicons name="sparkles" size={13} color={Colors.status.REPLY_RECEIVED} />
+              <Text style={styles.urgentDecisionText}>
+                Réponse reçue • Ouvrez la fiche pour accepter ou refuser
+              </Text>
+            </View>
+          )}
+
+          {isToCall && (
+            <View style={styles.urgentCallBadge}>
+              <Ionicons name="call" size={12} color={Colors.status.TO_CALL} />
+              <Text style={styles.urgentCallText}>
+                J+15 sans réponse • Appel téléphonique recommandé
+              </Text>
+            </View>
+          )}
 
           {company.address ? (
             <View style={styles.addressRow}>
@@ -183,6 +204,43 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     borderWidth: 1,
     borderColor: Colors.border,
+    ...(Platform.OS === 'web' ? { cursor: 'pointer' as any } : {}),
+  },
+  urgentDecisionBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: `${Colors.status.REPLY_RECEIVED}25`,
+    borderColor: Colors.status.REPLY_RECEIVED,
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingVertical: 5,
+    paddingHorizontal: 8,
+    gap: 6,
+    marginBottom: 8,
+  },
+  urgentDecisionText: {
+    color: Colors.status.REPLY_RECEIVED,
+    fontSize: 11,
+    fontWeight: '700',
+    flex: 1,
+  },
+  urgentCallBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: `${Colors.status.TO_CALL}25`,
+    borderColor: Colors.status.TO_CALL,
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingVertical: 5,
+    paddingHorizontal: 8,
+    gap: 6,
+    marginBottom: 8,
+  },
+  urgentCallText: {
+    color: Colors.status.TO_CALL,
+    fontSize: 11,
+    fontWeight: '700',
+    flex: 1,
   },
   cardHighlightReply: {
     borderColor: Colors.status.REPLY_RECEIVED,

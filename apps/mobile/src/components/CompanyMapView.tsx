@@ -34,7 +34,7 @@ export const CompanyMapView: React.FC<CompanyMapViewProps> = ({
   onSelectCompany,
   onOpenRefPointModal,
 }) => {
-  const webViewRef = useRef<WebView>(null);
+  const webViewRef = useRef<any>(null);
   const savedMapFilters = FilterStorageService.getFiltersSync();
   const [activeTab, setActiveTab] = useState<'RADAR' | 'MAP'>(
     savedMapFilters.mapTab || 'RADAR',
@@ -199,14 +199,14 @@ export const CompanyMapView: React.FC<CompanyMapViewProps> = ({
     return JSON.stringify(payload);
   }, [geolocatedCompanies, refPoint, distancesMap]);
 
-  // HTML autonome Leaflet sans AUCUNE clé API (ESRI Dark Canvas + OpenStreetMap)
+  // HTML autonome Leaflet en mode Satellite avec noms des villes (ESRI World Imagery + World Boundaries & Places)
   const htmlContent = useMemo(() => {
     return `<!DOCTYPE html>
 <html lang="fr">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>AlterTrack Map</title>
+  <title>AlterTrack Satellite Map</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -264,6 +264,84 @@ export const CompanyMapView: React.FC<CompanyMapViewProps> = ({
       padding: 6px 10px; border-radius: 6px; font-size: 11px; font-weight: 700;
       text-decoration: none; margin-top: 4px;
     }
+
+    /* Style du badge de ville au centre des regroupements d'entreprises */
+    .city-cluster-pill {
+      background: rgba(11, 15, 25, 0.90);
+      border: 1.5px solid #00D2C4;
+      color: #FFFFFF;
+      font-size: 11px;
+      font-weight: 700;
+      padding: 3px 8px;
+      border-radius: 12px;
+      white-space: nowrap;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.7);
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      pointer-events: none;
+    }
+    .city-count {
+      background: #00D2C4;
+      color: #0B0F19;
+      font-size: 10px;
+      font-weight: 800;
+      padding: 1px 5px;
+      border-radius: 8px;
+    }
+
+    /* Nom de l'entreprise affiché sous chaque bulle */
+    .custom-company-tooltip {
+      background: rgba(11, 15, 25, 0.92) !important;
+      border: 1px solid rgba(0, 210, 196, 0.75) !important;
+      color: #FFFFFF !important;
+      font-size: 10px !important;
+      font-weight: 700 !important;
+      border-radius: 6px !important;
+      padding: 2px 6px !important;
+      box-shadow: 0 3px 8px rgba(0,0,0,0.7) !important;
+      max-width: 135px !important;
+      white-space: nowrap !important;
+      overflow: hidden !important;
+      text-overflow: ellipsis !important;
+      text-align: center !important;
+      pointer-events: none !important;
+    }
+    .custom-company-tooltip::before {
+      border-bottom-color: rgba(11, 15, 25, 0.92) !important;
+    }
+    .pin-company-tip {
+      color: #FFFFFF;
+      font-weight: 700;
+    }
+
+    /* Contrôles Leaflet intégrés au thème sombre */
+    .leaflet-control-layers {
+      background: rgba(19, 27, 46, 0.92) !important;
+      border: 1px solid #00D2C4 !important;
+      border-radius: 10px !important;
+      color: #FFFFFF !important;
+      box-shadow: 0 4px 14px rgba(0,0,0,0.6) !important;
+      padding: 6px 10px !important;
+      font-size: 12px !important;
+    }
+    .leaflet-control-layers-toggle {
+      background-color: rgba(19, 27, 46, 0.92) !important;
+      border-radius: 8px !important;
+      border: 1px solid #00D2C4 !important;
+      width: 34px !important;
+      height: 34px !important;
+      background-size: 20px 20px !important;
+    }
+    .leaflet-control-zoom a {
+      background: rgba(19, 27, 46, 0.9) !important;
+      color: #00D2C4 !important;
+      border-color: rgba(0, 210, 196, 0.3) !important;
+    }
+    .leaflet-control-zoom a:hover {
+      background: #1E293B !important;
+      color: #FFFFFF !important;
+    }
   </style>
 </head>
 <body>
@@ -271,6 +349,16 @@ export const CompanyMapView: React.FC<CompanyMapViewProps> = ({
   <script>
     var mapInstance = null;
     var markersGroup = null;
+
+    function escapeHtml(str) {
+      if (!str) return '';
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
 
     function initMap() {
       if (typeof L === 'undefined' || typeof L.map !== 'function') {
@@ -281,19 +369,64 @@ export const CompanyMapView: React.FC<CompanyMapViewProps> = ({
 
       try {
         var data = ${mapDataJson};
-        mapInstance = L.map('map', { zoomControl: true, attributionControl: false });
+        mapInstance = L.map('map', { zoomControl: false, attributionControl: false });
+        L.control.zoom({ position: 'bottomright' }).addTo(mapInstance);
 
-        // Tuiles ESRI World Dark Gray 100% gratuites sans AUCUNE clé API
-        var esriDark = L.tileLayer('https://services.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}', {
-          maxZoom: 16,
-          attribution: 'Esri, HERE, Garmin, &copy; OpenStreetMap'
-        }).addTo(mapInstance);
+        // Créer un panneau dédié pour les noms des villes au-dessus des photos satellites
+        mapInstance.createPane('labelsPane');
+        mapInstance.getPane('labelsPane').style.zIndex = '350';
+        mapInstance.getPane('labelsPane').style.pointerEvents = 'none';
 
-        // Secours OpenStreetMap standard si besoin
-        esriDark.on('tileerror', function() {
+        // 1. Couche Satellite Haute Définition (ESRI World Imagery)
+        var satLayer = L.tileLayer('https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+          maxZoom: 19,
+          maxNativeZoom: 18,
+          attribution: 'Esri, Maxar'
+        });
+
+        // 2. Couche Noms des Villes, Communes et Frontières (ESRI Reference World Boundaries & Places)
+        var placesLayer = L.tileLayer('https://services.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}', {
+          maxZoom: 19,
+          maxNativeZoom: 18,
+          pane: 'labelsPane'
+        });
+
+        // 3. Couche Réseau Routier (ESRI World Transportation)
+        var roadsLayer = L.tileLayer('https://services.arcgisonline.com/ArcGIS/rest/services/Reference/World_Transportation/MapServer/tile/{z}/{y}/{x}', {
+          maxZoom: 19,
+          maxNativeZoom: 18,
+          opacity: 0.55,
+          pane: 'labelsPane'
+        });
+
+        // 4. Couche Plan classique OpenStreetMap (Alternative disponible)
+        var osmLayer = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+          maxZoom: 19,
+          attribution: '&copy; OpenStreetMap'
+        });
+
+        // Groupe Hybride Satellite + Villes (Actif par défaut)
+        var hybridGroup = L.layerGroup([satLayer, roadsLayer, placesLayer]).addTo(mapInstance);
+
+        // Sélecteur de couches Leaflet en haut à droite
+        var pureSatLayer = L.tileLayer('https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+          maxZoom: 19,
+          maxNativeZoom: 18,
+          attribution: 'Esri, Maxar'
+        });
+
+        var baseMaps = {
+          "🛰️ Satellite + Villes": hybridGroup,
+          "🛰️ Satellite pur": pureSatLayer,
+          "🗺️ Plan standard": osmLayer
+        };
+        L.control.layers(baseMaps, null, { position: 'topright' }).addTo(mapInstance);
+
+        // Secours si tuiles indisponibles
+        satLayer.on('tileerror', function() {
           if (!mapInstance._osmFallback) {
             mapInstance._osmFallback = true;
-            L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(mapInstance);
+            osmLayer.addTo(mapInstance);
           }
         });
 
@@ -309,8 +442,8 @@ export const CompanyMapView: React.FC<CompanyMapViewProps> = ({
           homeMarker.bindPopup('<div class="popup-title">' + (data.refPoint.isGps ? 'Position GPS' : 'Mon adresse fixe') + '</div><div class="popup-sub">' + data.refPoint.label + '</div>');
 
           // Cercles 15km et 30km
-          L.circle([data.refPoint.latitude, data.refPoint.longitude], { radius: 15000, color: '#00D2C4', weight: 1.5, fillColor: '#00D2C4', fillOpacity: 0.05, dashArray: '5, 8' }).addTo(mapInstance);
-          L.circle([data.refPoint.latitude, data.refPoint.longitude], { radius: 30000, color: '#0066FF', weight: 1.5, fillColor: '#0066FF', fillOpacity: 0.03, dashArray: '4, 10' }).addTo(mapInstance);
+          L.circle([data.refPoint.latitude, data.refPoint.longitude], { radius: 15000, color: '#00D2C4', weight: 1.5, fillColor: '#00D2C4', fillOpacity: 0.06, dashArray: '5, 8' }).addTo(mapInstance);
+          L.circle([data.refPoint.latitude, data.refPoint.longitude], { radius: 30000, color: '#0066FF', weight: 1.5, fillColor: '#0066FF', fillOpacity: 0.04, dashArray: '4, 10' }).addTo(mapInstance);
         }
 
         // Détecter les entreprises partageant les mêmes coordonnées (ex: même commune sans numéro de rue)
@@ -325,6 +458,7 @@ export const CompanyMapView: React.FC<CompanyMapViewProps> = ({
         Object.keys(coordGroups).forEach(function(key) {
           var group = coordGroups[key];
           var total = group.length;
+          var cityName = group[0].city || '';
 
           if (total > 1) {
             var centerLat = group[0].latitude;
@@ -332,12 +466,23 @@ export const CompanyMapView: React.FC<CompanyMapViewProps> = ({
 
             // Point central discret de la commune
             L.circleMarker([centerLat, centerLng], {
-              radius: 5,
+              radius: 6,
               color: '#00D2C4',
               fillColor: '#00D2C4',
-              fillOpacity: 0.85,
+              fillOpacity: 0.9,
               weight: 2
             }).addTo(mapInstance);
+
+            // Badge avec le nom de la ville au centre du cluster
+            if (cityName) {
+              var cityLabelIcon = L.divIcon({
+                className: 'city-cluster-container',
+                html: '<div class="city-cluster-pill">📍 ' + cityName + ' <span class="city-count">' + total + '</span></div>',
+                iconSize: [120, 24],
+                iconAnchor: [60, 12]
+              });
+              L.marker([centerLat, centerLng], { icon: cityLabelIcon, interactive: false, zIndexOffset: 200 }).addTo(mapInstance);
+            }
           }
 
           group.forEach(function(comp, idx) {
@@ -355,7 +500,7 @@ export const CompanyMapView: React.FC<CompanyMapViewProps> = ({
               L.polyline([[comp.latitude, comp.longitude], [markerLat, markerLng]], {
                 color: '#00D2C4',
                 weight: 1.5,
-                opacity: 0.45,
+                opacity: 0.6,
                 dashArray: '3, 4'
               }).addTo(mapInstance);
             }
@@ -370,6 +515,16 @@ export const CompanyMapView: React.FC<CompanyMapViewProps> = ({
             });
 
             var marker = L.marker([markerLat, markerLng], { icon: icon }).addTo(markersGroup);
+
+            // Afficher le nom de l'entreprise sous la bulle
+            var compNameSafe = escapeHtml(comp.name);
+            marker.bindTooltip('<span class="pin-company-tip">' + compNameSafe + '</span>', {
+              permanent: true,
+              direction: 'bottom',
+              offset: [0, 8],
+              className: 'custom-company-tooltip'
+            });
+
             var popupHtml = '<div class="popup-title">' + comp.name + '</div>';
             if (comp.city || comp.address) popupHtml += '<div class="popup-sub">' + (comp.address ? comp.address + ' • ' : '') + comp.city + '</div>';
             if (total > 1) popupHtml += '<div class="popup-commune-info">📍 Entreprise ' + (idx + 1) + ' sur ' + total + ' à ' + (comp.city || 'cette commune') + '</div>';
@@ -489,7 +644,7 @@ export const CompanyMapView: React.FC<CompanyMapViewProps> = ({
           activeOpacity={0.7}
         >
           <Ionicons
-            name="map"
+            name="earth"
             size={14}
             color={activeTab === 'MAP' ? Colors.primary : Colors.textSecondary}
           />
@@ -499,7 +654,7 @@ export const CompanyMapView: React.FC<CompanyMapViewProps> = ({
               activeTab === 'MAP' && styles.subModeTabTextActive,
             ]}
           >
-            🗺️ Carte 2D (Sans clé API)
+            🛰️ Satellite & Villes
           </Text>
         </TouchableOpacity>
       </View>
@@ -690,6 +845,29 @@ export const CompanyMapView: React.FC<CompanyMapViewProps> = ({
               <Text style={styles.loadingText}>Affichage de la carte...</Text>
             </View>
           )}
+
+          {/* Boutons d'actions rapides sur la carte */}
+          <View style={styles.mapFloatingControls}>
+            <TouchableOpacity
+              style={styles.mapCtrlBtn}
+              onPress={() => webViewRef.current?.injectJavaScript('window.fitAll && window.fitAll(); true;')}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="scan-outline" size={14} color="#00D2C4" />
+              <Text style={styles.mapCtrlText}>Tout voir</Text>
+            </TouchableOpacity>
+
+            {refPoint && (
+              <TouchableOpacity
+                style={styles.mapCtrlBtn}
+                onPress={() => webViewRef.current?.injectJavaScript('window.centerOnHome && window.centerOnHome(); true;')}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="home" size={14} color="#00D2C4" />
+                <Text style={styles.mapCtrlText}>Mon adresse</Text>
+              </TouchableOpacity>
+            )}
+          </View>
 
           {/* Fiche flottante de l'entreprise cliquée */}
           {selectedCompany && (
@@ -1125,6 +1303,35 @@ const styles = StyleSheet.create({
   openDetailsText: {
     color: '#FFFFFF',
     fontSize: 13,
+    fontWeight: '700',
+  },
+  mapFloatingControls: {
+    position: 'absolute',
+    top: 12,
+    left: 12,
+    flexDirection: 'row',
+    gap: 8,
+    zIndex: 10,
+  },
+  mapCtrlBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: 'rgba(19, 27, 46, 0.92)',
+    paddingVertical: 7,
+    paddingHorizontal: 11,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 210, 196, 0.5)',
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.4,
+    shadowRadius: 4,
+  },
+  mapCtrlText: {
+    color: '#FFFFFF',
+    fontSize: 11.5,
     fontWeight: '700',
   },
 });

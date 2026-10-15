@@ -1,31 +1,43 @@
+import { Ionicons } from '@expo/vector-icons';
 import React from 'react';
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Colors } from '../constants/colors';
-import { STATUS_LABELS, Status, CompanyStats } from '../types/company';
+import { CompanyStats, STATUS_LABELS, Status } from '../types/company';
 
 interface FilterTabsProps {
-  selectedStatus: Status | 'ALL';
-  onSelectStatus: (status: Status | 'ALL') => void;
+  selectedStatuses?: Status[];
+  selectedStatus?: Status | 'ALL';
+  onToggleStatus: (status: Status) => void;
+  onSelectAll: () => void;
   stats?: CompanyStats;
   totalCount?: number;
 }
 
-const ALL_STATUSES: Status[] = [
-  'TO_SEND',
-  'WAITING_FOR_REPLY',
-  'TO_FOLLOW_UP',
-  'REPLY_RECEIVED',
-  'TO_CALL',
-  'ACCEPTED',
-  'REFUSED',
+const ALL_STATUSES: Array<{
+  key: Status;
+  icon: keyof typeof Ionicons.glyphMap;
+}> = [
+  { key: 'REPLY_RECEIVED', icon: 'chatbubble-ellipses' }, // Mis en avant car urgent !
+  { key: 'TO_CALL', icon: 'call' }, // Mis en avant car urgent !
+  { key: 'TO_SEND', icon: 'mail-unread' },
+  { key: 'WAITING_FOR_REPLY', icon: 'time' },
+  { key: 'TO_FOLLOW_UP', icon: 'refresh-circle' },
+  { key: 'ACCEPTED', icon: 'checkmark-circle' },
+  { key: 'REFUSED', icon: 'close-circle' },
 ];
 
 export const FilterTabs: React.FC<FilterTabsProps> = ({
+  selectedStatuses = [],
   selectedStatus,
-  onSelectStatus,
+  onToggleStatus,
+  onSelectAll,
   stats,
   totalCount = 0,
 }) => {
+  const isAll =
+    selectedStatus === 'ALL' ||
+    (selectedStatuses.length === 0 && !selectedStatus);
+
   return (
     <View style={styles.container}>
       <ScrollView
@@ -33,72 +45,85 @@ export const FilterTabs: React.FC<FilterTabsProps> = ({
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
       >
+        {/* Puce "Toutes" */}
         <TouchableOpacity
-          style={[styles.tab, selectedStatus === 'ALL' && styles.tabActive]}
-          onPress={() => onSelectStatus('ALL')}
+          style={[styles.tab, isAll && styles.tabActive]}
+          onPress={onSelectAll}
           activeOpacity={0.7}
+          accessibilityRole="button"
+          accessibilityLabel="Toutes les candidatures"
         >
-          <Text style={[styles.tabText, selectedStatus === 'ALL' && styles.tabTextActive]}>
-            Tous
+          <Text style={[styles.tabText, isAll && styles.tabTextActive]}>
+            Toutes
           </Text>
-          <View style={[styles.countBadge, selectedStatus === 'ALL' && styles.countBadgeActive]}>
-            <Text
-              style={[
-                styles.countText,
-                selectedStatus === 'ALL' && styles.countTextActive,
-              ]}
-            >
+          <View style={[styles.countBadge, isAll && styles.countBadgeActive]}>
+            <Text style={[styles.countText, isAll && styles.countTextActive]}>
               {totalCount}
             </Text>
           </View>
         </TouchableOpacity>
 
-        {ALL_STATUSES.map((status) => {
-          const isActive = selectedStatus === status;
+        {/* Puces de chaque statut métier */}
+        {ALL_STATUSES.map(({ key: status, icon }) => {
+          const isActive =
+            selectedStatus === status || selectedStatuses.includes(status);
           const count = stats ? stats[status] || 0 : 0;
           const statusColor = Colors.status[status];
+          const isUrgent =
+            (status === 'REPLY_RECEIVED' || status === 'TO_CALL') && count > 0;
 
           return (
             <TouchableOpacity
               key={status}
               style={[
                 styles.tab,
+                isUrgent && !isActive && styles.tabUrgent,
                 isActive && {
-                  backgroundColor: `${statusColor}25`,
+                  backgroundColor: `${statusColor}22`,
                   borderColor: statusColor,
+                  borderWidth: 1.5,
                 },
               ]}
-              onPress={() => onSelectStatus(status)}
+              onPress={() => onToggleStatus(status)}
               activeOpacity={0.7}
+              accessibilityRole="button"
+              accessibilityLabel={`${STATUS_LABELS[status]}, ${count} candidature${count > 1 ? 's' : ''}`}
             >
-              <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
+              <Ionicons
+                name={icon}
+                size={13}
+                color={isActive ? statusColor : isUrgent ? statusColor : Colors.textSecondary}
+              />
               <Text
                 style={[
                   styles.tabText,
                   isActive && { color: statusColor, fontWeight: '700' },
+                  isUrgent && !isActive && { color: Colors.text, fontWeight: '600' },
                 ]}
               >
                 {STATUS_LABELS[status]}
               </Text>
-              {count > 0 && (
-                <View
+              <View
+                style={[
+                  styles.countBadge,
+                  isActive && { backgroundColor: statusColor },
+                  isUrgent && !isActive && {
+                    backgroundColor: `${statusColor}30`,
+                    borderColor: statusColor,
+                    borderWidth: 1,
+                  },
+                ]}
+              >
+                <Text
                   style={[
-                    styles.countBadge,
-                    {
-                      backgroundColor: isActive ? statusColor : Colors.surfaceHighlight,
-                    },
+                    styles.countText,
+                    isActive && { color: '#0B0F19' },
+                    isUrgent && !isActive && { color: statusColor },
                   ]}
                 >
-                  <Text
-                    style={[
-                      styles.countText,
-                      { color: isActive ? '#FFFFFF' : Colors.textSecondary },
-                    ]}
-                  >
-                    {count}
-                  </Text>
-                </View>
-              )}
+                  {count}
+                </Text>
+              </View>
             </TouchableOpacity>
           );
         })}
@@ -109,36 +134,38 @@ export const FilterTabs: React.FC<FilterTabsProps> = ({
 
 const styles = StyleSheet.create({
   container: {
-    paddingVertical: 10,
+    paddingVertical: 8,
     backgroundColor: Colors.background,
   },
   scrollContent: {
     paddingHorizontal: 16,
     gap: 8,
+    alignItems: 'center',
   },
   tab: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 14,
-    paddingVertical: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
     borderRadius: 20,
     backgroundColor: Colors.cardBackground,
     borderWidth: 1,
     borderColor: Colors.border,
+    gap: 6,
+    ...(Platform.OS === 'web' ? { cursor: 'pointer' as any } : {}),
   },
   tabActive: {
     backgroundColor: `${Colors.primary}25`,
     borderColor: Colors.primary,
+    borderWidth: 1.5,
   },
-  statusDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    marginRight: 6,
+  tabUrgent: {
+    borderColor: `${Colors.status.REPLY_RECEIVED}80`,
+    backgroundColor: `${Colors.cardBackground}`,
   },
   tabText: {
     color: Colors.textSecondary,
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '500',
   },
   tabTextActive: {
@@ -146,11 +173,13 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   countBadge: {
-    marginLeft: 6,
     paddingHorizontal: 6,
-    paddingVertical: 2,
+    paddingVertical: 1,
     borderRadius: 10,
     backgroundColor: Colors.surfaceHighlight,
+    minWidth: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   countBadgeActive: {
     backgroundColor: Colors.primary,
