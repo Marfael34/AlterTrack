@@ -24,6 +24,7 @@ describe('MailingService', () => {
   };
   let emailService: {
     sendMail: jest.Mock;
+    isConfigured: jest.Mock;
   };
   let imapService: {
     fetchRecentIncomingEmails: jest.Mock;
@@ -68,6 +69,10 @@ describe('MailingService', () => {
     emailService = {
       sendMail: jest.fn().mockResolvedValue({
         messageId: '<msg-123@gmail.com>',
+      }),
+      isConfigured: jest.fn().mockReturnValue({
+        configured: true,
+        user: 'test@gmail.com',
       }),
     };
 
@@ -245,6 +250,34 @@ describe('MailingService', () => {
 
       expect(prisma.company.update).not.toHaveBeenCalled();
       expect(result.repliesDetected).toBe(0);
+    });
+  });
+
+  describe('sendTestEmail', () => {
+    it('should generate email with Gemini, attach CV and send test email to specified recipient', async () => {
+      const result = await service.sendTestEmail(
+        'candidat@test.com',
+        'Entreprise Test',
+      );
+
+      expect(geminiService.generateEmail).toHaveBeenCalledWith({
+        companyName: 'Entreprise Test',
+        template: 'Mon template',
+        nature: EmailNature.FIRST_CONTACT,
+      });
+
+      expect(emailService.sendMail).toHaveBeenCalledWith(
+        expect.objectContaining({
+          to: 'candidat@test.com',
+          attachmentPath: '/tmp/cv.pdf',
+          attachmentName: 'CV.pdf',
+        }),
+      );
+
+      expect(result.success).toBe(true);
+      expect(result.recipient).toBe('candidat@test.com');
+      expect(result.hasAttachment).toBe(true);
+      expect(result.isSimulation).toBe(false);
     });
   });
 });

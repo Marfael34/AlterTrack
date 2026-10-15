@@ -15,6 +15,7 @@ import {
   View,
 } from 'react-native';
 import { AddressFieldAssistant } from '../components/AddressFieldAssistant';
+import { EmailPreviewModal } from '../components/EmailPreviewModal';
 import { ReferencePointModal } from '../components/ReferencePointModal';
 import { StatusBadge } from '../components/StatusBadge';
 import { Colors } from '../constants/colors';
@@ -70,6 +71,7 @@ export const CompanyDetailScreen: React.FC<CompanyDetailScreenProps> = ({
   const [refPoint, setRefPoint] = useState<ReferencePoint | null>(propRefPoint || null);
   const [isRefPointModalOpen, setIsRefPointModalOpen] = useState(false);
   const [distanceKm, setDistanceKm] = useState<number | null>(null);
+  const [isPreviewModalOpen, setIsPreviewModalOpen] = useState(false);
 
   const scrollViewRef = useRef<ScrollView>(null);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
@@ -357,23 +359,54 @@ export const CompanyDetailScreen: React.FC<CompanyDetailScreenProps> = ({
           </TouchableOpacity>
         )}
 
+        {/* Bannière de prévisualisation et test pour candidature à envoyer */}
+        {status === 'TO_SEND' && (
+          <View style={styles.toSendBanner}>
+            <View style={styles.toSendHeaderRow}>
+              <Ionicons name="sparkles" size={17} color={Colors.accent} />
+              <Text style={styles.toSendTitle}>Candidature en attente d'envoi</Text>
+            </View>
+            <Text style={styles.toSendSubtitle}>
+              Prévisualisez la lettre générée par Gemini et testez l'envoi sur votre boîte personnelle avant tout contact direct.
+            </Text>
+            <TouchableOpacity
+              style={styles.previewMailBtn}
+              onPress={() => setIsPreviewModalOpen(true)}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="eye-outline" size={16} color="#FFFFFF" />
+              <Text style={styles.previewMailBtnText}>Aperçu & Tester l'e-mail IA</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
         {/* Bouton de relance manuelle si À relancer */}
         {status === 'TO_FOLLOW_UP' && !company.followUpSentAt && (
-          <TouchableOpacity
-            style={styles.followUpBtn}
-            onPress={handleSendFollowUp}
-            disabled={sendingFollowUp}
-            activeOpacity={0.8}
-          >
-            {sendingFollowUp ? (
-              <ActivityIndicator color="#FFFFFF" size="small" />
-            ) : (
-              <>
-                <Ionicons name="paper-plane" size={16} color="#FFFFFF" />
-                <Text style={styles.followUpBtnText}>Envoyer la relance maintenant</Text>
-              </>
-            )}
-          </TouchableOpacity>
+          <View style={styles.followUpWrap}>
+            <TouchableOpacity
+              style={styles.followUpBtn}
+              onPress={handleSendFollowUp}
+              disabled={sendingFollowUp}
+              activeOpacity={0.8}
+            >
+              {sendingFollowUp ? (
+                <ActivityIndicator color="#FFFFFF" size="small" />
+              ) : (
+                <>
+                  <Ionicons name="paper-plane" size={16} color="#FFFFFF" />
+                  <Text style={styles.followUpBtnText}>Envoyer la relance maintenant</Text>
+                </>
+              )}
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.followUpPreviewBtn}
+              onPress={() => setIsPreviewModalOpen(true)}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="eye-outline" size={15} color={Colors.accent} />
+              <Text style={styles.followUpPreviewBtnText}>Aperçu / Tester la relance</Text>
+            </TouchableOpacity>
+          </View>
         )}
 
         {/* Carte Localisation & Distance */}
@@ -490,7 +523,17 @@ export const CompanyDetailScreen: React.FC<CompanyDetailScreenProps> = ({
             refPoint={refPoint}
           />
 
-          <Text style={styles.fieldLabel}>Adresse e-mail de contact *</Text>
+          <View style={styles.emailLabelRow}>
+            <Text style={styles.fieldLabelInline}>Adresse e-mail de contact *</Text>
+            <TouchableOpacity
+              style={styles.inlinePreviewBtn}
+              onPress={() => setIsPreviewModalOpen(true)}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="sparkles" size={12} color={Colors.accent} />
+              <Text style={styles.inlinePreviewText}>Tester l'e-mail IA</Text>
+            </TouchableOpacity>
+          </View>
           <TextInput
             style={styles.input}
             value={email}
@@ -587,6 +630,14 @@ export const CompanyDetailScreen: React.FC<CompanyDetailScreenProps> = ({
         onClose={() => setIsRefPointModalOpen(false)}
         currentPoint={refPoint}
         onSave={handleSaveRefPoint}
+      />
+
+      {/* Modal d'aperçu et test d'envoi IA */}
+      <EmailPreviewModal
+        visible={isPreviewModalOpen}
+        onClose={() => setIsPreviewModalOpen(false)}
+        companyName={company.name}
+        nature={status === 'TO_FOLLOW_UP' ? 'FOLLOW_UP' : 'FIRST_CONTACT'}
       />
     </View>
   );
@@ -709,6 +760,49 @@ const styles = StyleSheet.create({
   callBannerTextProminent: {
     color: '#FFFFFF',
   },
+  toSendBanner: {
+    backgroundColor: '#161F36',
+    borderWidth: 1,
+    borderColor: `${Colors.accent}50`,
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 16,
+    gap: 8,
+  },
+  toSendHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  toSendTitle: {
+    color: Colors.text,
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  toSendSubtitle: {
+    color: Colors.textSecondary,
+    fontSize: 12,
+    lineHeight: 16,
+  },
+  previewMailBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.accent,
+    paddingVertical: 10,
+    borderRadius: 10,
+    gap: 8,
+    marginTop: 4,
+  },
+  previewMailBtnText: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+    fontSize: 13,
+  },
+  followUpWrap: {
+    gap: 8,
+    marginBottom: 16,
+  },
   followUpBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -717,12 +811,27 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderRadius: 12,
     gap: 8,
-    marginBottom: 16,
   },
   followUpBtnText: {
     color: '#FFFFFF',
     fontWeight: '700',
     fontSize: 14,
+  },
+  followUpPreviewBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: `${Colors.accent}18`,
+    borderWidth: 1,
+    borderColor: `${Colors.accent}40`,
+    paddingVertical: 9,
+    borderRadius: 10,
+    gap: 6,
+  },
+  followUpPreviewBtnText: {
+    color: Colors.accent,
+    fontWeight: '600',
+    fontSize: 12,
   },
   section: {
     marginBottom: 20,
@@ -765,6 +874,32 @@ const styles = StyleSheet.create({
     marginBottom: 6,
     marginTop: 10,
     fontWeight: '500',
+  },
+  emailLabelRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 6,
+    marginTop: 10,
+  },
+  fieldLabelInline: {
+    fontSize: 13,
+    color: Colors.textSecondary,
+    fontWeight: '500',
+  },
+  inlinePreviewBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: `${Colors.accent}15`,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  inlinePreviewText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: Colors.accent,
   },
   input: {
     backgroundColor: Colors.cardBackground,

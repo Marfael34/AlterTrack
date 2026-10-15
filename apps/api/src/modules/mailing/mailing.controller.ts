@@ -7,6 +7,7 @@ import {
   Post,
 } from '@nestjs/common';
 import { SendBatchDto } from './dto/send-batch.dto';
+import { SendTestEmailDto } from './dto/send-test-email.dto';
 import { TestGeminiDto } from './dto/test-gemini.dto';
 import { MailingService } from './mailing.service';
 
@@ -36,5 +37,14 @@ export class MailingController {
   @HttpCode(HttpStatus.OK)
   testGemini(@Body() testDto: TestGeminiDto) {
     return this.mailingService.testGemini(testDto.companyName, testDto.nature);
+  }
+
+  @Post('send-test')
+  @HttpCode(HttpStatus.OK)
+  sendTestEmail(@Body() testDto: SendTestEmailDto) {
+    return this.mailingService.sendTestEmail(
+      testDto.toEmail,
+      testDto.companyName,
+    );
   }
 }

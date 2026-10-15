@@ -273,4 +273,50 @@ export class MailingService {
       nature: nature || EmailNature.FIRST_CONTACT,
     });
   }
+
+  async sendTestEmail(toEmail: string, companyName?: string) {
+    const targetCompany = companyName?.trim() || 'Entreprise Exemple (Test)';
+    const config = await this.appConfigService.getOrCreateConfig();
+
+    let cvPath: string | undefined;
+    try {
+      cvPath = await this.appConfigService.getCvFilePath();
+    } catch {
+      this.logger.warn(
+        'Aucun CV PDF trouvé sur le serveur pour la pièce jointe du test.',
+      );
+    }
+
+    const emailContent = await this.geminiService.generateEmail({
+      companyName: targetCompany,
+      template: config.template,
+      nature: EmailNature.FIRST_CONTACT,
+    });
+
+    const isSmtp = this.emailService.isConfigured();
+
+    const sendResult = await this.emailService.sendMail({
+      to: toEmail.trim(),
+      subject: `[TEST ALTERTRACK] ${emailContent.subject}`,
+      body: `=== CE MESSAGE EST UN TEST ALTERTRACK ===\nEntreprise ciblée pour la génération : ${targetCompany}\nDestinataire réel lors d'une vraie candidature : rh@${targetCompany.toLowerCase().replace(/[^a-z0-9]/g, '')}.com\n==========================================\n\n${emailContent.body}`,
+      attachmentPath: cvPath,
+      attachmentName: config.cvOriginalName || 'CV.pdf',
+    });
+
+    return {
+      success: true,
+      recipient: toEmail.trim(),
+      companyTarget: targetCompany,
+      subject: `[TEST ALTERTRACK] ${emailContent.subject}`,
+      body: emailContent.body,
+      hasAttachment: Boolean(cvPath),
+      attachmentName: cvPath ? config.cvOriginalName || 'CV.pdf' : null,
+      messageId: sendResult.messageId,
+      isSimulation: !isSmtp.configured,
+      smtpUser: isSmtp.user,
+      note: !isSmtp.configured
+        ? 'Identifiants Gmail SMTP non configurés dans le fichier .env : l’envoi a été simulé dans les journaux du serveur.'
+        : 'E-mail de test réel expédié avec succès via smtp.gmail.com avec votre CV joint.',
+    };
+  }
 }

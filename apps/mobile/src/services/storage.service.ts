@@ -61,4 +61,17 @@ export const StorageService = {
   async setApiKey(apiKey: string): Promise<void> {
     await AsyncStorage.setItem(API_KEY_KEY, apiKey.trim());
   },
+
+  async getTestEmail(): Promise<string> {
+    try {
+      const value = await AsyncStorage.getItem('altertrack_test_email');
+      return value || '';
+    } catch {
+      return '';
+    }
+  },
+
+  async setTestEmail(email: string): Promise<void> {
+    await AsyncStorage.setItem('altertrack_test_email', email.trim());
+  },
 };

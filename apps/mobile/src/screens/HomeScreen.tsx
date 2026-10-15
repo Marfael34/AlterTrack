@@ -412,9 +412,13 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
     Alert.alert(
       'Envoi groupé en 1 clic',
-      `Confirmez-vous l'envoi personnalisé de votre candidature et CV à ${toSendCount} entreprise(s) ?`,
+      `Confirmez-vous l'envoi de votre candidature et CV à ${toSendCount} entreprise(s) ?\n\n💡 Recommandation : vous pouvez tester la réception sur votre boîte personnelle avant tout envoi réel.`,
       [
         { text: 'Annuler', style: 'cancel' },
+        {
+          text: 'Tester d’abord 🧪',
+          onPress: () => onOpenSettings(),
+        },
         {
           text: 'Envoyer',
           style: 'default',
@@ -499,7 +503,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
   return (
     <View style={styles.container}>
-      {/* Header */}
+      {/* Header épuré & ultra-light */}
       <View style={styles.header}>
         <View style={styles.headerBrand}>
           <Image
@@ -507,9 +511,36 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             style={styles.logoImage}
             resizeMode="contain"
           />
-          <Text style={styles.appSubtitle}>Suivi automatisé de candidatures</Text>
         </View>
         <View style={styles.headerActions}>
+          {toSendCount > 0 && (
+            <TouchableOpacity
+              style={styles.headerSendBatchBtn}
+              onPress={handleSendBatch}
+              disabled={sendingBatch}
+              activeOpacity={0.8}
+              accessibilityLabel={`Envoyer les ${toSendCount} candidatures prêtes`}
+            >
+              {sendingBatch ? (
+                <ActivityIndicator size="small" color="#FFFFFF" />
+              ) : (
+                <>
+                  <Ionicons name="paper-plane" size={13} color="#FFFFFF" />
+                  <Text style={styles.headerSendBatchText}>{toSendCount}</Text>
+                </>
+              )}
+            </TouchableOpacity>
+          )}
+
+          <TouchableOpacity
+            style={styles.headerButton}
+            onPress={handleCheckReplies}
+            activeOpacity={0.7}
+            accessibilityLabel="Vérifier les réponses recruteurs par email"
+          >
+            <Ionicons name="refresh-outline" size={20} color={Colors.text} />
+          </TouchableOpacity>
+
           <TouchableOpacity
             style={[
               styles.headerButton,
@@ -517,38 +548,13 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             ]}
             onPress={handleToggleSelectionMode}
             activeOpacity={0.7}
+            accessibilityLabel="Sélection multiple"
           >
             <Ionicons
               name={isSelectionMode ? 'checkmark-circle' : 'checkbox-outline'}
               size={20}
               color={isSelectionMode ? Colors.primary : Colors.text}
             />
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.headerButton}
-            onPress={handleImportSpreadsheet}
-            disabled={importing}
-            activeOpacity={0.7}
-          >
-            {importing ? (
-              <ActivityIndicator size="small" color={Colors.primary} />
-            ) : (
-              <Ionicons name="document-attach-outline" size={20} color={Colors.text} />
-            )}
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.headerButton}
-            onPress={handleCheckReplies}
-            activeOpacity={0.7}
-          >
-            <Ionicons name="refresh-outline" size={20} color={Colors.text} />
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.headerButton}
-            onPress={onOpenSettings}
-            activeOpacity={0.7}
-          >
-            <Ionicons name="settings-outline" size={20} color={Colors.text} />
           </TouchableOpacity>
         </View>
       </View>
@@ -658,88 +664,24 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         totalCount={totalCount}
       />
 
-      {/* Barre Point de repère (Distance) */}
-      <View style={styles.refPointBar}>
+      {/* Point de repère ultra-discret (affiché uniquement si configuré) */}
+      {refPoint && (
         <TouchableOpacity
-          style={[
-            styles.refPointButton,
-            refPoint && styles.refPointButtonActive,
-          ]}
+          style={styles.refPointSlimRow}
           onPress={() => setIsRefPointModalOpen(true)}
           activeOpacity={0.7}
         >
           <Ionicons
-            name={refPoint?.isGps ? 'navigate' : 'home'}
-            size={15}
-            color={refPoint ? Colors.accent : Colors.textMuted}
+            name={refPoint.isGps ? 'navigate' : 'location-sharp'}
+            size={12}
+            color={Colors.accent}
           />
-          <Text
-            style={[
-              styles.refPointText,
-              refPoint && styles.refPointTextActive,
-            ]}
-            numberOfLines={1}
-          >
-            {refPoint
-              ? `Adresse fixe : ${refPoint.label}`
-              : '📍 Définir mon adresse fixe pour calculer les distances'}
+          <Text style={styles.refPointSlimText} numberOfLines={1}>
+            Distances depuis <Text style={{ color: Colors.text, fontWeight: '600' }}>{refPoint.label}</Text>
           </Text>
-          <Ionicons
-            name="chevron-forward"
-            size={13}
-            color={refPoint ? Colors.accent : Colors.textMuted}
-          />
+          <Ionicons name="pencil" size={11} color={Colors.textMuted} />
         </TouchableOpacity>
-      </View>
-
-      {/* Sélecteur de vue : Liste ou Carte interactive */}
-      <View style={styles.viewModeSegment}>
-        <TouchableOpacity
-          style={[
-            styles.viewModeTab,
-            viewMode === 'LIST' && styles.viewModeTabActive,
-          ]}
-          onPress={() => handleSetViewMode('LIST')}
-          activeOpacity={0.7}
-        >
-          <Ionicons
-            name="list"
-            size={14}
-            color={viewMode === 'LIST' ? Colors.primary : Colors.textSecondary}
-          />
-          <Text
-            style={[
-              styles.viewModeTabText,
-              viewMode === 'LIST' && styles.viewModeTabTextActive,
-            ]}
-          >
-            Liste ({displayedCompanies.length})
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[
-            styles.viewModeTab,
-            viewMode === 'MAP' && styles.viewModeTabActive,
-          ]}
-          onPress={() => handleSetViewMode('MAP')}
-          activeOpacity={0.7}
-        >
-          <Ionicons
-            name="map"
-            size={14}
-            color={viewMode === 'MAP' ? Colors.accent : Colors.textSecondary}
-          />
-          <Text
-            style={[
-              styles.viewModeTabText,
-              viewMode === 'MAP' && styles.viewModeTabTextActive,
-            ]}
-          >
-            Carte interactive 🗺️
-          </Text>
-        </TouchableOpacity>
-      </View>
+      )}
 
       {/* Puces de filtres actifs avec suppression rapide */}
       {activeFiltersCount > 0 && (
@@ -1078,50 +1020,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         </View>
       )}
 
-      {/* Boutons d'actions flottants (FAB) */}
-      {!isSelectionMode && (
-        <View style={styles.fabContainer}>
-          {toSendCount > 0 && (
-            <TouchableOpacity
-              style={[styles.batchFab, sendingBatch && styles.buttonDisabled]}
-              onPress={handleSendBatch}
-              disabled={sendingBatch}
-              activeOpacity={0.8}
-            >
-              {sendingBatch ? (
-                <ActivityIndicator color="#FFFFFF" size="small" />
-              ) : (
-                <>
-                  <Ionicons name="paper-plane" size={16} color="#FFFFFF" />
-                  <Text style={styles.batchFabText}>Envoyer ({toSendCount})</Text>
-                </>
-              )}
-            </TouchableOpacity>
-          )}
-
-          <View style={styles.fabRightGroup}>
-            <TouchableOpacity
-              style={styles.importFab}
-              onPress={handleImportSpreadsheet}
-              disabled={importing}
-              activeOpacity={0.8}
-            >
-              {importing ? (
-                <ActivityIndicator size="small" color="#FFFFFF" />
-              ) : (
-                <Ionicons name="document-text-outline" size={22} color="#FFFFFF" />
-              )}
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.addFab}
-              onPress={onOpenAddCompany}
-              activeOpacity={0.8}
-            >
-              <Ionicons name="add" size={26} color="#FFFFFF" />
-            </TouchableOpacity>
-          </View>
-        </View>
-      )}
+      {/* Suppression du fabContainer encombrant : navigation directe via MainTabBar en bas */}
     </View>
   );
 };
@@ -1156,7 +1055,35 @@ const styles = StyleSheet.create({
   },
   headerActions: {
     flexDirection: 'row',
+    alignItems: 'center',
     gap: 8,
+  },
+  headerSendBatchBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: Colors.primary,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 19,
+  },
+  headerSendBatchText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  refPointSlimRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 3,
+    marginBottom: 4,
+    gap: 6,
+  },
+  refPointSlimText: {
+    color: Colors.textMuted,
+    fontSize: 11,
+    flex: 1,
   },
   headerButton: {
     width: 38,

@@ -12,6 +12,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { EmailPreviewModal } from '../components/EmailPreviewModal';
 import { ReferencePointModal } from '../components/ReferencePointModal';
 import { Colors } from '../constants/colors';
 import { ApiService } from '../services/api.service';
@@ -48,6 +49,19 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
   const [registeringPush, setRegisteringPush] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState<'IDLE' | 'SUCCESS' | 'ERROR'>('IDLE');
 
+  const [testEmail, setTestEmail] = useState('');
+  const [testCompany, setTestCompany] = useState('Capgemini');
+  const [sendingTestMail, setSendingTestMail] = useState(false);
+  const [testMailResult, setTestMailResult] = useState<{
+    success: boolean;
+    isSimulation: boolean;
+    recipient: string;
+    subject: string;
+    attachmentName: string | null;
+    note: string;
+  } | null>(null);
+  const [isPreviewModalOpen, setIsPreviewModalOpen] = useState(false);
+
   useEffect(() => {
     if (propRefPoint !== undefined) {
       setRefPoint(propRefPoint);
@@ -60,12 +74,16 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
 
   const loadInitialSettings = async () => {
     try {
-      const [url, key] = await Promise.all([
+      const [url, key, savedTestEmail] = await Promise.all([
         StorageService.getServerUrl(),
         StorageService.getApiKey(),
+        StorageService.getTestEmail(),
       ]);
       setServerUrl(url);
       setApiKey(key);
+      if (savedTestEmail) {
+        setTestEmail(savedTestEmail);
+      }
       setTunnelUrl(StorageService.getTunnelUrl());
 
       // Charge la configuration distante si le serveur est joignable
@@ -186,6 +204,56 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
       Alert.alert('Erreur', err instanceof Error ? err.message : "Échec de l'upload du CV");
     } finally {
       setUploadingCv(false);
+    }
+  };
+
+  const handleSendTestEmail = async () => {
+    const trimmedEmail = testEmail.trim();
+    if (!trimmedEmail || !trimmedEmail.includes('@') || !trimmedEmail.includes('.')) {
+      Alert.alert(
+        'Adresse e-mail requise',
+        'Veuillez renseigner votre adresse e-mail personnelle pour recevoir le test.',
+      );
+      return;
+    }
+
+    setSendingTestMail(true);
+    setTestMailResult(null);
+
+    try {
+      await StorageService.setTestEmail(trimmedEmail);
+      const res = await ApiService.sendTestEmail(
+        trimmedEmail,
+        testCompany.trim() || undefined,
+      );
+
+      setTestMailResult({
+        success: res.success,
+        isSimulation: res.isSimulation,
+        recipient: res.recipient,
+        subject: res.subject,
+        attachmentName: res.attachmentName,
+        note: res.note,
+      });
+
+      if (res.isSimulation) {
+        Alert.alert(
+          'Simulation réussie 🧪',
+          `L'e-mail a été généré avec succès par Gemini avec votre CV joint.\n\nMode simulation activé : pour envoyer réellement par Gmail, configurez GMAIL_USER et GMAIL_APP_PASSWORD dans le .env du serveur.`,
+        );
+      } else {
+        Alert.alert(
+          'E-mail test expédié ! ✉️',
+          `L'e-mail a été expédié à ${res.recipient} avec pour objet :\n"${res.subject}"\n\nVérifiez votre boîte de réception !`,
+        );
+      }
+    } catch (err) {
+      Alert.alert(
+        'Erreur lors du test',
+        err instanceof Error ? err.message : 'Échec de l\'envoi du mail de test',
+      );
+    } finally {
+      setSendingTestMail(false);
     }
   };
 
@@ -475,6 +543,105 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
           )}
         </View>
 
+        {/* Section : Test d'envoi d'e-mail (SMTP & IA) */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeaderRow}>
+            <Ionicons name="flask-outline" size={20} color={Colors.primary} />
+            <Text style={styles.sectionTitle}>Test d'envoi d'e-mail (SMTP & IA)</Text>
+          </View>
+          <Text style={styles.sectionDescription}>
+            Vérifiez l'e-mail rédigé par Google Gemini et la présence de votre CV en pièce jointe sur votre propre boîte avant tout envoi direct aux entreprises.
+          </Text>
+
+          <Text style={styles.fieldLabel}>Votre adresse e-mail personnelle de test *</Text>
+          <TextInput
+            style={styles.input}
+            value={testEmail}
+            onChangeText={setTestEmail}
+            placeholder="votre.email@gmail.com"
+            placeholderTextColor={Colors.textMuted}
+            keyboardType="email-address"
+            autoCapitalize="none"
+            autoCorrect={false}
+          />
+
+          <Text style={styles.fieldLabel}>Entreprise fictive ou cible pour le test</Text>
+          <TextInput
+            style={styles.input}
+            value={testCompany}
+            onChangeText={setTestCompany}
+            placeholder="Ex: Capgemini, Thalès, Ubisoft..."
+            placeholderTextColor={Colors.textMuted}
+          />
+
+          <View style={styles.testActionsRow}>
+            <TouchableOpacity
+              style={styles.previewBtn}
+              onPress={() => setIsPreviewModalOpen(true)}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="eye-outline" size={16} color={Colors.accent} />
+              <Text style={styles.previewBtnText}>Aperçu Gemini</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.sendTestMailBtn, sendingTestMail && styles.buttonDisabled]}
+              onPress={handleSendTestEmail}
+              disabled={sendingTestMail}
+              activeOpacity={0.8}
+            >
+              {sendingTestMail ? (
+                <ActivityIndicator color="#FFFFFF" size="small" />
+              ) : (
+                <>
+                  <Ionicons name="paper-plane-outline" size={16} color="#FFFFFF" />
+                  <Text style={styles.sendTestMailBtnText}>Envoyer le test</Text>
+                </>
+              )}
+            </TouchableOpacity>
+          </View>
+
+          {testMailResult && (
+            <View
+              style={[
+                styles.testResultBox,
+                testMailResult.isSimulation
+                  ? styles.testResultSimulation
+                  : styles.testResultReal,
+              ]}
+            >
+              <Ionicons
+                name={
+                  testMailResult.isSimulation
+                    ? 'information-circle-outline'
+                    : 'checkmark-circle-outline'
+                }
+                size={22}
+                color={testMailResult.isSimulation ? Colors.accent : Colors.success}
+              />
+              <View style={{ flex: 1, gap: 3 }}>
+                <Text style={styles.testResultTitle}>
+                  {testMailResult.isSimulation
+                    ? 'Mode Simulation validé'
+                    : 'E-mail de test expédié avec succès !'}
+                </Text>
+                <Text style={styles.testResultNote}>
+                  Destinataire : {testMailResult.recipient}
+                </Text>
+                <Text style={styles.testResultNote}>
+                  Objet : {testMailResult.subject}
+                </Text>
+                {testMailResult.attachmentName && (
+                  <Text style={styles.testResultNote}>
+                    Pièce jointe : 📎 {testMailResult.attachmentName}
+                  </Text>
+                )}
+                <Text style={styles.testResultFootnote}>{testMailResult.note}</Text>
+              </View>
+            </View>
+          )}
+        </View>
+
         {/* Section 4 : Notifications Push */}
         <View style={styles.section}>
           <View style={styles.sectionHeaderRow}>
@@ -557,6 +724,15 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
             onUpdateRefPoint(point);
           }
         }}
+      />
+
+      {/* Modal d'aperçu de l'e-mail IA */}
+      <EmailPreviewModal
+        visible={isPreviewModalOpen}
+        onClose={() => setIsPreviewModalOpen(false)}
+        companyName={testCompany.trim() || 'Entreprise Test'}
+        nature="FIRST_CONTACT"
+        hasCv={hasCv}
       />
     </View>
   );
@@ -790,5 +966,74 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: Colors.textSecondary,
     lineHeight: 16,
+  },
+  testActionsRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 14,
+  },
+  previewBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: `${Colors.accent}18`,
+    borderWidth: 1,
+    borderColor: `${Colors.accent}45`,
+    borderRadius: 10,
+    paddingVertical: 12,
+    gap: 6,
+  },
+  previewBtnText: {
+    color: Colors.accent,
+    fontWeight: '700',
+    fontSize: 13,
+  },
+  sendTestMailBtn: {
+    flex: 1.2,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.primary,
+    borderRadius: 10,
+    paddingVertical: 12,
+    gap: 6,
+  },
+  sendTestMailBtnText: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+    fontSize: 13,
+  },
+  testResultBox: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+    borderRadius: 10,
+    padding: 12,
+    borderWidth: 1,
+    marginTop: 12,
+  },
+  testResultSimulation: {
+    backgroundColor: `${Colors.accent}12`,
+    borderColor: `${Colors.accent}40`,
+  },
+  testResultReal: {
+    backgroundColor: `${Colors.success}12`,
+    borderColor: `${Colors.success}40`,
+  },
+  testResultTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: Colors.text,
+  },
+  testResultNote: {
+    fontSize: 12,
+    color: Colors.textSecondary,
+  },
+  testResultFootnote: {
+    fontSize: 11,
+    color: Colors.textMuted,
+    marginTop: 4,
+    lineHeight: 15,
   },
 });

@@ -317,4 +317,36 @@ export const ApiService = {
       body: JSON.stringify({ expoPushToken }),
     });
   },
+
+  async previewEmail(
+    companyName: string,
+    nature?: 'FIRST_CONTACT' | 'FOLLOW_UP',
+  ): Promise<{ subject: string; body: string }> {
+    return this.request('/mailing/test-gemini', {
+      method: 'POST',
+      body: JSON.stringify({ companyName, nature }),
+    });
+  },
+
+  async sendTestEmail(
+    toEmail: string,
+    companyName?: string,
+  ): Promise<{
+    success: boolean;
+    recipient: string;
+    companyTarget: string;
+    subject: string;
+    body: string;
+    hasAttachment: boolean;
+    attachmentName: string | null;
+    messageId: string;
+    isSimulation: boolean;
+    smtpUser: string | null;
+    note: string;
+  }> {
+    return this.request('/mailing/send-test', {
+      method: 'POST',
+      body: JSON.stringify({ toEmail, companyName }),
+    });
+  },
 };

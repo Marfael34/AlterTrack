@@ -50,6 +50,13 @@ Conformément au document [Regles.md](../../Regles.md) (notamment sections **5. 
 ### 2.5 Correction de typage React Native Web (`CompanyMapView.tsx`)
 - Correction du typage de référence `useRef<any>(null)` pour le composant `WebView` compatible React 19 / TypeScript 5.7+ / Web.
 
+### 2.6 Allègement Ultra-Light & Minimaliste (`HomeScreen.tsx`)
+- **Suppression du gros sélecteur segmented control (Liste / Carte)** au milieu de l'écran : le basculement se fait directement et sans encombrement via les onglets `Candidatures` et `Carte radar` de la `MainTabBar`.
+- **Suppression des boutons d'actions flottants (FABs)** au bas de l'écran qui masquaient le bas des cartes et entraient en collision avec la barre de navigation.
+- **Header ultra-épuré** : retrait du sous-titre verbeux et des boutons redondants (Paramètres et Import). Intégration d'un bouton compact d'envoi groupé uniquement lorsque des candidatures sont prêtes (`toSendCount > 0`).
+- **Point de repère discret** : passage d'un grand pavé gris à une ligne fine discrète n'encombrant pas la vue.
+- **Résultat visuel** : gain de plus de 160 pixels verticaux. Les cartes d'entreprises sont immédiatement visibles dès l'ouverture de l'application sans aucun défilement préalable.
+
 ---
 
 ## 3. Contrôles et Validations Exécutés
@@ -69,5 +76,5 @@ Conformément à la règle **1.12** (*« Ne jamais prétendre qu'une vérificati
 Conformément à [Regles.md](../../Regles.md) §13 :
 
 ```bash
-git add . && git commit -m "feat(ux): amélioration de l'ergonomie, navigation responsive web et KPIs interactifs" && git push
+git add . && git commit -m "feat(ux): interface ultra-light et épurée, suppression des doublons et navigation fluide" && git push
 ```

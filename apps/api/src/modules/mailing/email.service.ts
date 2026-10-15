@@ -41,6 +41,13 @@ export class EmailService {
     }
   }
 
+  isConfigured(): { configured: boolean; user: string | null } {
+    return {
+      configured: Boolean(this.transporter && this.fromUser),
+      user: this.fromUser,
+    };
+  }
+
   async sendMail(options: SendMailOptions): Promise<SendMailResult> {
     if (!this.transporter || !this.fromUser) {
       const mockId = `<mock-${Date.now()}@altertrack.local>`;
