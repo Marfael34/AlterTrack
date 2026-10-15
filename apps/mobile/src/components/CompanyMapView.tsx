@@ -336,43 +336,59 @@ export const CompanyMapView: React.FC<CompanyMapViewProps> = ({
       border-radius: 8px;
     }
 
-    /* Nom de l'entreprise affiché sous chaque épingle :
-       Masqué en zoom global, affiché automatiquement dès qu'on zoome sur la zone (zoom >= 13) */
+    /* Nom de l'entreprise affiché directement en dessous de chaque épingle */
     .custom-company-tooltip {
       background: rgba(11, 15, 25, 0.94) !important;
       border: 1px solid rgba(0, 210, 196, 0.8) !important;
       color: #FFFFFF !important;
-      font-size: 10px !important;
+      font-size: 9.5px !important;
       font-weight: 700 !important;
       border-radius: 6px !important;
-      padding: 2px 7px !important;
+      padding: 2px 6px !important;
       box-shadow: 0 3px 8px rgba(0,0,0,0.7) !important;
-      max-width: 140px !important;
+      max-width: 110px !important;
       white-space: nowrap !important;
       overflow: hidden !important;
       text-overflow: ellipsis !important;
       text-align: center !important;
       pointer-events: none !important;
 
-      /* Par défaut en zoom global : invisible pour fluidifier la carte */
+      /* Par défaut en zoom global : invisible */
       opacity: 0 !important;
       visibility: hidden !important;
       transform: translateY(-2px);
-      transition: opacity 0.22s ease-in-out, visibility 0.22s ease-in-out, transform 0.22s ease-in-out;
+      transition: opacity 0.18s ease-in-out, visibility 0.18s ease-in-out, transform 0.18s ease-in-out;
     }
+
     .custom-company-tooltip::before {
       border-bottom-color: rgba(11, 15, 25, 0.94) !important;
     }
+
     .pin-company-tip {
       color: #FFFFFF;
       font-weight: 700;
     }
 
-    /* Dès qu'on zoome sur la zone (zoom >= 13) : affichage net et fluide */
+    /* Dès qu'on zoome sur la zone (zoom >= 13) : affichage actif */
     body.zoom-detail .custom-company-tooltip {
-      opacity: 1 !important;
-      visibility: visible !important;
+      opacity: 1;
+      visibility: visible;
       transform: translateY(0);
+    }
+
+    /* Règle anti-chevauchement absolue : masquage immédiat des étiquettes en conflit */
+    body.zoom-detail .custom-company-tooltip.collision-hidden,
+    .custom-company-tooltip.collision-hidden {
+      opacity: 0 !important;
+      visibility: hidden !important;
+      pointer-events: none !important;
+    }
+
+    /* En zoom de zone, masquer le macaron central pour dégager les noms des punaises */
+    body.zoom-detail .city-cluster-pill {
+      opacity: 0 !important;
+      visibility: hidden !important;
+      transition: opacity 0.2s ease;
     }
 
     /* Sélecteur de couches */
@@ -488,20 +504,87 @@ export const CompanyMapView: React.FC<CompanyMapViewProps> = ({
       '</div>';
     }
 
-    // Gestion de l'affichage / masquage du nom des entreprises selon le niveau de zoom
-    function updateZoomLevel() {
+    var companyMarkers = [];
+    var collisionTimer = null;
+
+    // Détection mathématique de collision d'étiquettes à l'écran pour garantir 0 superposition
+    function resolveCollisions() {
       if (!mapInstance) return;
       var zoom = mapInstance.getZoom();
-      if (zoom >= 13) {
-        document.body.classList.add('zoom-detail');
-      } else {
+      var isDetail = zoom >= 13;
+
+      if (!isDetail) {
         document.body.classList.remove('zoom-detail');
+        return;
       }
+      document.body.classList.add('zoom-detail');
+
+      if (!companyMarkers || companyMarkers.length === 0) return;
+
+      var placedBoxes = [];
+      var marginX = 8; // Marge horizontale de sécurité entre deux étiquettes
+      var marginY = 4; // Marge verticale de sécurité
+
+      companyMarkers.forEach(function(item) {
+        var marker = item.marker;
+        var comp = item.comp;
+        var tooltip = marker.getTooltip();
+        if (!tooltip) return;
+
+        var tipEl = tooltip.getElement();
+        var latLng = marker.getLatLng();
+        var pt = mapInstance.latLngToContainerPoint(latLng);
+
+        // Estimer la largeur de l'étiquette compacte sous la punaise (max 110px)
+        var estimatedWidth = Math.min(110, Math.max(50, comp.name.length * 6.2 + 14));
+        var estimatedHeight = 18;
+
+        // Boîte englobante de l'étiquette directement sous la pointe de l'aiguille
+        var box = {
+          left: pt.x - (estimatedWidth / 2) - marginX,
+          right: pt.x + (estimatedWidth / 2) + marginX,
+          top: pt.y + 2 - marginY,
+          bottom: pt.y + 2 + estimatedHeight + marginY
+        };
+
+        // Vérifier si cette boîte chevauche une étiquette déjà validée à l'écran
+        var collides = false;
+        for (var i = 0; i < placedBoxes.length; i++) {
+          var other = placedBoxes[i];
+          var overlap = !(
+            box.right < other.left ||
+            box.left > other.right ||
+            box.bottom < other.top ||
+            box.top > other.bottom
+          );
+          if (overlap) {
+            collides = true;
+            break;
+          }
+        }
+
+        if (collides) {
+          // Masquer immédiatement pour empêcher toute superposition
+          if (tipEl) tipEl.classList.add('collision-hidden');
+          tooltip.setOpacity(0);
+        } else {
+          // Afficher proprement sous la punaise
+          placedBoxes.push(box);
+          if (tipEl) tipEl.classList.remove('collision-hidden');
+          tooltip.setOpacity(1);
+        }
+      });
+    }
+
+    function scheduleCollisionCheck() {
+      if (collisionTimer) clearTimeout(collisionTimer);
+      collisionTimer = setTimeout(resolveCollisions, 50);
     }
 
     function renderMarkers(data, isInitial) {
       if (!mapInstance || !markersGroup) return;
       markersGroup.clearLayers();
+      companyMarkers = [];
 
       // 1. Punaise 3D pour l'adresse fixe / domicile (sans emoji)
       if (data.refPoint) {
@@ -565,9 +648,13 @@ export const CompanyMapView: React.FC<CompanyMapViewProps> = ({
 
           if (total > 1) {
             var angle = (2 * Math.PI * idx) / total - (Math.PI / 2);
-            var radius = total > 5 ? 0.0036 : 0.0024;
-            markerLat = comp.latitude + radius * Math.cos(angle);
-            markerLng = comp.longitude + (radius * 1.35) * Math.sin(angle);
+            // Rayon géographique équilibré pour donner de l'espace à chaque punaise
+            var radius = total > 5 ? 0.0075 : (total > 3 ? 0.0060 : 0.0045);
+            var cosA = Math.cos(angle);
+            var sinA = Math.sin(angle);
+
+            markerLat = comp.latitude + radius * cosA;
+            markerLng = comp.longitude + (radius * 1.35) * sinA;
 
             L.polyline([[comp.latitude, comp.longitude], [markerLat, markerLng]], {
               color: '#00D2C4',
@@ -591,6 +678,7 @@ export const CompanyMapView: React.FC<CompanyMapViewProps> = ({
 
           var marker = L.marker([markerLat, markerLng], { icon: icon }).addTo(markersGroup);
 
+          // Nom de l'entreprise strictement placé EN DESSOUS de la punaise
           var compNameSafe = escapeHtml(comp.name);
           marker.bindTooltip('<span class="pin-company-tip">' + compNameSafe + '</span>', {
             permanent: true,
@@ -598,6 +686,8 @@ export const CompanyMapView: React.FC<CompanyMapViewProps> = ({
             offset: [0, 2],
             className: 'custom-company-tooltip'
           });
+
+          companyMarkers.push({ marker: marker, comp: comp });
 
           var popupHtml = '<div class="popup-title">' + compNameSafe + '</div>';
           if (comp.city || comp.address) popupHtml += '<div class="popup-sub">' + (comp.address ? escapeHtml(comp.address) + ' • ' : '') + escapeHtml(comp.city) + '</div>';
@@ -607,6 +697,15 @@ export const CompanyMapView: React.FC<CompanyMapViewProps> = ({
           marker.bindPopup(popupHtml);
 
           marker.on('click', function() {
+            var tip = marker.getTooltip();
+            if (tip) {
+              tip.setOpacity(1);
+              var el = tip.getElement();
+              if (el) {
+                el.classList.remove('collision-hidden');
+                el.style.zIndex = '9999';
+              }
+            }
             if (window.ReactNativeWebView) {
               window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'SELECT_PIN', companyId: comp.id }));
             }
@@ -624,7 +723,9 @@ export const CompanyMapView: React.FC<CompanyMapViewProps> = ({
         }
       }
 
-      updateZoomLevel();
+      resolveCollisions();
+      scheduleCollisionCheck();
+      setTimeout(resolveCollisions, 350);
     }
 
     function initMap() {
@@ -639,9 +740,13 @@ export const CompanyMapView: React.FC<CompanyMapViewProps> = ({
         mapInstance = L.map('map', { zoomControl: false, attributionControl: false });
         L.control.zoom({ position: 'bottomright' }).addTo(mapInstance);
 
-        // Écouter les changements de zoom pour afficher ou masquer automatiquement les noms
-        mapInstance.on('zoomend', updateZoomLevel);
-        mapInstance.on('zoom', updateZoomLevel);
+        // Écouter les changements de zoom et de déplacement pour afficher/masquer et éliminer toute superposition
+        mapInstance.on('zoomend', function() {
+          resolveCollisions();
+          scheduleCollisionCheck();
+        });
+        mapInstance.on('zoom', resolveCollisions);
+        mapInstance.on('moveend', scheduleCollisionCheck);
 
         mapInstance.createPane('labelsPane');
         mapInstance.getPane('labelsPane').style.zIndex = '350';
@@ -700,13 +805,15 @@ export const CompanyMapView: React.FC<CompanyMapViewProps> = ({
         setTimeout(function() {
           if (mapInstance) {
             mapInstance.invalidateSize();
-            updateZoomLevel();
+            resolveCollisions();
+            scheduleCollisionCheck();
           }
         }, 300);
         setTimeout(function() {
           if (mapInstance) {
             mapInstance.invalidateSize();
-            updateZoomLevel();
+            resolveCollisions();
+            scheduleCollisionCheck();
           }
         }, 800);
 
@@ -722,7 +829,9 @@ export const CompanyMapView: React.FC<CompanyMapViewProps> = ({
 
     window.updateMapData = function(newData) {
       renderMarkers(newData, false);
-      updateZoomLevel();
+      resolveCollisions();
+      scheduleCollisionCheck();
+      setTimeout(resolveCollisions, 350);
     };
 
     function selectCompany(id) {
@@ -735,14 +844,20 @@ export const CompanyMapView: React.FC<CompanyMapViewProps> = ({
       var data = ${mapDataJson};
       if (mapInstance && data.refPoint) {
         mapInstance.setView([data.refPoint.latitude, data.refPoint.longitude], 13, { animate: true });
-        setTimeout(updateZoomLevel, 350);
+        setTimeout(function() {
+          resolveCollisions();
+          scheduleCollisionCheck();
+        }, 350);
       }
     };
 
     window.fitAll = function() {
       if (mapInstance && markersGroup && markersGroup.getLayers().length > 0) {
         mapInstance.fitBounds(markersGroup.getBounds(), { padding: [60, 60], maxZoom: 13 });
-        setTimeout(updateZoomLevel, 350);
+        setTimeout(function() {
+          resolveCollisions();
+          scheduleCollisionCheck();
+        }, 350);
       }
     };
 

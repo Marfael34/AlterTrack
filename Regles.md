@@ -40,6 +40,9 @@ gérée avec Prisma.
     compromis et procédures d'exploitation doivent être consignés.
 12. **Ne jamais prétendre qu'une vérification a réussi si elle n'a pas
     été exécutée.**
+13. **Timeout opérationnel (300 secondes maximum) :** Si une étape,
+    commande ou tâche dure plus de 300 secondes, l'interrompre et passer à
+    autre chose (approche alternative ou suite du flux) sans rester bloqué.
 
 ## 2. Architecture générale recommandée
 

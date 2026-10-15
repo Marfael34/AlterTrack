@@ -29,10 +29,11 @@ Conformément à la demande de l'utilisateur (*« pour la map, je veux que la ma
   - Aiguille / tige métallique effilée en acier chromé (`#needleChrome`) pointant vers le bas avec pointe d'ancrage de haute précision au sol `(16, 47)`.
   - **Retrait strict de tous les émojis** : aucun émoji (`🏢`, `🏠`, `🎯`) sur les punaises pour un rendu professionnel, épuré et ultra-moderne.
   - Punaise de repère fixe / domicile en cyan signature AlterTrack avec disque central épuré et halo d'impulsion au sol.
-- **Affichage dynamique des noms d'entreprises selon le zoom** :
-  - **En zoom global (< 13)** (vue d'ensemble de la région / du département / du pays) : les noms d'entreprises sont automatiquement masqués pour conserver une carte nette, limpide et fluide sans encombrement visuel.
-  - **En zoom ciblé (>= 13)** (zoom sur une commune, un quartier ou une zone d'activité) : les noms d'entreprises apparaissent automatiquement sous leur punaise respective avec une transition douce.
-  - Les fiches d'entreprises et popups restent consultables par simple tap à tout niveau de zoom.
+- **Affichage dynamique des noms d'entreprises strictement en dessous et sans chevauchement** :
+  - **Positionnement strict en dessous (`direction: 'bottom'`)** : Chaque étiquette est positionnée directement sous la pointe de la punaise (`offset: [0, 2]`), dans un badge compact sombre translucide avec bordure cyan (`max-width: 110px`).
+  - **Algorithme anti-collision mathématique (coordonnées écran Leaflet)** : Calcul en temps réel des boîtes englobantes des étiquettes à l'écran via `mapInstance.latLngToContainerPoint`. Si deux étiquettes entrent en conflit horizontal ou vertical, l'étiquette en chevauchement est masquée automatiquement pour garantir 0 superposition.
+  - **Révélation dynamique au zoom ou au tap** : Dès que l'utilisateur zoome sur la zone, la distance en pixels augmente et les étiquettes se dévoilent automatiquement sans jamais se toucher. Un tap direct sur n'importe quelle punaise force l'affichage de son nom au premier plan.
+  - **Répartition géographique équilibrée pour les communes groupées** : Les punaises d'une même commune sont réparties en cercle avec un rayon optimisé (`0.0045` à `0.0075°`) reliées par une ligne pointillée cyan, dégageant l'espace nécessaire pour lire les noms.
 
 ### 2.2 Agencement Plein Écran (`HomeScreen.tsx`)
 - Mise en place d'un rendu dédié immédiat lorsque `viewMode === 'MAP'` :
