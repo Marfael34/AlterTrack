@@ -501,6 +501,80 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
     }
   };
 
+  if (viewMode === 'MAP') {
+    return (
+      <View style={styles.container}>
+        <CompanyMapView
+          companies={displayedCompanies}
+          totalCount={totalCount}
+          stats={stats}
+          selectedStatuses={selectedStatuses}
+          onToggleStatus={(st) => {
+            setSelectedStatuses((prev) =>
+              prev.includes(st) ? prev.filter((s) => s !== st) : [...prev, st]
+            );
+          }}
+          onSelectAllStatuses={() => setSelectedStatuses([])}
+          searchQuery={searchQuery}
+          onChangeSearchQuery={setSearchQuery}
+          activeFiltersCount={activeFiltersCount}
+          onOpenFiltersModal={() => setIsFiltersModalOpen(true)}
+          refPoint={refPoint}
+          distancesMap={distancesMap}
+          onSelectCompany={onSelectCompany}
+          onOpenRefPointModal={() => setIsRefPointModalOpen(true)}
+        />
+
+        {/* Modal de filtres avancés */}
+        <FiltersModal
+          visible={isFiltersModalOpen}
+          onClose={() => setIsFiltersModalOpen(false)}
+          filters={{
+            statuses: selectedStatuses,
+            cities: selectedCities,
+            city:
+              selectedCities.length === 1
+                ? selectedCities[0]
+                : selectedCities.length > 1
+                ? selectedCities.join(', ')
+                : 'ALL',
+            sortBy,
+            sortOrder,
+          }}
+          onApply={(newFilters) => {
+            setSelectedStatuses(newFilters.statuses);
+            setSelectedCities(newFilters.cities);
+            setSortBy(newFilters.sortBy);
+            setSortOrder(newFilters.sortOrder);
+            FilterStorageService.saveFilters({
+              selectedStatuses: newFilters.statuses,
+              selectedCities: newFilters.cities,
+              selectedCity: newFilters.city,
+              sortBy: newFilters.sortBy,
+              sortOrder: newFilters.sortOrder,
+            });
+          }}
+          stats={stats}
+          cities={cities}
+          totalCount={totalCount}
+        />
+
+        {/* Modal de définition du point de repère géographique */}
+        <ReferencePointModal
+          visible={isRefPointModalOpen}
+          onClose={() => setIsRefPointModalOpen(false)}
+          currentPoint={refPoint}
+          onSave={(point) => {
+            setRefPoint(point);
+            if (onUpdateRefPoint) {
+              onUpdateRefPoint(point);
+            }
+          }}
+        />
+      </View>
+    );
+  }
+
   return (
     <View style={styles.container}>
       {/* Header épuré & ultra-light */}
@@ -848,18 +922,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         }}
       />
 
-      {/* Affichage : Carte interactive OU Liste */}
-      {viewMode === 'MAP' ? (
-        <CompanyMapView
-          companies={displayedCompanies}
-          refPoint={refPoint}
-          distancesMap={distancesMap}
-          onSelectCompany={onSelectCompany}
-          onOpenRefPointModal={() => setIsRefPointModalOpen(true)}
-        />
-      ) : (
-        <>
-          {/* Barre d'outils du mode sélection */}
+      {/* Affichage de la Liste des candidatures */}
+      {/* Barre d'outils du mode sélection */}
           {isSelectionMode ? (
             <View style={styles.selectionBar}>
               <View style={styles.selectionBarTopRow}>
@@ -994,8 +1058,6 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
               }
             />
           )}
-        </>
-      )}
 
       {/* Barre d'action flottante de suppression en mode sélection */}
       {isSelectionMode && selectedIds.size > 0 && (
