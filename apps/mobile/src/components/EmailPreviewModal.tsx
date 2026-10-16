@@ -104,7 +104,12 @@ export const EmailPreviewModal: React.FC<EmailPreviewModalProps> = ({
 
     try {
       await StorageService.setTestEmail(trimmed);
-      const res = await ApiService.sendTestEmail(trimmed, companyName);
+      const res = await ApiService.sendTestEmail(
+        trimmed,
+        companyName,
+        subject,
+        body,
+      );
       setTestResult({
         success: res.success,
         isSimulation: res.isSimulation,
@@ -116,18 +121,18 @@ export const EmailPreviewModal: React.FC<EmailPreviewModalProps> = ({
       if (res.isSimulation) {
         Alert.alert(
           'Simulation réussie 🧪',
-          `L'e-mail a été généré avec succès par l'IA Gemini avec votre CV joint.\n\nMode simulation activé : configurez GMAIL_USER et GMAIL_APP_PASSWORD dans le .env pour recevoir le vrai e-mail dans votre boîte.`,
+          `L'e-mail a été préparé avec votre CV joint.\n\nMode simulation activé : renseignez GMAIL_USER et GMAIL_APP_PASSWORD dans le .env du serveur pour expédier réellement le mail à ${res.recipient}.`,
         );
       } else {
         Alert.alert(
-          'E-mail test envoyé ! ✉️',
-          `L'e-mail a été expédié à ${res.recipient} avec pour objet :\n"${res.subject}"\n\nVérifiez votre boîte de réception (et vos spams si besoin).`,
+          'E-mail expédié ! ✉️',
+          `L'e-mail a été expédié à ${res.recipient} dans les conditions réelles d'une entreprise :\n- Objet : "${res.subject}"\n- Pièce jointe : CV inclus\n\nVérifiez la boîte de réception !`,
         );
       }
     } catch (err) {
       Alert.alert(
-        'Échec du test',
-        err instanceof Error ? err.message : 'Erreur lors de l’envoi du mail de test',
+        'Échec de l’envoi',
+        err instanceof Error ? err.message : 'Erreur lors de l’envoi du mail',
       );
     } finally {
       setSendingTest(false);
@@ -207,7 +212,7 @@ export const EmailPreviewModal: React.FC<EmailPreviewModalProps> = ({
               {/* Objet du mail */}
               <View style={styles.fieldBlock}>
                 <View style={styles.fieldHeaderRow}>
-                  <Text style={styles.fieldLabel}>Objet du mail :</Text>
+                  <Text style={styles.fieldLabel}>Objet du mail (modifiable) :</Text>
                   <TouchableOpacity
                     style={styles.refreshChip}
                     onPress={handleRegenerate}
@@ -217,28 +222,38 @@ export const EmailPreviewModal: React.FC<EmailPreviewModalProps> = ({
                     <Text style={styles.refreshChipText}>Régénérer</Text>
                   </TouchableOpacity>
                 </View>
-                <View style={styles.subjectBox}>
-                  <Text style={styles.subjectText}>{subject}</Text>
-                </View>
+                <TextInput
+                  style={styles.subjectInput}
+                  value={subject}
+                  onChangeText={setSubject}
+                  placeholder="Objet du mail..."
+                  placeholderTextColor={Colors.textMuted}
+                />
               </View>
 
               {/* Corps du message */}
               <View style={styles.fieldBlock}>
-                <Text style={styles.fieldLabel}>Corps du message généré :</Text>
-                <View style={styles.bodyBox}>
-                  <Text style={styles.bodyText}>{body}</Text>
-                </View>
+                <Text style={styles.fieldLabel}>Corps du message (modifiable) :</Text>
+                <TextInput
+                  style={styles.bodyInput}
+                  value={body}
+                  onChangeText={setBody}
+                  placeholder="Corps du mail personnalisé..."
+                  placeholderTextColor={Colors.textMuted}
+                  multiline
+                  numberOfLines={8}
+                  textAlignVertical="top"
+                />
               </View>
 
               {/* Section Test d'envoi */}
               <View style={styles.testSectionCard}>
                 <View style={styles.testHeaderRow}>
-                  <Ionicons name="flask-outline" size={18} color={Colors.primary} />
-                  <Text style={styles.testTitle}>Tester la réception avant l'envoi réel</Text>
+                  <Ionicons name="paper-plane-outline" size={18} color={Colors.primary} />
+                  <Text style={styles.testTitle}>Envoyer à une adresse de test (Format Entreprise)</Text>
                 </View>
                 <Text style={styles.testDescription}>
-                  Recevez cet e-mail exact sur votre propre boîte personnelle pour valider
-                  l'objet, la politesse et la pièce jointe (CV).
+                  Envoyez cet e-mail exact à l'adresse de votre choix. Le destinataire le recevra exactement comme une vraie entreprise (avec l'objet ci-dessus, le texte personnalisé et votre CV joint, sans mention de test).
                 </Text>
 
                 <TextInput
@@ -267,7 +282,7 @@ export const EmailPreviewModal: React.FC<EmailPreviewModalProps> = ({
                     <>
                       <Ionicons name="paper-plane-outline" size={16} color="#FFFFFF" />
                       <Text style={styles.sendTestBtnText}>
-                        M'envoyer une copie de test
+                        Envoyer l'e-mail à cette adresse
                       </Text>
                     </>
                   )}
@@ -442,30 +457,29 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: Colors.accent,
   },
-  subjectBox: {
+  subjectInput: {
     backgroundColor: Colors.background,
     borderWidth: 1,
     borderColor: Colors.border,
     borderRadius: 10,
-    padding: 12,
-  },
-  subjectText: {
+    paddingHorizontal: 12,
+    paddingVertical: 10,
     color: Colors.text,
     fontSize: 14,
     fontWeight: '700',
   },
-  bodyBox: {
+  bodyInput: {
     backgroundColor: Colors.background,
     borderWidth: 1,
     borderColor: Colors.border,
     borderRadius: 10,
-    padding: 12,
-    maxHeight: 220,
-  },
-  bodyText: {
+    paddingHorizontal: 12,
+    paddingVertical: 10,
     color: Colors.text,
     fontSize: 13,
     lineHeight: 20,
+    minHeight: 140,
+    maxHeight: 220,
   },
   testSectionCard: {
     backgroundColor: '#161B2B',

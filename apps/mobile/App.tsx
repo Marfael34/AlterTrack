@@ -1,10 +1,12 @@
 import { StatusBar } from 'expo-status-bar';
 import React, { useEffect, useState } from 'react';
-import { Platform, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Platform, StyleSheet, View } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { MainTabBar, MainTabType } from './src/components/MainTabBar';
 import { Colors } from './src/constants/colors';
+import { AuthProvider, useAuth } from './src/context/AuthContext';
 import { AddCompanyScreen } from './src/screens/AddCompanyScreen';
+import { AuthScreen } from './src/screens/AuthScreen';
 import { CompanyDetailScreen } from './src/screens/CompanyDetailScreen';
 import { HomeScreen } from './src/screens/HomeScreen';
 import { SettingsScreen } from './src/screens/SettingsScreen';
@@ -15,7 +17,8 @@ import { Company, CompanyStats } from './src/types/company';
 
 type AppScreen = 'HOME' | 'MAP' | 'DETAIL' | 'ADD' | 'SETTINGS';
 
-export default function App() {
+function AppContent() {
+  const { token, isLoading } = useAuth();
   const [currentScreen, setCurrentScreen] = useState<AppScreen>('HOME');
   const [selectedCompany, setSelectedCompany] = useState<Company | null>(null);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
@@ -23,6 +26,7 @@ export default function App() {
   const [stats, setStats] = useState<CompanyStats | null>(null);
 
   useEffect(() => {
+    if (!token) return;
     void (async () => {
       const [point] = await Promise.all([
         LocationService.getReferencePoint(),
@@ -30,13 +34,14 @@ export default function App() {
       ]);
       setRefPoint(point);
     })();
-  }, []);
+  }, [token]);
 
   useEffect(() => {
+    if (!token) return;
     void ApiService.getCompanyStats()
       .then(setStats)
       .catch(() => {});
-  }, [refreshTrigger]);
+  }, [token, refreshTrigger]);
 
   const handleOpenDetail = (company: Company) => {
     setSelectedCompany(company);
@@ -46,6 +51,25 @@ export default function App() {
   const handleDataChanged = () => {
     setRefreshTrigger((prev) => prev + 1);
   };
+
+  if (isLoading) {
+    return (
+      <View style={[styles.root, styles.center]}>
+        <ActivityIndicator size="large" color={Colors.brandCyan} />
+      </View>
+    );
+  }
+
+  if (!token) {
+    return (
+      <View style={styles.root}>
+        <SafeAreaView style={styles.container}>
+          <StatusBar style="light" />
+          <AuthScreen />
+        </SafeAreaView>
+      </View>
+    );
+  }
 
   const urgentActionCount =
     (stats?.REPLY_RECEIVED || 0) + (stats?.TO_CALL || 0);
@@ -60,67 +84,75 @@ export default function App() {
       : 'HOME';
 
   return (
+    <View style={styles.root}>
+      <SafeAreaView style={styles.container}>
+        <StatusBar style="light" />
+
+        {/* Écran principal : Candidatures (Liste ou Carte) */}
+        {(currentScreen === 'HOME' || currentScreen === 'MAP') && (
+          <HomeScreen
+            key={refreshTrigger}
+            refreshTrigger={refreshTrigger}
+            onSelectCompany={handleOpenDetail}
+            onOpenSettings={() => setCurrentScreen('SETTINGS')}
+            onOpenAddCompany={() => setCurrentScreen('ADD')}
+            refPoint={refPoint}
+            onUpdateRefPoint={setRefPoint}
+            initialViewMode={currentScreen === 'MAP' ? 'MAP' : 'LIST'}
+            onViewModeChanged={(mode) =>
+              setCurrentScreen(mode === 'MAP' ? 'MAP' : 'HOME')
+            }
+          />
+        )}
+
+        {/* Fiche détail d'une entreprise */}
+        {currentScreen === 'DETAIL' && selectedCompany && (
+          <CompanyDetailScreen
+            company={selectedCompany}
+            onBack={() => setCurrentScreen('HOME')}
+            onUpdated={handleDataChanged}
+            refPoint={refPoint}
+            onUpdateRefPoint={setRefPoint}
+          />
+        )}
+
+        {/* Ajout d'une entreprise / Import */}
+        {currentScreen === 'ADD' && (
+          <AddCompanyScreen
+            onBack={() => setCurrentScreen('HOME')}
+            onCreated={handleDataChanged}
+            refPoint={refPoint}
+          />
+        )}
+
+        {/* Paramètres & IA */}
+        {currentScreen === 'SETTINGS' && (
+          <SettingsScreen
+            onBack={() => setCurrentScreen('HOME')}
+            refPoint={refPoint}
+            onUpdateRefPoint={setRefPoint}
+          />
+        )}
+
+        {/* Barre de navigation ergonomique inférieure (visible hors fiche détail) */}
+        {currentScreen !== 'DETAIL' && (
+          <MainTabBar
+            activeTab={activeMainTab}
+            onSelectTab={(tab) => setCurrentScreen(tab)}
+            urgentActionCount={urgentActionCount}
+          />
+        )}
+      </SafeAreaView>
+    </View>
+  );
+}
+
+export default function App() {
+  return (
     <SafeAreaProvider>
-      <View style={styles.root}>
-        <SafeAreaView style={styles.container}>
-          <StatusBar style="light" />
-
-          {/* Écran principal : Candidatures (Liste ou Carte) */}
-          {(currentScreen === 'HOME' || currentScreen === 'MAP') && (
-            <HomeScreen
-              key={refreshTrigger}
-              refreshTrigger={refreshTrigger}
-              onSelectCompany={handleOpenDetail}
-              onOpenSettings={() => setCurrentScreen('SETTINGS')}
-              onOpenAddCompany={() => setCurrentScreen('ADD')}
-              refPoint={refPoint}
-              onUpdateRefPoint={setRefPoint}
-              initialViewMode={currentScreen === 'MAP' ? 'MAP' : 'LIST'}
-              onViewModeChanged={(mode) =>
-                setCurrentScreen(mode === 'MAP' ? 'MAP' : 'HOME')
-              }
-            />
-          )}
-
-          {/* Fiche détail d'une entreprise */}
-          {currentScreen === 'DETAIL' && selectedCompany && (
-            <CompanyDetailScreen
-              company={selectedCompany}
-              onBack={() => setCurrentScreen('HOME')}
-              onUpdated={handleDataChanged}
-              refPoint={refPoint}
-              onUpdateRefPoint={setRefPoint}
-            />
-          )}
-
-          {/* Ajout d'une entreprise / Import */}
-          {currentScreen === 'ADD' && (
-            <AddCompanyScreen
-              onBack={() => setCurrentScreen('HOME')}
-              onCreated={handleDataChanged}
-              refPoint={refPoint}
-            />
-          )}
-
-          {/* Paramètres & IA */}
-          {currentScreen === 'SETTINGS' && (
-            <SettingsScreen
-              onBack={() => setCurrentScreen('HOME')}
-              refPoint={refPoint}
-              onUpdateRefPoint={setRefPoint}
-            />
-          )}
-
-          {/* Barre de navigation ergonomique inférieure (visible hors fiche détail) */}
-          {currentScreen !== 'DETAIL' && (
-            <MainTabBar
-              activeTab={activeMainTab}
-              onSelectTab={(tab) => setCurrentScreen(tab)}
-              urgentActionCount={urgentActionCount}
-            />
-          )}
-        </SafeAreaView>
-      </View>
+      <AuthProvider>
+        <AppContent />
+      </AuthProvider>
     </SafeAreaProvider>
   );
 }
@@ -131,6 +163,9 @@ const styles = StyleSheet.create({
     backgroundColor: '#070A10',
     alignItems: 'center',
     width: '100%',
+  },
+  center: {
+    justifyContent: 'center',
   },
   container: {
     flex: 1,

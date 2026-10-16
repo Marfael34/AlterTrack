@@ -17,4 +17,14 @@ export class SendTestEmailDto {
   @IsString()
   @MaxLength(255)
   companyName?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(255)
+  subject?: string;
+
+  @IsOptional()
+  @IsString()
+  body?: string;
 }
+

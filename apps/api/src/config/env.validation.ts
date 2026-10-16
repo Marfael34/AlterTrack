@@ -48,6 +48,14 @@ export class EnvironmentVariables {
   @IsString()
   @IsOptional()
   GMAIL_APP_PASSWORD?: string;
+
+  @IsString()
+  @IsOptional()
+  JWT_SECRET?: string;
+
+  @IsString()
+  @IsOptional()
+  JWT_EXPIRES_IN: string = '30d';
 }
 
 export function validateEnvironment(config: Record<string, unknown>) {

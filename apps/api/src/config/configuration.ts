@@ -7,4 +7,7 @@ export default () => ({
   geminiApiKey: process.env.GEMINI_API_KEY,
   gmailUser: process.env.GMAIL_USER,
   gmailAppPassword: process.env.GMAIL_APP_PASSWORD,
+  jwtSecret: process.env.JWT_SECRET || process.env.API_KEY || 'altertrack_jwt_secure_session_key_2026',
+  jwtExpiresIn: process.env.JWT_EXPIRES_IN || '30d',
 });
+

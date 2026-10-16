@@ -16,6 +16,8 @@ import {
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import * as path from 'path';
+import { CurrentUser } from '../auth/current-user.decorator';
+import type { AuthenticatedUser } from '../auth/current-user.decorator';
 import { CompaniesService } from './companies.service';
 import { CreateCompanyDto } from './dto/create-company.dto';
 import { QueryCompanyDto } from './dto/query-company.dto';
@@ -28,8 +30,11 @@ export class CompaniesController {
 
   @Post()
   @HttpCode(HttpStatus.CREATED)
-  create(@Body() createCompanyDto: CreateCompanyDto) {
-    return this.companiesService.create(createCompanyDto);
+  create(
+    @Body() createCompanyDto: CreateCompanyDto,
+    @CurrentUser() user?: AuthenticatedUser,
+  ) {
+    return this.companiesService.create(createCompanyDto, user?.id);
   }
 
   private readonly logger = new Logger(CompaniesController.name);
@@ -58,12 +63,13 @@ export class CompaniesController {
   importSpreadsheet(
     @UploadedFile() file?: Express.Multer.File,
     @Body() body?: { fileBase64?: string; fileName?: string },
+    @CurrentUser() user?: AuthenticatedUser,
   ) {
     if (file && file.buffer && file.buffer.length > 0) {
       this.logger.log(
         `Import reçu via Multipart : "${file.originalname}" (${file.buffer.length} octets)`,
       );
-      return this.companiesService.importFromSpreadsheet(file.buffer);
+      return this.companiesService.importFromSpreadsheet(file.buffer, user?.id);
     }
 
     if (body?.fileBase64 && body.fileBase64.length > 0) {
@@ -71,7 +77,7 @@ export class CompaniesController {
       this.logger.log(
         `Import reçu via Base64 : "${body.fileName ?? 'tableur'}" (${buffer.length} octets)`,
       );
-      return this.companiesService.importFromSpreadsheet(buffer);
+      return this.companiesService.importFromSpreadsheet(buffer, user?.id);
     }
 
     throw new BadRequestException(
@@ -80,47 +86,64 @@ export class CompaniesController {
   }
 
   @Get('stats')
-  getStats() {
-    return this.companiesService.getStats();
+  getStats(@CurrentUser() user?: AuthenticatedUser) {
+    return this.companiesService.getStats(user?.id);
   }
 
   @Get('cities')
-  getCities() {
-    return this.companiesService.getCities();
+  getCities(@CurrentUser() user?: AuthenticatedUser) {
+    return this.companiesService.getCities(user?.id);
   }
 
   @Get()
-  findAll(@Query() query: QueryCompanyDto) {
-    return this.companiesService.findAll(query);
+  findAll(
+    @Query() query: QueryCompanyDto,
+    @CurrentUser() user?: AuthenticatedUser,
+  ) {
+    return this.companiesService.findAll(query, user?.id);
   }
 
   @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.companiesService.findOne(id);
+  findOne(
+    @Param('id') id: string,
+    @CurrentUser() user?: AuthenticatedUser,
+  ) {
+    return this.companiesService.findOne(id, user?.id);
   }
 
   @Patch(':id')
-  update(@Param('id') id: string, @Body() updateCompanyDto: UpdateCompanyDto) {
-    return this.companiesService.update(id, updateCompanyDto);
+  update(
+    @Param('id') id: string,
+    @Body() updateCompanyDto: UpdateCompanyDto,
+    @CurrentUser() user?: AuthenticatedUser,
+  ) {
+    return this.companiesService.update(id, updateCompanyDto, user?.id);
   }
 
   @Patch(':id/status')
   updateStatus(
     @Param('id') id: string,
     @Body() updateStatusDto: UpdateCompanyStatusDto,
+    @CurrentUser() user?: AuthenticatedUser,
   ) {
-    return this.companiesService.updateStatus(id, updateStatusDto.status);
+    return this.companiesService.updateStatus(id, updateStatusDto.status, user?.id);
   }
 
   @Delete('batch')
   @HttpCode(HttpStatus.OK)
-  removeBatch(@Body() body: { ids?: string[]; all?: boolean }) {
-    return this.companiesService.removeBatch(body);
+  removeBatch(
+    @Body() body: { ids?: string[]; all?: boolean },
+    @CurrentUser() user?: AuthenticatedUser,
+  ) {
+    return this.companiesService.removeBatch(body, user?.id);
   }
 
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
-  remove(@Param('id') id: string) {
-    return this.companiesService.remove(id);
+  remove(
+    @Param('id') id: string,
+    @CurrentUser() user?: AuthenticatedUser,
+  ) {
+    return this.companiesService.remove(id, user?.id);
   }
 }

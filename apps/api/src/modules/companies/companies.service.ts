@@ -119,7 +119,7 @@ export class CompaniesService {
     return null;
   }
 
-  async create(createDto: CreateCompanyDto) {
+  async create(createDto: CreateCompanyDto, userId?: string) {
     let lat = createDto.latitude;
     let lon = createDto.longitude;
 
@@ -142,12 +142,17 @@ export class CompaniesService {
         phone: createDto.phone,
         notes: createDto.notes,
         status: createDto.status ?? Status.TO_SEND,
+        userId: userId ?? undefined,
       },
     });
   }
 
-  async findAll(query: QueryCompanyDto) {
+  async findAll(query: QueryCompanyDto, userId?: string) {
     const where: Prisma.CompanyWhereInput = {};
+
+    if (userId) {
+      where.userId = userId;
+    }
 
     if (query.statuses && query.statuses.length > 0) {
       where.status = { in: query.statuses };
@@ -203,20 +208,20 @@ export class CompaniesService {
     };
   }
 
-  async findOne(id: string) {
+  async findOne(id: string, userId?: string) {
     const company = await this.prisma.company.findUnique({
       where: { id },
     });
 
-    if (!company) {
+    if (!company || (userId && company.userId && company.userId !== userId)) {
       throw new NotFoundException(`Entreprise avec l'ID ${id} non trouvée`);
     }
 
     return company;
   }
 
-  async update(id: string, updateDto: UpdateCompanyDto) {
-    const existing = await this.findOne(id);
+  async update(id: string, updateDto: UpdateCompanyDto, userId?: string) {
+    const existing = await this.findOne(id, userId);
 
     let lat: number | null | undefined = updateDto.latitude;
     let lon: number | null | undefined = updateDto.longitude;
@@ -244,8 +249,8 @@ export class CompaniesService {
     });
   }
 
-  async updateStatus(id: string, status: Status) {
-    await this.findOne(id);
+  async updateStatus(id: string, status: Status, userId?: string) {
+    await this.findOne(id, userId);
 
     return this.prisma.company.update({
       where: { id },
@@ -253,17 +258,21 @@ export class CompaniesService {
     });
   }
 
-  async remove(id: string) {
-    await this.findOne(id);
+  async remove(id: string, userId?: string) {
+    await this.findOne(id, userId);
 
     return this.prisma.company.delete({
       where: { id },
     });
   }
 
-  async removeBatch(body: { ids?: string[]; all?: boolean }) {
+  async removeBatch(body: { ids?: string[]; all?: boolean }, userId?: string) {
+    const where: Prisma.CompanyWhereInput = userId ? { userId } : {};
+
     if (body.all) {
-      const result = await this.prisma.company.deleteMany({});
+      const result = await this.prisma.company.deleteMany({
+        where,
+      });
       this.logger.log(
         `Suppression totale : ${result.count} entreprise(s) supprimée(s)`,
       );
@@ -277,7 +286,7 @@ export class CompaniesService {
     }
 
     const result = await this.prisma.company.deleteMany({
-      where: { id: { in: body.ids } },
+      where: { ...where, id: { in: body.ids } },
     });
     this.logger.log(
       `Suppression groupée : ${result.count} entreprise(s) supprimée(s)`,
@@ -286,13 +295,14 @@ export class CompaniesService {
     return { deletedCount: result.count };
   }
 
-  async getStats() {
-    const groups = await this.prisma.company.groupBy({
+  async getStats(userId?: string) {
+    const groups = (await (this.prisma.company.groupBy as any)({
       by: ['status'],
+      where: userId ? { userId } : undefined,
       _count: {
         id: true,
       },
-    });
+    })) as Array<{ status: Status; _count: { id: number } }>;
 
     const stats: Record<string, number> = {
       TO_SEND: 0,
@@ -305,16 +315,17 @@ export class CompaniesService {
     };
 
     for (const group of groups) {
-      stats[group.status] = group._count.id;
+      stats[group.status] = group._count?.id ?? 0;
     }
 
     return stats;
   }
 
-  async getCities(): Promise<Array<{ city: string; count: number }>> {
+  async getCities(userId?: string): Promise<Array<{ city: string; count: number }>> {
     const records = await this.prisma.company.findMany({
       where: {
         city: { not: null },
+        ...(userId ? { userId } : {}),
       },
       select: {
         city: true,
@@ -336,7 +347,7 @@ export class CompaniesService {
 
   private readonly logger = new Logger(CompaniesService.name);
 
-  async importFromSpreadsheet(fileBuffer: Buffer) {
+  async importFromSpreadsheet(fileBuffer: Buffer, userId?: string) {
     if (!fileBuffer || fileBuffer.length === 0) {
       throw new BadRequestException('Le fichier reçu est vide (0 octet)');
     }

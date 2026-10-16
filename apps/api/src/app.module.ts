@@ -6,6 +6,8 @@ import { ApiKeyGuard } from './common/guards/api-key.guard';
 import configuration from './config/configuration';
 import { validateEnvironment } from './config/env.validation';
 import { ScheduleModule } from '@nestjs/schedule';
+import { AuthModule } from './modules/auth/auth.module';
+import { JwtAuthGuard } from './modules/auth/jwt-auth.guard';
 import { AppConfigModule } from './modules/app-config/app-config.module';
 import { CompaniesModule } from './modules/companies/companies.module';
 import { GeminiModule } from './modules/gemini/gemini.module';
@@ -25,6 +27,7 @@ import { PrismaModule } from './prisma/prisma.module';
     }),
     ScheduleModule.forRoot(),
     PrismaModule,
+    AuthModule,
     HealthModule,
     CompaniesModule,
     AppConfigModule,
@@ -36,7 +39,7 @@ import { PrismaModule } from './prisma/prisma.module';
   providers: [
     {
       provide: APP_GUARD,
-      useClass: ApiKeyGuard,
+      useClass: JwtAuthGuard,
     },
     {
       provide: APP_FILTER,

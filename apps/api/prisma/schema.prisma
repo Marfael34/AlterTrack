@@ -20,8 +20,27 @@ enum Status {
   ACCEPTED           // Accepté
 }
 
+model User {
+  id               String    @id @default(uuid())
+  email            String    @unique
+  password         String
+  fullName         String
+  gmailUser        String?
+  gmailAppPassword String?
+  template         String?   @default("Bonjour,\n\nActuellement à la recherche d'une opportunité en alternance, je me permets de vous contacter pour vous soumettre ma candidature au sein de votre entreprise.\n\nVous trouverez ci-joint mon CV détaillant mes compétences et réalisations.\n\nRestant à votre entière disposition pour un échange téléphonique ou un entretien, je vous remercie par avance pour l'attention portée à ma démarche.\n\nBien cordialement,")
+  cvFilePath       String?
+  cvOriginalName   String?
+  expoPushToken    String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  companies        Company[]
+}
+
 model Company {
   id              String    @id @default(uuid())
+  userId          String?
+  user            User?     @relation(fields: [userId], references: [id], onDelete: Cascade)
   name            String
   email           String
   address         String?
@@ -38,6 +57,7 @@ model Company {
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
+  @@index([userId])
   @@index([status])
   @@index([email])
 }
@@ -51,3 +71,4 @@ model AppConfig {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 }
+

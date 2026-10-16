@@ -74,4 +74,37 @@ export const StorageService = {
   async setTestEmail(email: string): Promise<void> {
     await AsyncStorage.setItem('altertrack_test_email', email.trim());
   },
+
+  async getAuthToken(): Promise<string | null> {
+    try {
+      return await AsyncStorage.getItem('altertrack_auth_token');
+    } catch {
+      return null;
+    }
+  },
+
+  async setAuthToken(token: string): Promise<void> {
+    await AsyncStorage.setItem('altertrack_auth_token', token.trim());
+  },
+
+  async removeAuthToken(): Promise<void> {
+    await AsyncStorage.removeItem('altertrack_auth_token');
+  },
+
+  async getAuthUser(): Promise<any | null> {
+    try {
+      const raw = await AsyncStorage.getItem('altertrack_auth_user');
+      return raw ? JSON.parse(raw) : null;
+    } catch {
+      return null;
+    }
+  },
+
+  async setAuthUser(user: any): Promise<void> {
+    await AsyncStorage.setItem('altertrack_auth_user', JSON.stringify(user));
+  },
+
+  async removeAuthUser(): Promise<void> {
+    await AsyncStorage.removeItem('altertrack_auth_user');
+  },
 };

@@ -155,7 +155,7 @@ describe('CompaniesService', () => {
 
     it('should delete all companies when all is true', async () => {
       const result = await service.removeBatch({ all: true });
-      expect(prisma.company.deleteMany).toHaveBeenCalledWith({});
+      expect(prisma.company.deleteMany).toHaveBeenCalledWith({ where: {} });
       expect(result.deletedCount).toBe(2);
     });
   });

@@ -274,49 +274,85 @@ export class MailingService {
     });
   }
 
-  async sendTestEmail(toEmail: string, companyName?: string) {
-    const targetCompany = companyName?.trim() || 'Entreprise Exemple (Test)';
+  async sendTestEmail(
+    toEmail: string,
+    companyName?: string,
+    customSubject?: string,
+    customBody?: string,
+    currentUser?: {
+      id?: string;
+      fullName?: string;
+      gmailUser?: string | null;
+      gmailAppPassword?: string | null;
+      template?: string | null;
+      cvFilePath?: string | null;
+      cvOriginalName?: string | null;
+    },
+  ) {
+    const targetCompany = companyName?.trim() || 'Entreprise Exemple';
     const config = await this.appConfigService.getOrCreateConfig();
 
     let cvPath: string | undefined;
-    try {
-      cvPath = await this.appConfigService.getCvFilePath();
-    } catch {
-      this.logger.warn(
-        'Aucun CV PDF trouvé sur le serveur pour la pièce jointe du test.',
-      );
+    let cvName = config.cvOriginalName || 'CV.pdf';
+
+    if (currentUser?.cvFilePath) {
+      cvPath = currentUser.cvFilePath;
+      cvName = currentUser.cvOriginalName || 'CV.pdf';
+    } else {
+      try {
+        cvPath = await this.appConfigService.getCvFilePath();
+      } catch {
+        this.logger.warn(
+          'Aucun CV PDF trouvé sur le serveur pour la pièce jointe du test.',
+        );
+      }
     }
 
-    const emailContent = await this.geminiService.generateEmail({
-      companyName: targetCompany,
-      template: config.template,
-      nature: EmailNature.FIRST_CONTACT,
-    });
+    let subject = customSubject?.trim();
+    let body = customBody?.trim();
 
-    const isSmtp = this.emailService.isConfigured();
+    if (!subject || !body) {
+      const template = currentUser?.template || config.template;
+      const emailContent = await this.geminiService.generateEmail({
+        companyName: targetCompany,
+        template,
+        nature: EmailNature.FIRST_CONTACT,
+      });
+      subject = subject || emailContent.subject;
+      body = body || emailContent.body;
+    }
+
+    const isSmtp = this.emailService.isConfigured(
+      currentUser?.gmailUser,
+      currentUser?.gmailAppPassword,
+    );
 
     const sendResult = await this.emailService.sendMail({
       to: toEmail.trim(),
-      subject: `[TEST ALTERTRACK] ${emailContent.subject}`,
-      body: `=== CE MESSAGE EST UN TEST ALTERTRACK ===\nEntreprise ciblée pour la génération : ${targetCompany}\nDestinataire réel lors d'une vraie candidature : rh@${targetCompany.toLowerCase().replace(/[^a-z0-9]/g, '')}.com\n==========================================\n\n${emailContent.body}`,
+      subject,
+      body,
       attachmentPath: cvPath,
-      attachmentName: config.cvOriginalName || 'CV.pdf',
+      attachmentName: cvName,
+      senderUser: currentUser?.gmailUser,
+      senderPass: currentUser?.gmailAppPassword,
+      senderName: currentUser?.fullName,
     });
 
     return {
       success: true,
       recipient: toEmail.trim(),
       companyTarget: targetCompany,
-      subject: `[TEST ALTERTRACK] ${emailContent.subject}`,
-      body: emailContent.body,
+      subject,
+      body,
       hasAttachment: Boolean(cvPath),
-      attachmentName: cvPath ? config.cvOriginalName || 'CV.pdf' : null,
+      attachmentName: cvPath ? cvName : null,
       messageId: sendResult.messageId,
       isSimulation: !isSmtp.configured,
       smtpUser: isSmtp.user,
       note: !isSmtp.configured
-        ? 'Identifiants Gmail SMTP non configurés dans le fichier .env : l’envoi a été simulé dans les journaux du serveur.'
-        : 'E-mail de test réel expédié avec succès via smtp.gmail.com avec votre CV joint.',
+        ? 'Identifiants Gmail non configurés (ni dans votre profil ni sur le serveur) : l’envoi a été simulé dans les journaux.'
+        : `E-mail envoyé avec succès à ${toEmail.trim()} depuis l’adresse ${isSmtp.user} (avec CV joint).`,
     };
   }
 }
+

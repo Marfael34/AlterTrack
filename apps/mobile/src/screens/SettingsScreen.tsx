@@ -20,6 +20,7 @@ import { LocationService, ReferencePoint } from '../services/location.service';
 import { NotificationService } from '../services/notification.service';
 import { StorageService } from '../services/storage.service';
 import { AppConfig } from '../types/config';
+import { useAuth } from '../context/AuthContext';
 
 interface SettingsScreenProps {
   onBack: () => void;
@@ -32,6 +33,14 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
   refPoint: propRefPoint,
   onUpdateRefPoint,
 }) => {
+  const { user, updateProfile, logout } = useAuth();
+
+  const [profileFullName, setProfileFullName] = useState(user?.fullName || '');
+  const [profileGmailUser, setProfileGmailUser] = useState(user?.gmailUser || '');
+  const [profileGmailAppPassword, setProfileGmailAppPassword] = useState('');
+  const [showGmailPassword, setShowGmailPassword] = useState(false);
+  const [savingProfile, setSavingProfile] = useState(false);
+
   const [refPoint, setRefPoint] = useState<ReferencePoint | null>(propRefPoint || null);
   const [isRefPointModalOpen, setIsRefPointModalOpen] = useState(false);
   const [serverUrl, setServerUrl] = useState('');
@@ -69,8 +78,53 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
   }, [propRefPoint]);
 
   useEffect(() => {
+    if (user) {
+      setProfileFullName(user.fullName || '');
+      setProfileGmailUser(user.gmailUser || '');
+    }
+  }, [user]);
+
+  useEffect(() => {
     void loadInitialSettings();
   }, []);
+
+  const handleSaveProfile = async () => {
+    setSavingProfile(true);
+    try {
+      await updateProfile({
+        fullName: profileFullName.trim() || undefined,
+        gmailUser: profileGmailUser.trim() || null,
+        gmailAppPassword: profileGmailAppPassword.trim() || undefined,
+      });
+      setProfileGmailAppPassword('');
+      Alert.alert(
+        'Profil mis à jour ✅',
+        'Vos coordonnées et identifiants Gmail d\'envoi ont été enregistrés avec succès !',
+      );
+    } catch (err: any) {
+      Alert.alert(
+        'Erreur',
+        err?.message || 'Impossible de mettre à jour le profil.',
+      );
+    } finally {
+      setSavingProfile(false);
+    }
+  };
+
+  const handleLogout = () => {
+    Alert.alert(
+      'Déconnexion',
+      'Êtes-vous sûr de vouloir vous déconnecter de votre compte AlterTrack ?',
+      [
+        { text: 'Annuler', style: 'cancel' },
+        {
+          text: 'Se déconnecter',
+          style: 'destructive',
+          onPress: () => logout(),
+        },
+      ],
+    );
+  };
 
   const loadInitialSettings = async () => {
     try {
@@ -239,18 +293,18 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
       if (res.isSimulation) {
         Alert.alert(
           'Simulation réussie 🧪',
-          `L'e-mail a été généré avec succès par Gemini avec votre CV joint.\n\nMode simulation activé : pour envoyer réellement par Gmail, configurez GMAIL_USER et GMAIL_APP_PASSWORD dans le .env du serveur.`,
+          `L'e-mail a été préparé avec votre CV joint.\n\nMode simulation actif : pour expédier réellement l'e-mail, renseignez GMAIL_USER et GMAIL_APP_PASSWORD dans le fichier .env du serveur.`,
         );
       } else {
         Alert.alert(
-          'E-mail test expédié ! ✉️',
-          `L'e-mail a été expédié à ${res.recipient} avec pour objet :\n"${res.subject}"\n\nVérifiez votre boîte de réception !`,
+          'E-mail expédié ! ✉️',
+          `L'e-mail a été expédié à ${res.recipient} dans les conditions réelles d'une entreprise :\n- Objet : "${res.subject}"\n- Pièce jointe : CV inclus\n\nVérifiez la boîte de réception !`,
         );
       }
     } catch (err) {
       Alert.alert(
-        'Erreur lors du test',
-        err instanceof Error ? err.message : 'Échec de l\'envoi du mail de test',
+        'Erreur lors de l’envoi',
+        err instanceof Error ? err.message : 'Échec de l\'envoi du mail',
       );
     } finally {
       setSendingTestMail(false);
@@ -268,6 +322,107 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent}>
+        {/* Section 0 : Mon Compte & Envoi d'E-mails */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeaderRow}>
+            <Ionicons name="person-circle-outline" size={22} color={Colors.brandCyan} />
+            <Text style={styles.sectionTitle}>Mon Compte & Envoi Gmail</Text>
+          </View>
+          <Text style={styles.sectionDescription}>
+            Configurez vos identifiants d'envoi Gmail pour que vos candidatures et mails de test soient expédiés avec votre propre adresse e-mail.
+          </Text>
+
+          {/* Badge utilisateur connecté */}
+          <View style={styles.accountBadge}>
+            <View style={styles.accountAvatar}>
+              <Text style={styles.accountAvatarText}>
+                {(user?.fullName || user?.email || 'U').charAt(0).toUpperCase()}
+              </Text>
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.accountName}>
+                {user?.fullName || 'Utilisateur AlterTrack'}
+              </Text>
+              <Text style={styles.accountEmail}>{user?.email}</Text>
+            </View>
+            <TouchableOpacity
+              style={styles.logoutBtn}
+              onPress={handleLogout}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="log-out-outline" size={16} color={Colors.danger} />
+              <Text style={styles.logoutBtnText}>Déconnexion</Text>
+            </TouchableOpacity>
+          </View>
+
+          <Text style={styles.fieldLabel}>Nom complet</Text>
+          <TextInput
+            style={styles.input}
+            value={profileFullName}
+            onChangeText={setProfileFullName}
+            placeholder="ex: Rafael Martinez"
+            placeholderTextColor={Colors.textMuted}
+          />
+
+          <Text style={styles.fieldLabel}>Adresse Gmail d'envoi</Text>
+          <TextInput
+            style={styles.input}
+            value={profileGmailUser}
+            onChangeText={setProfileGmailUser}
+            placeholder="votre.compte@gmail.com"
+            placeholderTextColor={Colors.textMuted}
+            keyboardType="email-address"
+            autoCapitalize="none"
+          />
+
+          <Text style={styles.fieldLabel}>Mot de passe d'application Google (16 lettres)</Text>
+          <View style={styles.passwordInputWrapper}>
+            <TextInput
+              style={[styles.input, { flex: 1, borderWidth: 0, marginBottom: 0 }]}
+              value={profileGmailAppPassword}
+              onChangeText={setProfileGmailAppPassword}
+              placeholder={user?.hasGmailConfigured ? '•••••••••••••••• (configuré)' : '16 lettres générées sur Google'}
+              placeholderTextColor={Colors.textMuted}
+              secureTextEntry={!showGmailPassword}
+              autoCapitalize="none"
+            />
+            <TouchableOpacity
+              onPress={() => setShowGmailPassword(!showGmailPassword)}
+              style={styles.eyeBtn}
+            >
+              <Ionicons
+                name={showGmailPassword ? 'eye-off-outline' : 'eye-outline'}
+                size={18}
+                color={Colors.textMuted}
+              />
+            </TouchableOpacity>
+          </View>
+
+          {/* Guide Google App Password */}
+          <View style={styles.gmailHelpCard}>
+            <Ionicons name="information-circle-outline" size={16} color={Colors.brandCyan} />
+            <Text style={styles.gmailHelpText}>
+              <Text style={{ fontWeight: '700', color: Colors.text }}>Comment obtenir le mot de passe ?</Text> Activez la validation en 2 étapes sur Google, puis rendez-vous sur <Text style={{ color: Colors.brandCyan }}>myaccount.google.com/apppasswords</Text> pour générer un mot de passe pour AlterTrack.
+            </Text>
+          </View>
+
+          <TouchableOpacity
+            style={[styles.saveProfileBtn, savingProfile && styles.buttonDisabled]}
+            onPress={handleSaveProfile}
+            disabled={savingProfile}
+            activeOpacity={0.8}
+          >
+            {savingProfile ? (
+              <ActivityIndicator color="#FFFFFF" size="small" />
+            ) : (
+              <>
+                <Ionicons name="save-outline" size={18} color="#FFFFFF" />
+                <Text style={styles.saveProfileBtnText}>Enregistrer mes paramètres Gmail</Text>
+              </>
+            )}
+          </TouchableOpacity>
+        </View>
+
         {/* Section 1 : Connexion Serveur PC / Tailscale */}
         <View style={styles.section}>
           <View style={styles.sectionHeaderRow}>
@@ -543,17 +698,17 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
           )}
         </View>
 
-        {/* Section : Test d'envoi d'e-mail (SMTP & IA) */}
+        {/* Section : Test d'envoi d'e-mail (Format Entreprise réel) */}
         <View style={styles.section}>
           <View style={styles.sectionHeaderRow}>
-            <Ionicons name="flask-outline" size={20} color={Colors.primary} />
-            <Text style={styles.sectionTitle}>Test d'envoi d'e-mail (SMTP & IA)</Text>
+            <Ionicons name="paper-plane-outline" size={20} color={Colors.primary} />
+            <Text style={styles.sectionTitle}>Test d'envoi d'e-mail (Format Entreprise)</Text>
           </View>
           <Text style={styles.sectionDescription}>
-            Vérifiez l'e-mail rédigé par Google Gemini et la présence de votre CV en pièce jointe sur votre propre boîte avant tout envoi direct aux entreprises.
+            Renseignez une adresse e-mail pour lui envoyer la candidature personnalisée exactement telle qu'une entreprise la recevrait (avec le vrai objet, le corps de texte personnalisé et votre CV joint, sans mention de test).
           </Text>
 
-          <Text style={styles.fieldLabel}>Votre adresse e-mail personnelle de test *</Text>
+          <Text style={styles.fieldLabel}>Adresse e-mail destinataire *</Text>
           <TextInput
             style={styles.input}
             value={testEmail}
@@ -565,7 +720,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
             autoCorrect={false}
           />
 
-          <Text style={styles.fieldLabel}>Entreprise fictive ou cible pour le test</Text>
+          <Text style={styles.fieldLabel}>Entreprise cible pour la personnalisation</Text>
           <TextInput
             style={styles.input}
             value={testCompany}
@@ -581,7 +736,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
               activeOpacity={0.8}
             >
               <Ionicons name="eye-outline" size={16} color={Colors.accent} />
-              <Text style={styles.previewBtnText}>Aperçu Gemini</Text>
+              <Text style={styles.previewBtnText}>Aperçu & Personnaliser</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -595,7 +750,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
               ) : (
                 <>
                   <Ionicons name="paper-plane-outline" size={16} color="#FFFFFF" />
-                  <Text style={styles.sendTestMailBtnText}>Envoyer le test</Text>
+                  <Text style={styles.sendTestMailBtnText}>Envoyer l'e-mail</Text>
                 </>
               )}
             </TouchableOpacity>
@@ -1035,5 +1190,100 @@ const styles = StyleSheet.create({
     color: Colors.textMuted,
     marginTop: 4,
     lineHeight: 15,
+  },
+  accountBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.surface,
+    borderRadius: 12,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    marginBottom: 16,
+    gap: 12,
+  },
+  accountAvatar: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: `${Colors.brandCyan}25`,
+    borderWidth: 1.5,
+    borderColor: Colors.brandCyan,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  accountAvatarText: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: Colors.brandCyan,
+  },
+  accountName: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: Colors.text,
+  },
+  accountEmail: {
+    fontSize: 12,
+    color: Colors.textSecondary,
+    marginTop: 2,
+  },
+  logoutBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: `${Colors.danger}15`,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: `${Colors.danger}40`,
+  },
+  logoutBtnText: {
+    fontSize: 12,
+    color: Colors.danger,
+    fontWeight: '600',
+  },
+  passwordInputWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.surface,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    paddingHorizontal: 10,
+    marginBottom: 12,
+  },
+  eyeBtn: {
+    padding: 6,
+  },
+  gmailHelpCard: {
+    flexDirection: 'row',
+    backgroundColor: `${Colors.brandCyan}12`,
+    borderWidth: 1,
+    borderColor: `${Colors.brandCyan}30`,
+    borderRadius: 10,
+    padding: 12,
+    gap: 8,
+    marginBottom: 16,
+  },
+  gmailHelpText: {
+    flex: 1,
+    fontSize: 11,
+    color: Colors.textSecondary,
+    lineHeight: 16,
+  },
+  saveProfileBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.brandBlue,
+    borderRadius: 10,
+    paddingVertical: 12,
+    gap: 8,
+  },
+  saveProfileBtnText: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+    fontSize: 14,
   },
 });

@@ -1,4 +1,11 @@
 import { Platform } from 'react-native';
+import {
+  AuthResponse,
+  LoginPayload,
+  RegisterPayload,
+  UpdateProfilePayload,
+  UserProfile,
+} from '../types/auth';
 import { Company, CompanyStats, Status } from '../types/company';
 import { AppConfig } from '../types/config';
 import { StorageService } from './storage.service';
@@ -7,9 +14,11 @@ export const ApiService = {
   async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
     const baseUrl = await StorageService.getServerUrl();
     const apiKey = await StorageService.getApiKey();
+    const token = await StorageService.getAuthToken();
 
     const headers: Record<string, string> = {
       'x-api-key': apiKey,
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...(options.headers as Record<string, string>),
     };
 
@@ -172,6 +181,7 @@ export const ApiService = {
   ): Promise<T> {
     const baseUrl = await StorageService.getServerUrl();
     const apiKey = await StorageService.getApiKey();
+    const token = await StorageService.getAuthToken();
     const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
     const url = `${baseUrl}${cleanEndpoint}`;
 
@@ -205,6 +215,7 @@ export const ApiService = {
         mimeType,
         headers: {
           'x-api-key': apiKey,
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
           Accept: 'application/json',
         },
       });
@@ -331,6 +342,8 @@ export const ApiService = {
   async sendTestEmail(
     toEmail: string,
     companyName?: string,
+    subject?: string,
+    body?: string,
   ): Promise<{
     success: boolean;
     recipient: string;
@@ -346,7 +359,32 @@ export const ApiService = {
   }> {
     return this.request('/mailing/send-test', {
       method: 'POST',
-      body: JSON.stringify({ toEmail, companyName }),
+      body: JSON.stringify({ toEmail, companyName, subject, body }),
+    });
+  },
+
+  async register(payload: RegisterPayload): Promise<AuthResponse> {
+    return this.request('/auth/register', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  },
+
+  async login(payload: LoginPayload): Promise<AuthResponse> {
+    return this.request('/auth/login', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  },
+
+  async getProfile(): Promise<UserProfile> {
+    return this.request('/auth/me');
+  },
+
+  async updateProfile(payload: UpdateProfilePayload): Promise<UserProfile> {
+    return this.request('/auth/profile', {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
     });
   },
 };

@@ -37,6 +37,8 @@ services:
       GEMINI_API_KEY: ${GEMINI_API_KEY}
       GMAIL_USER: ${GMAIL_USER}
       GMAIL_APP_PASSWORD: ${GMAIL_APP_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET:-altertrack_super_secret_jwt_key_2026_dev}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
     ports:
       - "${PORT:-3000}:3000"
     volumes:

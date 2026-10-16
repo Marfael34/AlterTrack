@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as fs from 'fs';
 import * as nodemailer from 'nodemailer';
@@ -9,6 +9,9 @@ export interface SendMailOptions {
   body: string;
   attachmentPath?: string;
   attachmentName?: string;
+  senderUser?: string | null;
+  senderPass?: string | null;
+  senderName?: string | null;
 }
 
 export interface SendMailResult {
@@ -33,15 +36,24 @@ export class EmailService {
         secure: true,
         auth: { user, pass },
       });
-      this.logger.log(`Transport SMTP Gmail configuré pour ${user}`);
+      this.logger.log(`Transport SMTP Gmail global configuré pour ${user}`);
     } else {
       this.logger.warn(
-        'Identifiants Gmail SMTP non configurés ou fictifs : mode simulation activé.',
+        'Identifiants Gmail SMTP globaux non configurés : les envois sans identifiants utilisateur seront simulés.',
       );
     }
   }
 
-  isConfigured(): { configured: boolean; user: string | null } {
+  isConfigured(
+    userCustomGmail?: string | null,
+    userCustomPass?: string | null,
+  ): { configured: boolean; user: string | null } {
+    if (userCustomGmail && userCustomPass) {
+      return {
+        configured: true,
+        user: userCustomGmail,
+      };
+    }
     return {
       configured: Boolean(this.transporter && this.fromUser),
       user: this.fromUser,
@@ -49,10 +61,24 @@ export class EmailService {
   }
 
   async sendMail(options: SendMailOptions): Promise<SendMailResult> {
-    if (!this.transporter || !this.fromUser) {
+    const effectiveUser = options.senderUser || this.fromUser;
+    const effectiveName = options.senderName || 'Rafael Martinez';
+
+    let activeTransporter = this.transporter;
+
+    if (options.senderUser && options.senderPass) {
+      activeTransporter = nodemailer.createTransport({
+        host: 'smtp.gmail.com',
+        port: 465,
+        secure: true,
+        auth: { user: options.senderUser, pass: options.senderPass },
+      });
+    }
+
+    if (!activeTransporter || !effectiveUser) {
       const mockId = `<mock-${Date.now()}@altertrack.local>`;
       this.logger.log(
-        `[SIMULATION ENVOI MAIL] Vers: ${options.to} | Objet: "${options.subject}" | ID: ${mockId}`,
+        `[SIMULATION ENVOI MAIL] De: ${effectiveUser ?? 'Non configuré'} | Vers: ${options.to} | Objet: "${options.subject}" | ID: ${mockId}`,
       );
       return { messageId: mockId };
     }
@@ -68,18 +94,36 @@ export class EmailService {
     }
 
     const mailOptions: nodemailer.SendMailOptions = {
-      from: `"Rafael Martinez" <${this.fromUser}>`,
+      from: `"${effectiveName}" <${effectiveUser}>`,
       to: options.to,
       subject: options.subject,
       text: options.body,
       attachments,
     };
 
-    const info = await this.transporter.sendMail(mailOptions);
-    this.logger.log(
-      `Email envoyé avec succès à ${options.to} (ID: ${info.messageId})`,
-    );
-
-    return { messageId: info.messageId };
+    try {
+      const info = await activeTransporter.sendMail(mailOptions);
+      this.logger.log(
+        `Email envoyé avec succès de ${effectiveUser} à ${options.to} (ID: ${info.messageId})`,
+      );
+      return { messageId: info.messageId };
+    } catch (err: any) {
+      this.logger.error(
+        `Erreur SMTP lors de l'envoi vers ${options.to}: ${err?.message}`,
+      );
+      if (
+        err?.message?.includes('535') ||
+        err?.message?.toLowerCase().includes('badcredentials') ||
+        err?.message?.toLowerCase().includes('invalid login')
+      ) {
+        throw new BadRequestException(
+          `Échec d'authentification Gmail (535) : Google a rejeté vos identifiants pour "${effectiveUser}". Assurez-vous d'utiliser un Mot de passe d'application Google (16 lettres sans espace) généré sur https://myaccount.google.com/apppasswords.`,
+        );
+      }
+      throw new BadRequestException(
+        `Erreur lors de l'envoi de l'e-mail : ${err?.message || 'Erreur SMTP'}`,
+      );
+    }
   }
 }
+
