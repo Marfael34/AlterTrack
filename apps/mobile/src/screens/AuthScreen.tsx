@@ -21,12 +21,14 @@ export const AuthScreen: React.FC = () => {
   // Form states
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [fullName, setFullName] = useState('');
   const [gmailUser, setGmailUser] = useState('');
   const [gmailAppPassword, setGmailAppPassword] = useState('');
 
   // UI states
   const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [showAppPassword, setShowAppPassword] = useState(false);
   const [showEmailConfig, setShowEmailConfig] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -45,16 +47,26 @@ export const AuthScreen: React.FC = () => {
       return;
     }
 
+    if (tab === 'REGISTER') {
+      if (password.length < 6) {
+        setErrorMessage('Le mot de passe doit comporter au moins 6 caractères.');
+        return;
+      }
+      if (!confirmPassword) {
+        setErrorMessage('Veuillez confirmer votre mot de passe.');
+        return;
+      }
+      if (password !== confirmPassword) {
+        setErrorMessage('Les mots de passe ne correspondent pas.');
+        return;
+      }
+    }
+
     setLoading(true);
     try {
       if (tab === 'LOGIN') {
         await login({ email: cleanEmail, password });
       } else {
-        if (password.length < 6) {
-          setErrorMessage('Le mot de passe doit comporter au moins 6 caractères.');
-          setLoading(false);
-          return;
-        }
         await register({
           email: cleanEmail,
           password,
@@ -101,6 +113,7 @@ export const AuthScreen: React.FC = () => {
               onPress={() => {
                 setTab('LOGIN');
                 setErrorMessage(null);
+                setConfirmPassword('');
               }}
               activeOpacity={0.7}
             >
@@ -207,26 +220,92 @@ export const AuthScreen: React.FC = () => {
                 style={styles.inputIcon}
               />
               <TextInput
-                style={styles.input}
-                placeholder="••••••••"
+                style={[styles.input, { color: '#FFFFFF' }]}
+                placeholder={showPassword ? 'Votre mot de passe' : '••••••••'}
                 placeholderTextColor={Colors.textMuted}
                 value={password}
                 onChangeText={setPassword}
                 secureTextEntry={!showPassword}
                 autoCapitalize="none"
+                autoCorrect={false}
+                selectionColor={Colors.brandCyan}
+                cursorColor={Colors.brandCyan}
               />
               <TouchableOpacity
                 onPress={() => setShowPassword(!showPassword)}
                 style={styles.eyeButton}
+                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                activeOpacity={0.7}
               >
                 <Ionicons
-                  name={showPassword ? 'eye-off-outline' : 'eye-outline'}
-                  size={18}
-                  color={Colors.textMuted}
+                  name={showPassword ? 'eye' : 'eye-off'}
+                  size={20}
+                  color={showPassword ? Colors.brandCyan : Colors.textMuted}
                 />
               </TouchableOpacity>
             </View>
           </View>
+
+          {/* Confirmation du mot de passe lors de l'inscription */}
+          {tab === 'REGISTER' && (
+            <View style={styles.fieldGroup}>
+              <Text style={styles.label}>Confirmer le mot de passe</Text>
+              <View
+                style={[
+                  styles.inputWrapper,
+                  confirmPassword.length > 0 &&
+                    password !== confirmPassword &&
+                    styles.inputWrapperError,
+                ]}
+              >
+                <Ionicons
+                  name="shield-checkmark-outline"
+                  size={18}
+                  color={
+                    confirmPassword.length > 0 && password === confirmPassword
+                      ? Colors.success
+                      : Colors.textMuted
+                  }
+                  style={styles.inputIcon}
+                />
+                <TextInput
+                  style={[styles.input, { color: '#FFFFFF' }]}
+                  placeholder={
+                    showConfirmPassword
+                      ? 'Répétez le mot de passe'
+                      : '••••••••'
+                  }
+                  placeholderTextColor={Colors.textMuted}
+                  value={confirmPassword}
+                  onChangeText={setConfirmPassword}
+                  secureTextEntry={!showConfirmPassword}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  selectionColor={Colors.brandCyan}
+                  cursorColor={Colors.brandCyan}
+                />
+                <TouchableOpacity
+                  onPress={() => setShowConfirmPassword(!showConfirmPassword)}
+                  style={styles.eyeButton}
+                  hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons
+                    name={showConfirmPassword ? 'eye' : 'eye-off'}
+                    size={20}
+                    color={
+                      showConfirmPassword ? Colors.brandCyan : Colors.textMuted
+                    }
+                  />
+                </TouchableOpacity>
+              </View>
+              {confirmPassword.length > 0 && password !== confirmPassword && (
+                <Text style={styles.passwordMismatchText}>
+                  Les mots de passe ne correspondent pas
+                </Text>
+              )}
+            </View>
+          )}
 
           {/* Configuration d'envoi Gmail optionnelle lors de l'inscription */}
           {tab === 'REGISTER' && (
@@ -467,17 +546,28 @@ const styles = StyleSheet.create({
     borderColor: Colors.border,
     paddingHorizontal: 12,
   },
+  inputWrapperError: {
+    borderColor: Colors.danger,
+    backgroundColor: 'rgba(239, 68, 68, 0.08)',
+  },
+  passwordMismatchText: {
+    color: Colors.danger,
+    fontSize: 12,
+    marginTop: 4,
+    marginLeft: 4,
+    fontWeight: '500',
+  },
   inputIcon: {
     marginRight: 8,
   },
   input: {
     flex: 1,
-    color: Colors.text,
+    color: '#FFFFFF',
     fontSize: 14,
     paddingVertical: 12,
   },
   eyeButton: {
-    padding: 6,
+    padding: 8,
   },
   optionalSection: {
     marginTop: 4,
