@@ -9,17 +9,19 @@ import { AddCompanyScreen } from './src/screens/AddCompanyScreen';
 import { AuthScreen } from './src/screens/AuthScreen';
 import { CompanyDetailScreen } from './src/screens/CompanyDetailScreen';
 import { HomeScreen } from './src/screens/HomeScreen';
+import { ProfileScreen } from './src/screens/ProfileScreen';
 import { SettingsScreen } from './src/screens/SettingsScreen';
 import { ApiService } from './src/services/api.service';
 import { FilterStorageService } from './src/services/filterStorage.service';
 import { LocationService, ReferencePoint } from './src/services/location.service';
 import { Company, CompanyStats } from './src/types/company';
 
-type AppScreen = 'HOME' | 'MAP' | 'DETAIL' | 'ADD' | 'SETTINGS';
+type AppScreen = 'HOME' | 'MAP' | 'DETAIL' | 'ADD' | 'PROFILE' | 'SETTINGS';
 
 function AppContent() {
   const { token, isLoading } = useAuth();
   const [currentScreen, setCurrentScreen] = useState<AppScreen>('HOME');
+  const [previousScreen, setPreviousScreen] = useState<AppScreen>('PROFILE');
   const [selectedCompany, setSelectedCompany] = useState<Company | null>(null);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [refPoint, setRefPoint] = useState<ReferencePoint | null>(null);
@@ -79,8 +81,8 @@ function AppContent() {
       ? 'MAP'
       : currentScreen === 'ADD'
       ? 'ADD'
-      : currentScreen === 'SETTINGS'
-      ? 'SETTINGS'
+      : currentScreen === 'PROFILE' || currentScreen === 'SETTINGS'
+      ? 'PROFILE'
       : 'HOME';
 
   return (
@@ -94,7 +96,10 @@ function AppContent() {
             key={refreshTrigger}
             refreshTrigger={refreshTrigger}
             onSelectCompany={handleOpenDetail}
-            onOpenSettings={() => setCurrentScreen('SETTINGS')}
+            onOpenSettings={() => {
+              setPreviousScreen('HOME');
+              setCurrentScreen('SETTINGS');
+            }}
             onOpenAddCompany={() => setCurrentScreen('ADD')}
             refPoint={refPoint}
             onUpdateRefPoint={setRefPoint}
@@ -125,17 +130,29 @@ function AppContent() {
           />
         )}
 
-        {/* Paramètres & IA */}
-        {currentScreen === 'SETTINGS' && (
-          <SettingsScreen
-            onBack={() => setCurrentScreen('HOME')}
+        {/* Écran Profil utilisateur */}
+        {currentScreen === 'PROFILE' && (
+          <ProfileScreen
+            onOpenSettings={() => {
+              setPreviousScreen('PROFILE');
+              setCurrentScreen('SETTINGS');
+            }}
             refPoint={refPoint}
             onUpdateRefPoint={setRefPoint}
           />
         )}
 
-        {/* Barre de navigation ergonomique inférieure (visible hors fiche détail) */}
-        {currentScreen !== 'DETAIL' && (
+        {/* Paramètres & IA */}
+        {currentScreen === 'SETTINGS' && (
+          <SettingsScreen
+            onBack={() => setCurrentScreen(previousScreen)}
+            refPoint={refPoint}
+            onUpdateRefPoint={setRefPoint}
+          />
+        )}
+
+        {/* Barre de navigation ergonomique inférieure (visible hors fiche détail et paramètres) */}
+        {currentScreen !== 'DETAIL' && currentScreen !== 'SETTINGS' && (
           <MainTabBar
             activeTab={activeMainTab}
             onSelectTab={(tab) => setCurrentScreen(tab)}

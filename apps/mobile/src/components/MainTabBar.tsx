@@ -3,7 +3,7 @@ import React from 'react';
 import { Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Colors } from '../constants/colors';
 
-export type MainTabType = 'HOME' | 'MAP' | 'ADD' | 'SETTINGS';
+export type MainTabType = 'HOME' | 'MAP' | 'ADD' | 'PROFILE';
 
 interface MainTabBarProps {
   activeTab: MainTabType;
@@ -45,10 +45,10 @@ export const MainTabBar: React.FC<MainTabBarProps> = ({
       iconActive: 'add-circle',
     },
     {
-      key: 'SETTINGS',
-      label: 'Paramètres',
-      icon: 'settings-outline',
-      iconActive: 'settings',
+      key: 'PROFILE',
+      label: 'Profil',
+      icon: 'person-outline',
+      iconActive: 'person',
     },
   ];
 
@@ -62,6 +62,8 @@ export const MainTabBar: React.FC<MainTabBarProps> = ({
               ? Colors.accent
               : tab.key === 'ADD'
               ? Colors.brandGreen
+              : tab.key === 'PROFILE'
+              ? Colors.brandCyan
               : Colors.primary;
 
           return (
