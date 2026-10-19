@@ -8,6 +8,7 @@ import {
 import { JwtService } from '@nestjs/jwt';
 import * as bcryptjs from 'bcryptjs';
 import { PrismaService } from '../../prisma/prisma.service';
+import { buildStandardCvFileName } from '../app-config/app-config.service';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
@@ -142,10 +143,14 @@ export class AuthService {
       gmailAppPassword?: string;
       template?: string;
       password?: string;
+      cvOriginalName?: string;
     } = {};
 
     if (dto.fullName) {
       updateData.fullName = dto.fullName.trim();
+      if (user.cvFilePath) {
+        updateData.cvOriginalName = buildStandardCvFileName(updateData.fullName);
+      }
     }
 
     if (dto.gmailUser !== undefined) {

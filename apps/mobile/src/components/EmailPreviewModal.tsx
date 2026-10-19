@@ -14,8 +14,9 @@ import {
   View,
 } from 'react-native';
 import { Colors } from '../constants/colors';
+import { useAuth } from '../context/AuthContext';
 import { ApiService } from '../services/api.service';
-import { StorageService } from '../services/storage.service';
+import { StorageService, formatStandardCvName } from '../services/storage.service';
 
 interface EmailPreviewModalProps {
   visible: boolean;
@@ -40,6 +41,7 @@ export const EmailPreviewModal: React.FC<EmailPreviewModalProps> = ({
   cvOriginalName = null,
   onCvUploaded,
 }) => {
+  const { user } = useAuth();
   const [loading, setLoading] = useState(false);
   const [subject, setSubject] = useState('');
   const [body, setBody] = useState('');
@@ -59,8 +61,10 @@ export const EmailPreviewModal: React.FC<EmailPreviewModalProps> = ({
 
   useEffect(() => {
     setCurrentHasCv(hasCv);
-    setCurrentCvName(cvOriginalName);
-  }, [hasCv, cvOriginalName]);
+    setCurrentCvName(
+      cvOriginalName || (hasCv ? formatStandardCvName(user?.fullName) : null),
+    );
+  }, [hasCv, cvOriginalName, user?.fullName]);
 
   useEffect(() => {
     if (visible && companyName) {
@@ -117,18 +121,19 @@ export const EmailPreviewModal: React.FC<EmailPreviewModalProps> = ({
         return;
       }
 
-      const safeName = isPdfExt ? rawName : `${rawName}.pdf`;
+      // Format uniforme : nom_prenom_CV.pdf
+      const standardName = formatStandardCvName(user?.fullName);
 
       setUploadingCvModal(true);
 
       const updated = await ApiService.uploadCv(
         file.uri,
-        safeName,
+        standardName,
         (file as unknown as { file?: unknown }).file,
       );
 
       const localInfo = {
-        fileName: updated.cvOriginalName || rawName,
+        fileName: updated.cvOriginalName || standardName,
         fileSize: file.size,
         fileUri: file.uri,
         uploadedAt: new Date().toISOString(),

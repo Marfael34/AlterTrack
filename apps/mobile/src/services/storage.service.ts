@@ -134,3 +134,48 @@ export interface LocalCvInfo {
   isSynced: boolean;
 }
 
+export function formatStandardCvName(fullName?: string | null): string {
+  if (!fullName || !fullName.trim()) {
+    return 'candidat_CV.pdf';
+  }
+
+  // Remplacer les tirets et underscores par des espaces pour traiter les noms composés
+  const normalizedSpaces = fullName.trim().replace(/[-_]+/g, ' ');
+  const rawParts = normalizedSpaces.split(/\s+/).filter(Boolean);
+  if (rawParts.length === 0) return 'candidat_CV.pdf';
+
+  const cleanPart = (str: string) =>
+    str
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-zA-Z0-9]/g, '')
+      .toLowerCase();
+
+  if (rawParts.length === 1) {
+    const single = cleanPart(rawParts[0]);
+    return single ? `${single}_CV.pdf` : 'candidat_CV.pdf';
+  }
+
+  let nom = '';
+  let prenom = '';
+
+  const firstWord = rawParts[0];
+  const isFirstWordAllUpper =
+    firstWord.length > 1 &&
+    firstWord === firstWord.toUpperCase() &&
+    rawParts.slice(1).some((w) => w !== w.toUpperCase());
+
+  if (isFirstWordAllUpper) {
+    nom = cleanPart(firstWord);
+    prenom = rawParts.slice(1).map(cleanPart).filter(Boolean).join('_');
+  } else {
+    prenom = cleanPart(rawParts[0]);
+    nom = rawParts.slice(1).map(cleanPart).filter(Boolean).join('_');
+  }
+
+  nom = nom || 'nom';
+  prenom = prenom || 'prenom';
+
+  return `${nom}_${prenom}_CV.pdf`;
+}
+

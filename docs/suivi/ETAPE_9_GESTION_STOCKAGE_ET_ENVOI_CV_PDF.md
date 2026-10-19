@@ -122,30 +122,49 @@ Conformément à la règle **1.12** (*« Ne jamais prétendre qu'une vérificati
 | :--- | :--- | :--- |
 | **Typage TypeScript Mobile** | `cd apps/mobile && npx tsc --noEmit` | ✅ **0 erreur** (Code retour 0) |
 | **Compilation Backend NestJS** | `npm run -w apps/api build` | ✅ **Succès** (Code retour 0) |
-| **Tests Unitaires Backend** | `npm run -w apps/api test` | ✅ **46/46 tests validés** (7 suites) |
+| **Tests Unitaires Backend** | `npm run -w apps/api test` | ✅ **51/51 tests validés** (8 suites, incluant les tests d'uniformisation du nommage) |
 
 ---
 
-## 4. Guide d'Utilisation pour l'Utilisateur
+## 4. Uniformisation du nom de fichier (`nom_prenom_CV.pdf`)
+
+Conformément à la demande de standardisation :
+- Tout CV téléversé (quel que soit le nom initial sur le téléphone : `CV.pdf`, `mon-cv.pdf`, `scan.pdf`, `document`) est automatiquement uniformisé au format :
+  **`nom_prenom_CV.pdf`** (ex : pour l'utilisateur *Raphael Martinez* ➔ **`martinez_raphael_CV.pdf`**).
+- Détection intelligente du Nom et du Prénom depuis `User.fullName` :
+  - Support de l'ordre usuel français *"Prénom Nom"* (ex : *"Raphael Martinez"* ➔ `martinez_raphael_CV.pdf`).
+  - Support des noms en majuscules *"NOM Prénom"* (ex : *"MARTINEZ Raphael"* ➔ `martinez_raphael_CV.pdf`).
+  - Nettoyage et suppression automatique des accents (`Raphaël` ➔ `raphael`) et caractères spéciaux.
+  - Gestion des noms composés (`Dupont-Moretti` ➔ `dupont_moretti`).
+- Ce nom uniformisé est appliqué :
+  - Aux métadonnées en base de données (`User.cvOriginalName` et `AppConfig.cvOriginalName`).
+  - Au fichier stocké sur le disque serveur (`cv_<userId>_<timestamp>_<hash>.pdf`).
+  - À la pièce jointe attachée dans les e-mails envoyés aux recruteurs.
+  - À l'en-tête de téléchargement et d'aperçu (`Content-Disposition: inline; filename="nom_prenom_CV.pdf"`).
+  - À la carte de visualisation et aux modales de l'application mobile.
+
+---
+
+## 5. Guide d'Utilisation pour l'Utilisateur
 
 1. **Importer votre CV :**
    - Ouvrez l'onglet **Paramètres** de l'application.
    - Dans la section **Curriculum Vitae (PDF)**, appuyez sur **Importer mon CV (PDF)**.
-   - Sélectionnez votre fichier `.pdf` (taille max. 10 Mo). Le fichier est automatiquement stocké sur votre téléphone et synchronisé sur l'API.
+   - Sélectionnez votre fichier `.pdf` (taille max. 10 Mo). Le fichier est automatiquement renommé au format `nom_prenom_CV.pdf` (ex : `martinez_raphael_CV.pdf`), stocké sur votre téléphone et synchronisé sur l'API.
 2. **Vérifier ou Prévisualiser :**
    - Depuis les **Paramètres**, appuyez sur le bouton **Voir** pour visualiser votre CV dans votre visionneuse PDF.
-   - Lors de l'envoi d'une candidature depuis une fiche entreprise, appuyez sur **Prévisualiser l'e-mail** : le bloc **Pièce jointe** confirme la présence du CV.
+   - Lors de l'envoi d'une candidature depuis une fiche entreprise, appuyez sur **Prévisualiser l'e-mail** : le bloc **Pièce jointe** confirme la présence du CV uniformisé.
 3. **Tester la réception :**
-   - Dans les **Paramètres**, utilisez le bouton **Envoyer un e-mail de test** : vous recevrez un e-mail sur votre adresse Gmail personnelle avec votre CV en pièce jointe réelle.
+   - Dans les **Paramètres**, utilisez le bouton **Envoyer un e-mail de test** : vous recevrez un e-mail sur votre adresse Gmail personnelle avec votre CV en pièce jointe réelle nommé `nom_prenom_CV.pdf`.
 4. **Envoi aux entreprises :**
-   - Tous les e-mails envoyés (envoi en masse sur l'accueil, envoi individuel ou relance automatique) intègrent automatiquement votre CV PDF en pièce jointe.
+   - Tous les e-mails envoyés (envoi en masse sur l'accueil, envoi individuel ou relance automatique) intègrent automatiquement votre CV PDF en pièce jointe avec le nommage professionnel standardisé.
 
 ---
 
-## 5. Proposition de Commit Git
+## 6. Proposition de Commit Git
 
 Conformément aux directives de [Regles.md](../../Regles.md) :
 
 ```bash
-git add . && git commit -m "feat: gestion stockage local et synchronisation du CV PDF avec envoi automatique par e-mail" && git push
+git add . && git commit -m "feat: uniformisation du nommage des CV en nom_prenom_CV.pdf" && git push
 ```

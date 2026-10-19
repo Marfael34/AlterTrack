@@ -20,6 +20,51 @@ Restant à votre entière disposition pour un échange téléphonique ou un entr
 
 Bien cordialement,`;
 
+export function buildStandardCvFileName(fullName?: string | null): string {
+  if (!fullName || !fullName.trim()) {
+    return 'candidat_CV.pdf';
+  }
+
+  // Remplacer les tirets et underscores par des espaces pour traiter les noms composés
+  const normalizedSpaces = fullName.trim().replace(/[-_]+/g, ' ');
+  const rawParts = normalizedSpaces.split(/\s+/).filter(Boolean);
+  if (rawParts.length === 0) return 'candidat_CV.pdf';
+
+  const cleanPart = (str: string) =>
+    str
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-zA-Z0-9]/g, '')
+      .toLowerCase();
+
+  if (rawParts.length === 1) {
+    const single = cleanPart(rawParts[0]);
+    return single ? `${single}_CV.pdf` : 'candidat_CV.pdf';
+  }
+
+  let nom = '';
+  let prenom = '';
+
+  const firstWord = rawParts[0];
+  const isFirstWordAllUpper =
+    firstWord.length > 1 &&
+    firstWord === firstWord.toUpperCase() &&
+    rawParts.slice(1).some((w) => w !== w.toUpperCase());
+
+  if (isFirstWordAllUpper) {
+    nom = cleanPart(firstWord);
+    prenom = rawParts.slice(1).map(cleanPart).filter(Boolean).join('_');
+  } else {
+    prenom = cleanPart(rawParts[0]);
+    nom = rawParts.slice(1).map(cleanPart).filter(Boolean).join('_');
+  }
+
+  nom = nom || 'nom';
+  prenom = prenom || 'prenom';
+
+  return `${nom}_${prenom}_CV.pdf`;
+}
+
 @Injectable()
 export class AppConfigService {
   private readonly logger = new Logger(AppConfigService.name);
@@ -114,12 +159,18 @@ export class AppConfigService {
       }
     }
 
-    // Génération d'un nom de fichier sécurisé et unique (évite toute traversée de chemin)
-    const baseName = path.basename(file.originalname);
-    const sanitizedOriginalName = baseName.toLowerCase().endsWith('.pdf')
-      ? baseName
-      : `${baseName}.pdf`;
-    const safeFilename = `cv_${Date.now()}_${randomBytes(8).toString('hex')}.pdf`;
+    let userFullName: string | null = null;
+    if (userId) {
+      const u = await this.prisma.user.findUnique({
+        where: { id: userId },
+        select: { fullName: true },
+      });
+      userFullName = u?.fullName || null;
+    }
+
+    // Génération du nom de fichier uniforme : nom_prenom_CV.pdf
+    const standardName = buildStandardCvFileName(userFullName);
+    const safeFilename = `cv_${userId || 'global'}_${Date.now()}_${randomBytes(8).toString('hex')}.pdf`;
     const targetPath = path.join(this.uploadDir, safeFilename);
 
     // Écriture du fichier sur le disque
@@ -129,7 +180,7 @@ export class AppConfigService {
       where: { id: config.id },
       data: {
         cvFilePath: targetPath,
-        cvOriginalName: sanitizedOriginalName,
+        cvOriginalName: standardName,
       },
     });
 
@@ -138,15 +189,15 @@ export class AppConfigService {
         where: { id: userId },
         data: {
           cvFilePath: targetPath,
-          cvOriginalName: sanitizedOriginalName,
+          cvOriginalName: standardName,
         },
       });
       this.logger.log(
-        `CV PDF enregistré avec succès pour l'utilisateur ${userId} (${sanitizedOriginalName}).`,
+        `CV PDF enregistré avec succès pour l'utilisateur ${userId} (${standardName}).`,
       );
     } else {
       this.logger.log(
-        `CV PDF enregistré avec succès au niveau global (${sanitizedOriginalName}).`,
+        `CV PDF enregistré avec succès au niveau global (${standardName}).`,
       );
     }
 
@@ -185,7 +236,7 @@ export class AppConfigService {
     if (userId) {
       const user = await this.prisma.user.findUnique({
         where: { id: userId },
-        select: { cvFilePath: true, cvOriginalName: true },
+        select: { cvFilePath: true, cvOriginalName: true, fullName: true },
       });
 
       if (user?.cvFilePath && fs.existsSync(user.cvFilePath)) {
@@ -193,7 +244,8 @@ export class AppConfigService {
         if (resolved.startsWith(uploadBoundary)) {
           return {
             filePath: resolved,
-            originalName: user.cvOriginalName || 'CV.pdf',
+            originalName:
+              user.cvOriginalName || buildStandardCvFileName(user.fullName),
           };
         }
       }

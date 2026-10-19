@@ -7,7 +7,7 @@ import {
 import { Status } from '@prisma/client';
 import * as fs from 'fs';
 import { PrismaService } from '../../prisma/prisma.service';
-import { AppConfigService } from '../app-config/app-config.service';
+import { AppConfigService, buildStandardCvFileName } from '../app-config/app-config.service';
 import { EmailNature } from '../gemini/dto/generate-email.dto';
 import { GeminiService } from '../gemini/gemini.service';
 import { PushNotificationService } from '../notifications/push-notification.service';
@@ -53,6 +53,7 @@ export class MailingService {
     currentUser?: {
       cvFilePath?: string | null;
       cvOriginalName?: string | null;
+      fullName?: string | null;
     } | null,
     config?: {
       cvFilePath?: string | null;
@@ -64,11 +65,19 @@ export class MailingService {
 
     if (currentUser?.cvFilePath && fs.existsSync(currentUser.cvFilePath)) {
       cvPath = currentUser.cvFilePath;
-      cvName = currentUser.cvOriginalName || 'CV.pdf';
+      cvName =
+        currentUser.cvOriginalName ||
+        (currentUser.fullName
+          ? buildStandardCvFileName(currentUser.fullName)
+          : 'CV.pdf');
     } else {
       try {
         cvPath = await this.appConfigService.getCvFilePath();
-        cvName = config?.cvOriginalName || 'CV.pdf';
+        cvName =
+          config?.cvOriginalName ||
+          (currentUser?.fullName
+            ? buildStandardCvFileName(currentUser.fullName)
+            : 'CV.pdf');
       } catch {
         this.logger.warn(
           'Aucun CV PDF trouvé sur le serveur pour la pièce jointe.',

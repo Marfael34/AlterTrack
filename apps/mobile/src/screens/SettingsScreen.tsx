@@ -19,7 +19,7 @@ import { Colors } from '../constants/colors';
 import { ApiService } from '../services/api.service';
 import { LocationService, ReferencePoint } from '../services/location.service';
 import { NotificationService } from '../services/notification.service';
-import { StorageService } from '../services/storage.service';
+import { StorageService, formatStandardCvName } from '../services/storage.service';
 import { AppConfig } from '../types/config';
 import { useAuth } from '../context/AuthContext';
 
@@ -204,7 +204,8 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
         setTemplate(config.template);
         if (config.hasCv) {
           setHasCv(true);
-          setActiveCvName(user?.cvOriginalName || config.cvOriginalName || localCv?.fileName || 'CV.pdf');
+          const fallbackStd = formatStandardCvName(user?.fullName || profileFullName);
+          setActiveCvName(user?.cvOriginalName || config.cvOriginalName || localCv?.fileName || fallbackStd);
         } else if (!localCv) {
           setHasCv(false);
           setActiveCvName(null);
@@ -320,18 +321,19 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
         return;
       }
 
-      const safeName = isPdfExt ? rawName : `${rawName}.pdf`;
+      // Format uniforme : nom_prenom_CV.pdf
+      const standardName = formatStandardCvName(user?.fullName || profileFullName);
 
       setUploadingCv(true);
 
       const updated = await ApiService.uploadCv(
         file.uri,
-        safeName,
+        standardName,
         (file as unknown as { file?: unknown }).file,
       );
 
       const localInfo = {
-        fileName: updated.cvOriginalName || rawName,
+        fileName: updated.cvOriginalName || standardName,
         fileSize: file.size,
         fileUri: file.uri,
         uploadedAt: new Date().toISOString(),

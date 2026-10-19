@@ -14,7 +14,7 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import type { Response } from 'express';
 import { CurrentUser } from '../auth/current-user.decorator';
 import type { AuthenticatedUser } from '../auth/current-user.decorator';
-import { AppConfigService } from './app-config.service';
+import { AppConfigService, buildStandardCvFileName } from './app-config.service';
 import { UpdatePushTokenDto } from './dto/update-push-token.dto';
 import { UpdateTemplateDto } from './dto/update-template.dto';
 
@@ -27,7 +27,10 @@ export class AppConfigController {
     const config = await this.appConfigService.getOrCreateConfig();
     const hasCv = Boolean(user?.cvFilePath || config.cvFilePath);
     const cvOriginalName =
-      user?.cvOriginalName || config.cvOriginalName || null;
+      user?.cvOriginalName ||
+      (user?.cvFilePath ? buildStandardCvFileName(user.fullName) : null) ||
+      config.cvOriginalName ||
+      null;
 
     return {
       id: config.id,
