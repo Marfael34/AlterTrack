@@ -3,6 +3,7 @@ import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Linking,
   Modal,
   Platform,
   ScrollView,
@@ -20,22 +21,34 @@ interface EmailPreviewModalProps {
   visible: boolean;
   onClose: () => void;
   companyName: string;
+  companyEmail?: string;
+  onSendToCompany?: (subject: string, body: string) => Promise<void>;
   nature?: 'FIRST_CONTACT' | 'FOLLOW_UP';
   hasCv?: boolean;
+  cvOriginalName?: string | null;
+  onCvUploaded?: () => void;
 }
 
 export const EmailPreviewModal: React.FC<EmailPreviewModalProps> = ({
   visible,
   onClose,
   companyName,
+  companyEmail,
+  onSendToCompany,
   nature = 'FIRST_CONTACT',
   hasCv = true,
+  cvOriginalName = null,
+  onCvUploaded,
 }) => {
   const [loading, setLoading] = useState(false);
   const [subject, setSubject] = useState('');
   const [body, setBody] = useState('');
   const [testEmail, setTestEmail] = useState('');
   const [sendingTest, setSendingTest] = useState(false);
+  const [sendingToCompany, setSendingToCompany] = useState(false);
+  const [currentHasCv, setCurrentHasCv] = useState(hasCv);
+  const [currentCvName, setCurrentCvName] = useState(cvOriginalName);
+  const [uploadingCvModal, setUploadingCvModal] = useState(false);
   const [testResult, setTestResult] = useState<{
     success: boolean;
     isSimulation: boolean;
@@ -43,6 +56,11 @@ export const EmailPreviewModal: React.FC<EmailPreviewModalProps> = ({
     note: string;
     attachmentName: string | null;
   } | null>(null);
+
+  useEffect(() => {
+    setCurrentHasCv(hasCv);
+    setCurrentCvName(cvOriginalName);
+  }, [hasCv, cvOriginalName]);
 
   useEffect(() => {
     if (visible && companyName) {
@@ -69,6 +87,70 @@ export const EmailPreviewModal: React.FC<EmailPreviewModalProps> = ({
       );
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleModalPickCv = async () => {
+    try {
+      const DocumentPicker = await import('expo-document-picker');
+      const result = await DocumentPicker.getDocumentAsync({
+        type: ['application/pdf', 'application/x-pdf', '*/*'],
+        copyToCacheDirectory: true,
+      });
+
+      if (result.canceled || !result.assets || result.assets.length === 0) {
+        return;
+      }
+
+      const file = result.assets[0];
+      const rawName = file.name || 'CV.pdf';
+      const isPdfMime = file.mimeType
+        ? file.mimeType.toLowerCase().includes('pdf')
+        : false;
+      const isPdfExt = rawName.toLowerCase().endsWith('.pdf');
+
+      if (!isPdfMime && !isPdfExt) {
+        Alert.alert(
+          'Format non reconnu',
+          'Veuillez sélectionner un document au format PDF (.pdf).',
+        );
+        return;
+      }
+
+      const safeName = isPdfExt ? rawName : `${rawName}.pdf`;
+
+      setUploadingCvModal(true);
+
+      const updated = await ApiService.uploadCv(
+        file.uri,
+        safeName,
+        (file as unknown as { file?: unknown }).file,
+      );
+
+      const localInfo = {
+        fileName: updated.cvOriginalName || rawName,
+        fileSize: file.size,
+        fileUri: file.uri,
+        uploadedAt: new Date().toISOString(),
+        isSynced: true,
+      };
+
+      await StorageService.setLocalCv(localInfo);
+      setCurrentHasCv(true);
+      setCurrentCvName(localInfo.fileName);
+
+      if (onCvUploaded) {
+        onCvUploaded();
+      }
+
+      Alert.alert(
+        'CV stocké et joint ✅',
+        `Le fichier "${localInfo.fileName}" est stocké et sera joint automatiquement à cet e-mail.`,
+      );
+    } catch (err: any) {
+      Alert.alert('Erreur', err?.message || "Échec de l'import du CV");
+    } finally {
+      setUploadingCvModal(false);
     }
   };
 
@@ -139,6 +221,57 @@ export const EmailPreviewModal: React.FC<EmailPreviewModalProps> = ({
     }
   };
 
+  const handleSendToCompany = () => {
+    if (!onSendToCompany) return;
+    Alert.alert(
+      'Envoi à l\'entreprise',
+      `Confirmez-vous l'envoi de cet e-mail personnalisé avec votre CV à ${companyName} (${companyEmail || 'adresse de contact'}) ?`,
+      [
+        { text: 'Annuler', style: 'cancel' },
+        {
+          text: 'Envoyer maintenant',
+          onPress: async () => {
+            setSendingToCompany(true);
+            try {
+              await onSendToCompany(subject, body);
+            } catch (err: any) {
+              // géré par l'appelant
+            } finally {
+              setSendingToCompany(false);
+            }
+          },
+        },
+      ],
+    );
+  };
+
+  const handleOpenInGmail = async () => {
+    const target = companyEmail?.trim() || '';
+    if (!target || target.endsWith('@sans-email.altertrack')) {
+      Alert.alert(
+        'Adresse e-mail requise',
+        'Veuillez renseigner une adresse e-mail valide pour cette entreprise.',
+      );
+      return;
+    }
+
+    const encodedSubject = encodeURIComponent(subject);
+    const encodedBody = encodeURIComponent(body);
+    const gmailAppUrl = `googlegmail:///co?to=${encodeURIComponent(target)}&subject=${encodedSubject}&body=${encodedBody}`;
+    const mailtoUrl = `mailto:${encodeURIComponent(target)}?subject=${encodedSubject}&body=${encodedBody}`;
+
+    try {
+      const canOpenGmail = await Linking.canOpenURL(gmailAppUrl).catch(() => false);
+      if (canOpenGmail) {
+        await Linking.openURL(gmailAppUrl);
+      } else {
+        await Linking.openURL(mailtoUrl);
+      }
+    } catch {
+      Alert.alert('Erreur', 'Impossible d\'ouvrir l\'application de messagerie Gmail.');
+    }
+  };
+
   return (
     <Modal
       visible={visible}
@@ -189,24 +322,49 @@ export const EmailPreviewModal: React.FC<EmailPreviewModalProps> = ({
               <View
                 style={[
                   styles.cvBadgeRow,
-                  hasCv ? styles.cvBadgeSuccess : styles.cvBadgeWarning,
+                  currentHasCv ? styles.cvBadgeSuccess : styles.cvBadgeWarning,
                 ]}
               >
                 <Ionicons
-                  name={hasCv ? 'attach-outline' : 'warning-outline'}
-                  size={16}
-                  color={hasCv ? Colors.success : Colors.warning}
+                  name={currentHasCv ? 'document-attach' : 'warning-outline'}
+                  size={18}
+                  color={currentHasCv ? Colors.success : Colors.warning}
                 />
-                <Text
-                  style={[
-                    styles.cvBadgeText,
-                    { color: hasCv ? Colors.success : Colors.warning },
-                  ]}
-                >
-                  {hasCv
-                    ? 'Le CV (PDF) sera joint automatiquement'
-                    : 'Attention : aucun CV uploadé sur le serveur'}
-                </Text>
+                <View style={{ flex: 1 }}>
+                  <Text
+                    style={[
+                      styles.cvBadgeTitle,
+                      { color: currentHasCv ? Colors.success : Colors.warning },
+                    ]}
+                  >
+                    {currentHasCv
+                      ? 'CV joint automatiquement ✅'
+                      : 'Aucun CV stocké dans l\'application ⚠️'}
+                  </Text>
+                  <Text style={styles.cvBadgeSubtext} numberOfLines={1}>
+                    {currentHasCv
+                      ? `Pièce jointe : ${currentCvName || 'CV.pdf'}`
+                      : 'Votre candidature partira sans pièce jointe.'}
+                  </Text>
+                </View>
+
+                {!currentHasCv && (
+                  <TouchableOpacity
+                    style={styles.modalUploadCvBtn}
+                    onPress={handleModalPickCv}
+                    disabled={uploadingCvModal}
+                    activeOpacity={0.8}
+                  >
+                    {uploadingCvModal ? (
+                      <ActivityIndicator size="small" color="#FFFFFF" />
+                    ) : (
+                      <>
+                        <Ionicons name="cloud-upload-outline" size={13} color="#FFFFFF" />
+                        <Text style={styles.modalUploadCvBtnText}>Importer</Text>
+                      </>
+                    )}
+                  </TouchableOpacity>
+                )}
               </View>
 
               {/* Objet du mail */}
@@ -245,6 +403,53 @@ export const EmailPreviewModal: React.FC<EmailPreviewModalProps> = ({
                   textAlignVertical="top"
                 />
               </View>
+
+              {/* Action Envoi Direct Entreprise & Gmail */}
+              {onSendToCompany && (
+                <View style={styles.directSendCard}>
+                  <Text style={styles.directSendLabel}>
+                    Prêt à envoyer votre candidature ?
+                  </Text>
+                  <View style={styles.directSendActionsRow}>
+                    <TouchableOpacity
+                      style={[
+                        styles.sendToCompanyBtn,
+                        sendingToCompany && styles.btnDisabled,
+                      ]}
+                      onPress={handleSendToCompany}
+                      disabled={sendingToCompany}
+                      activeOpacity={0.8}
+                    >
+                      {sendingToCompany ? (
+                        <ActivityIndicator size="small" color="#FFFFFF" />
+                      ) : (
+                        <>
+                          <Ionicons name="paper-plane" size={16} color="#FFFFFF" />
+                          <Text style={styles.sendToCompanyBtnText}>
+                            Envoyer via AlterTrack (avec CV)
+                          </Text>
+                        </>
+                      )}
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={styles.openGmailBtn}
+                      onPress={handleOpenInGmail}
+                      activeOpacity={0.8}
+                    >
+                      <Ionicons name="mail" size={16} color="#FFFFFF" />
+                      <Text style={styles.openGmailBtnText}>
+                        Ouvrir dans l'application Gmail
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                  {companyEmail && (
+                    <Text style={styles.directSendTargetText}>
+                      Destinataire officiel : {companyEmail}
+                    </Text>
+                  )}
+                </View>
+              )}
 
               {/* Section Test d'envoi */}
               <View style={styles.testSectionCard}>
@@ -424,9 +629,28 @@ const styles = StyleSheet.create({
     backgroundColor: `${Colors.warning}18`,
     borderColor: `${Colors.warning}40`,
   },
-  cvBadgeText: {
-    fontSize: 12,
-    fontWeight: '600',
+  cvBadgeTitle: {
+    fontSize: 12.5,
+    fontWeight: '700',
+  },
+  cvBadgeSubtext: {
+    fontSize: 11,
+    color: Colors.textSecondary,
+    marginTop: 1,
+  },
+  modalUploadCvBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: Colors.status.TO_CALL,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 7,
+  },
+  modalUploadCvBtnText: {
+    color: '#FFFFFF',
+    fontSize: 11.5,
+    fontWeight: '700',
   },
   fieldBlock: {
     gap: 6,
@@ -558,6 +782,66 @@ const styles = StyleSheet.create({
     color: Colors.textSecondary,
     marginTop: 2,
     lineHeight: 15,
+  },
+  directSendCard: {
+    backgroundColor: `${Colors.brandCyan}12`,
+    borderWidth: 1.5,
+    borderColor: `${Colors.brandCyan}50`,
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 16,
+    gap: 10,
+  },
+  directSendLabel: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: Colors.text,
+  },
+  directSendActionsRow: {
+    gap: 8,
+  },
+  sendToCompanyBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.brandBlue,
+    borderRadius: 10,
+    paddingVertical: 12,
+    gap: 8,
+    shadowColor: Colors.brandBlue,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.35,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  sendToCompanyBtnText: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+    fontSize: 13,
+  },
+  openGmailBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#EA4335',
+    borderRadius: 10,
+    paddingVertical: 12,
+    gap: 8,
+    shadowColor: '#EA4335',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.35,
+    shadowRadius: 6,
+    elevation: 3,
+  },
+  openGmailBtnText: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+    fontSize: 13,
+  },
+  directSendTargetText: {
+    fontSize: 11,
+    color: Colors.textSecondary,
+    textAlign: 'center',
   },
   modalFooter: {
     paddingHorizontal: 16,

@@ -5,6 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { Status } from '@prisma/client';
+import * as fs from 'fs';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AppConfigService } from '../app-config/app-config.service';
 import { EmailNature } from '../gemini/dto/generate-email.dto';
@@ -48,11 +49,49 @@ export class MailingService {
     private readonly pushService: PushNotificationService,
   ) {}
 
-  async sendInitialBatch(companyIds?: string[]) {
+  private async resolveCvAttachment(
+    currentUser?: {
+      cvFilePath?: string | null;
+      cvOriginalName?: string | null;
+    } | null,
+    config?: {
+      cvFilePath?: string | null;
+      cvOriginalName?: string | null;
+    } | null,
+  ): Promise<{ path?: string; name: string }> {
+    let cvPath: string | undefined;
+    let cvName = 'CV.pdf';
+
+    if (currentUser?.cvFilePath && fs.existsSync(currentUser.cvFilePath)) {
+      cvPath = currentUser.cvFilePath;
+      cvName = currentUser.cvOriginalName || 'CV.pdf';
+    } else {
+      try {
+        cvPath = await this.appConfigService.getCvFilePath();
+        cvName = config?.cvOriginalName || 'CV.pdf';
+      } catch {
+        this.logger.warn(
+          'Aucun CV PDF trouvé sur le serveur pour la pièce jointe.',
+        );
+      }
+    }
+
+    return { path: cvPath, name: cvName };
+  }
+
+  async sendInitialBatch(companyIds?: string[], userId?: string) {
+    let currentUser: any = null;
+    if (userId) {
+      currentUser = await this.prisma.user.findUnique({
+        where: { id: userId },
+      });
+    }
+
     const config = await this.appConfigService.getOrCreateConfig();
 
-    const whereClause: { status: Status; id?: { in: string[] } } = {
+    const whereClause: any = {
       status: Status.TO_SEND,
+      ...(userId ? { userId } : {}),
     };
 
     if (companyIds && companyIds.length > 0) {
@@ -71,20 +110,18 @@ export class MailingService {
     const successful: string[] = [];
     const failed: { id: string; name: string; error: string }[] = [];
 
-    let cvPath: string | undefined;
-    try {
-      cvPath = await this.appConfigService.getCvFilePath();
-    } catch {
-      this.logger.warn(
-        'Aucun CV PDF trouvé sur le serveur pour la pièce jointe.',
-      );
-    }
+    const { path: cvPath, name: cvName } = await this.resolveCvAttachment(
+      currentUser,
+      config,
+    );
+
+    const template = currentUser?.template || config.template;
 
     for (const company of companies) {
       try {
         const emailContent = await this.geminiService.generateEmail({
           companyName: company.name,
-          template: config.template,
+          template,
           nature: EmailNature.FIRST_CONTACT,
         });
 
@@ -93,7 +130,10 @@ export class MailingService {
           subject: emailContent.subject,
           body: emailContent.body,
           attachmentPath: cvPath,
-          attachmentName: config.cvOriginalName || 'CV.pdf',
+          attachmentName: cvName,
+          senderUser: currentUser?.gmailUser,
+          senderPass: currentUser?.gmailAppPassword,
+          senderName: currentUser?.fullName,
         });
 
         const now = new Date();
@@ -131,12 +171,105 @@ export class MailingService {
       failedCount: failed.length,
       successfulIds: successful,
       failed,
+      cvAttached: !!cvPath,
+      cvName: cvName || null,
     };
   }
 
-  async sendFollowUp(companyId: string) {
-    const company = await this.prisma.company.findUnique({
-      where: { id: companyId },
+  async sendSingle(
+    companyId: string,
+    customSubject?: string,
+    customBody?: string,
+    userId?: string,
+  ) {
+    const where: any = { id: companyId };
+    if (userId) {
+      where.userId = userId;
+    }
+
+    const company = await this.prisma.company.findFirst({
+      where,
+    });
+
+    if (!company) {
+      throw new NotFoundException(
+        `Entreprise avec l'ID ${companyId} non trouvée`,
+      );
+    }
+
+    let currentUser: any = null;
+    const effectiveUserId = userId || company.userId;
+    if (effectiveUserId) {
+      currentUser = await this.prisma.user.findUnique({
+        where: { id: effectiveUserId },
+      });
+    }
+
+    const config = await this.appConfigService.getOrCreateConfig();
+
+    const { path: cvPath, name: cvName } = await this.resolveCvAttachment(
+      currentUser,
+      config,
+    );
+
+    const template = currentUser?.template || config.template;
+    let subject = customSubject?.trim();
+    let body = customBody?.trim();
+
+    if (!subject || !body) {
+      const emailContent = await this.geminiService.generateEmail({
+        companyName: company.name,
+        template,
+        nature: EmailNature.FIRST_CONTACT,
+      });
+      subject = subject || emailContent.subject;
+      body = body || emailContent.body;
+    }
+
+    const sendResult = await this.emailService.sendMail({
+      to: company.email,
+      subject,
+      body,
+      attachmentPath: cvPath,
+      attachmentName: cvName,
+      senderUser: currentUser?.gmailUser,
+      senderPass: currentUser?.gmailAppPassword,
+      senderName: currentUser?.fullName,
+    });
+
+    const now = new Date();
+    const followUpTargetDate = new Date(
+      now.getTime() + 7 * 24 * 60 * 60 * 1000,
+    );
+
+    const updated = await this.prisma.company.update({
+      where: { id: company.id },
+      data: {
+        status: Status.WAITING_FOR_REPLY,
+        firstMailSentAt: now,
+        followUpReadyAt: followUpTargetDate,
+        lastMailId: sendResult.messageId,
+      },
+    });
+
+    return {
+      success: true,
+      company: updated,
+      messageId: sendResult.messageId,
+      isSimulation: Boolean(sendResult.isSimulation),
+      hasAttachment: Boolean(sendResult.hasAttachment),
+      attachmentName: sendResult.attachmentName || null,
+    };
+  }
+
+  async sendFollowUp(companyId: string, userId?: string) {
+    const where: any = { id: companyId };
+    if (userId) {
+      where.userId = userId;
+    }
+
+    const company = await this.prisma.company.findFirst({
+      where,
     });
 
     if (!company) {
@@ -152,18 +285,26 @@ export class MailingService {
       );
     }
 
+    let currentUser: any = null;
+    const effectiveUserId = userId || company.userId;
+    if (effectiveUserId) {
+      currentUser = await this.prisma.user.findUnique({
+        where: { id: effectiveUserId },
+      });
+    }
+
     const config = await this.appConfigService.getOrCreateConfig();
 
-    let cvPath: string | undefined;
-    try {
-      cvPath = await this.appConfigService.getCvFilePath();
-    } catch {
-      this.logger.warn('Aucun CV PDF trouvé pour la relance.');
-    }
+    const { path: cvPath, name: cvName } = await this.resolveCvAttachment(
+      currentUser,
+      config,
+    );
+
+    const template = currentUser?.template || config.template;
 
     const emailContent = await this.geminiService.generateEmail({
       companyName: company.name,
-      template: config.template,
+      template,
       nature: EmailNature.FOLLOW_UP,
     });
 
@@ -172,7 +313,10 @@ export class MailingService {
       subject: emailContent.subject,
       body: emailContent.body,
       attachmentPath: cvPath,
-      attachmentName: config.cvOriginalName || 'CV.pdf',
+      attachmentName: cvName,
+      senderUser: currentUser?.gmailUser,
+      senderPass: currentUser?.gmailAppPassword,
+      senderName: currentUser?.fullName,
     });
 
     const now = new Date();
@@ -264,12 +408,23 @@ export class MailingService {
     };
   }
 
-  async testGemini(companyName: string, nature?: EmailNature) {
-    const config = await this.appConfigService.getOrCreateConfig();
+  async testGemini(companyName: string, nature?: EmailNature, userId?: string) {
+    let template: string | undefined;
+    if (userId) {
+      const user = await this.prisma.user.findUnique({
+        where: { id: userId },
+      });
+      if (user?.template) template = user.template;
+    }
+
+    if (!template) {
+      const config = await this.appConfigService.getOrCreateConfig();
+      template = config.template;
+    }
 
     return this.geminiService.generateEmail({
       companyName,
-      template: config.template,
+      template,
       nature: nature || EmailNature.FIRST_CONTACT,
     });
   }
@@ -292,21 +447,10 @@ export class MailingService {
     const targetCompany = companyName?.trim() || 'Entreprise Exemple';
     const config = await this.appConfigService.getOrCreateConfig();
 
-    let cvPath: string | undefined;
-    let cvName = config.cvOriginalName || 'CV.pdf';
-
-    if (currentUser?.cvFilePath) {
-      cvPath = currentUser.cvFilePath;
-      cvName = currentUser.cvOriginalName || 'CV.pdf';
-    } else {
-      try {
-        cvPath = await this.appConfigService.getCvFilePath();
-      } catch {
-        this.logger.warn(
-          'Aucun CV PDF trouvé sur le serveur pour la pièce jointe du test.',
-        );
-      }
-    }
+    const { path: cvPath, name: cvName } = await this.resolveCvAttachment(
+      currentUser,
+      config,
+    );
 
     let subject = customSubject?.trim();
     let body = customBody?.trim();
@@ -344,8 +488,8 @@ export class MailingService {
       companyTarget: targetCompany,
       subject,
       body,
-      hasAttachment: Boolean(cvPath),
-      attachmentName: cvPath ? cvName : null,
+      hasAttachment: Boolean(sendResult.hasAttachment),
+      attachmentName: sendResult.attachmentName || (cvPath ? cvName : null),
       messageId: sendResult.messageId,
       isSimulation: !isSmtp.configured,
       smtpUser: isSmtp.user,

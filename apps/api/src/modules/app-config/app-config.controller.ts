@@ -2,6 +2,7 @@ import {
   BadRequestException,
   Body,
   Controller,
+  Delete,
   Get,
   Patch,
   Post,
@@ -11,6 +12,8 @@ import {
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import type { Response } from 'express';
+import { CurrentUser } from '../auth/current-user.decorator';
+import type { AuthenticatedUser } from '../auth/current-user.decorator';
 import { AppConfigService } from './app-config.service';
 import { UpdatePushTokenDto } from './dto/update-push-token.dto';
 import { UpdateTemplateDto } from './dto/update-template.dto';
@@ -20,14 +23,18 @@ export class AppConfigController {
   constructor(private readonly appConfigService: AppConfigService) {}
 
   @Get()
-  async getConfig() {
+  async getConfig(@CurrentUser() user?: AuthenticatedUser) {
     const config = await this.appConfigService.getOrCreateConfig();
+    const hasCv = Boolean(user?.cvFilePath || config.cvFilePath);
+    const cvOriginalName =
+      user?.cvOriginalName || config.cvOriginalName || null;
+
     return {
       id: config.id,
-      template: config.template,
-      hasCv: Boolean(config.cvFilePath),
-      cvOriginalName: config.cvOriginalName,
-      expoPushToken: config.expoPushToken,
+      template: user?.template || config.template,
+      hasCv,
+      cvOriginalName,
+      expoPushToken: user?.expoPushToken || config.expoPushToken,
       updatedAt: config.updatedAt,
     };
   }
@@ -49,25 +56,63 @@ export class AppConfigController {
         fileSize: 10 * 1024 * 1024, // 10 Mo max
       },
       fileFilter: (req, file, callback) => {
-        if (file.mimetype !== 'application/pdf') {
-          return callback(
-            new BadRequestException('Seuls les fichiers PDF sont acceptés'),
-            false,
-          );
+        const name = (file.originalname || '').toLowerCase();
+        const mime = (file.mimetype || '').toLowerCase();
+
+        const isAllowedMime =
+          mime.includes('pdf') ||
+          mime === 'application/octet-stream' ||
+          mime === 'binary/octet-stream' ||
+          mime.includes('download') ||
+          mime === 'application/unknown' ||
+          !mime;
+
+        const isPdfExt = name.endsWith('.pdf');
+
+        if (isAllowedMime || isPdfExt) {
+          return callback(null, true);
         }
-        callback(null, true);
+
+        return callback(
+          new BadRequestException('Seuls les fichiers PDF sont acceptés'),
+          false,
+        );
       },
     }),
   )
-  uploadCv(@UploadedFile() file: Express.Multer.File) {
-    return this.appConfigService.saveCv(file);
+  async uploadCv(
+    @UploadedFile() file: Express.Multer.File,
+    @CurrentUser() user?: AuthenticatedUser,
+  ) {
+    const updated = await this.appConfigService.saveCv(file, user?.id);
+    return {
+      id: updated.id,
+      hasCv: true,
+      cvOriginalName: updated.cvOriginalName,
+      message: 'CV enregistré et synchronisé avec succès.',
+    };
   }
 
   @Get('cv/download')
-  async downloadCv(@Res() res: Response) {
-    const filePath = await this.appConfigService.getCvFilePath();
-    const config = await this.appConfigService.getOrCreateConfig();
+  async downloadCv(
+    @Res() res: Response,
+    @CurrentUser() user?: AuthenticatedUser,
+  ) {
+    const { filePath, originalName } =
+      await this.appConfigService.getCvFileForUser(user?.id);
 
-    res.download(filePath, config.cvOriginalName || 'CV.pdf');
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader(
+      'Content-Disposition',
+      `inline; filename="${encodeURIComponent(originalName)}"`,
+    );
+
+    res.sendFile(filePath);
+  }
+
+  @Delete('cv')
+  deleteCv(@CurrentUser() user?: AuthenticatedUser) {
+    return this.appConfigService.deleteCv(user?.id);
   }
 }

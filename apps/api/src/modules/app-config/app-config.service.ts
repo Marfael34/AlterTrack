@@ -70,13 +70,26 @@ export class AppConfigService {
     });
   }
 
-  async saveCv(file: Express.Multer.File) {
-    if (!file) {
-      throw new BadRequestException('Aucun fichier fourni');
+  async saveCv(file: Express.Multer.File, userId?: string) {
+    if (!file || !file.buffer || file.buffer.length === 0) {
+      throw new BadRequestException('Aucun fichier fourni ou fichier vide');
     }
 
-    // Vérification stricte du type MIME
-    if (file.mimetype !== 'application/pdf') {
+    const name = (file.originalname || '').toLowerCase();
+    const mime = (file.mimetype || '').toLowerCase();
+
+    // Vérification des magic bytes PDF (%PDF-)
+    const hasPdfMagic =
+      file.buffer.length >= 4 &&
+      file.buffer.subarray(0, 4).toString('ascii') === '%PDF';
+
+    const isPdfExt = name.endsWith('.pdf');
+    const isPdfMime =
+      mime.includes('pdf') ||
+      mime === 'application/octet-stream' ||
+      mime === 'binary/octet-stream';
+
+    if (!hasPdfMagic && !isPdfExt) {
       throw new BadRequestException('Seuls les fichiers PDF sont acceptés');
     }
 
@@ -102,20 +115,42 @@ export class AppConfigService {
     }
 
     // Génération d'un nom de fichier sécurisé et unique (évite toute traversée de chemin)
-    const sanitizedOriginalName = path.basename(file.originalname);
+    const baseName = path.basename(file.originalname);
+    const sanitizedOriginalName = baseName.toLowerCase().endsWith('.pdf')
+      ? baseName
+      : `${baseName}.pdf`;
     const safeFilename = `cv_${Date.now()}_${randomBytes(8).toString('hex')}.pdf`;
     const targetPath = path.join(this.uploadDir, safeFilename);
 
     // Écriture du fichier sur le disque
     fs.writeFileSync(targetPath, file.buffer);
 
-    return this.prisma.appConfig.update({
+    const updatedConfig = await this.prisma.appConfig.update({
       where: { id: config.id },
       data: {
         cvFilePath: targetPath,
         cvOriginalName: sanitizedOriginalName,
       },
     });
+
+    if (userId) {
+      await this.prisma.user.update({
+        where: { id: userId },
+        data: {
+          cvFilePath: targetPath,
+          cvOriginalName: sanitizedOriginalName,
+        },
+      });
+      this.logger.log(
+        `CV PDF enregistré avec succès pour l'utilisateur ${userId} (${sanitizedOriginalName}).`,
+      );
+    } else {
+      this.logger.log(
+        `CV PDF enregistré avec succès au niveau global (${sanitizedOriginalName}).`,
+      );
+    }
+
+    return updatedConfig;
   }
 
   async getCvFilePath(): Promise<string> {
@@ -137,5 +172,103 @@ export class AppConfigService {
     }
 
     return resolved;
+  }
+
+  async getCvFileForUser(userId?: string): Promise<{
+    filePath: string;
+    originalName: string;
+  }> {
+    const uploadBoundary = this.uploadDir.endsWith(path.sep)
+      ? this.uploadDir
+      : `${this.uploadDir}${path.sep}`;
+
+    if (userId) {
+      const user = await this.prisma.user.findUnique({
+        where: { id: userId },
+        select: { cvFilePath: true, cvOriginalName: true },
+      });
+
+      if (user?.cvFilePath && fs.existsSync(user.cvFilePath)) {
+        const resolved = path.resolve(user.cvFilePath);
+        if (resolved.startsWith(uploadBoundary)) {
+          return {
+            filePath: resolved,
+            originalName: user.cvOriginalName || 'CV.pdf',
+          };
+        }
+      }
+    }
+
+    const config = await this.getOrCreateConfig();
+    if (config.cvFilePath && fs.existsSync(config.cvFilePath)) {
+      const resolved = path.resolve(config.cvFilePath);
+      if (resolved.startsWith(uploadBoundary)) {
+        return {
+          filePath: resolved,
+          originalName: config.cvOriginalName || 'CV.pdf',
+        };
+      }
+    }
+
+    throw new NotFoundException(
+      'Aucun CV PDF actif trouvé sur le serveur pour cet utilisateur',
+    );
+  }
+
+  async deleteCv(userId?: string): Promise<{ success: boolean; message: string }> {
+    const uploadBoundary = this.uploadDir.endsWith(path.sep)
+      ? this.uploadDir
+      : `${this.uploadDir}${path.sep}`;
+
+    if (userId) {
+      const user = await this.prisma.user.findUnique({
+        where: { id: userId },
+        select: { cvFilePath: true },
+      });
+
+      if (user?.cvFilePath) {
+        try {
+          const resolved = path.resolve(user.cvFilePath);
+          if (resolved.startsWith(uploadBoundary) && fs.existsSync(resolved)) {
+            fs.unlinkSync(resolved);
+          }
+        } catch (err) {
+          this.logger.warn(`Impossible de supprimer le fichier CV utilisateur: ${err}`);
+        }
+
+        await this.prisma.user.update({
+          where: { id: userId },
+          data: {
+            cvFilePath: null,
+            cvOriginalName: null,
+          },
+        });
+      }
+    }
+
+    const config = await this.getOrCreateConfig();
+    if (config.cvFilePath) {
+      try {
+        const resolved = path.resolve(config.cvFilePath);
+        if (resolved.startsWith(uploadBoundary) && fs.existsSync(resolved)) {
+          fs.unlinkSync(resolved);
+        }
+      } catch (err) {
+        this.logger.warn(`Impossible de supprimer le fichier CV global: ${err}`);
+      }
+
+      await this.prisma.appConfig.update({
+        where: { id: config.id },
+        data: {
+          cvFilePath: null,
+          cvOriginalName: null,
+        },
+      });
+    }
+
+    return {
+      success: true,
+      message: 'CV supprimé avec succès',
+    };
   }
 }

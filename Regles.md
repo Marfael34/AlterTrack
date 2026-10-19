@@ -40,9 +40,12 @@ gérée avec Prisma.
     compromis et procédures d'exploitation doivent être consignés.
 12. **Ne jamais prétendre qu'une vérification a réussi si elle n'a pas
     été exécutée.**
-13. **Timeout opérationnel (300 secondes maximum) :** Si une étape,
-    commande ou tâche dure plus de 300 secondes, l'interrompre et passer à
-    autre chose (approche alternative ou suite du flux) sans rester bloqué.
+13. **Gestion des tâches longues et timeouts opérationnels (600s / 1200s) :**
+    Si le temps d'une tâche dépasse 600s (10 minutes), l'interrompre et
+    passer à la tâche suivante. Réessayer la tâche en tout dernier. Si
+    toujours rien ou bloqué au bout de 1200s (20 minutes) au total, arrêter,
+    indiquer précisément à l'utilisateur la commande à exécuter manuellement
+    et attendre qu'il renvoie les informations nécessaires.
 
 ## 2. Architecture générale recommandée
 
@@ -779,6 +782,7 @@ règles suivantes :
 16. Distinguer clairement ce qui a été modifié, ce qui reste à faire et
     ce qui est seulement recommandé.
 17. Produire systématiquement une fiche de suivi par étape documentant les réalisations, les contrôles effectués et la suite du planning.
+18. Si une commande dépasse les 600s, demander à l'utilisateur de l'exécuter et attendre qu'il renvoie les résultats.
 
 ## 18. Checklist avant livraison
 

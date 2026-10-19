@@ -1,4 +1,6 @@
 import { Platform } from 'react-native';
+import * as FileSystem from 'expo-file-system/legacy';
+import { File as ExpoFile } from 'expo-file-system';
 import {
   AuthResponse,
   LoginPayload,
@@ -185,76 +187,96 @@ export const ApiService = {
     const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
     const url = `${baseUrl}${cleanEndpoint}`;
 
-    // 1. Sur Web : utilisation directe du File / Blob du navigateur
-    if (Platform.OS === 'web') {
-      const formData = new FormData();
-      if (
-        (typeof Blob !== 'undefined' && webFile instanceof Blob) ||
-        (typeof File !== 'undefined' && webFile instanceof File)
-      ) {
-        formData.append('file', webFile as Blob, fileName);
-      } else {
-        const res = await fetch(fileUri);
-        const blob = await res.blob();
-        formData.append('file', blob, fileName);
-      }
-      return this.request(endpoint, {
-        method: 'POST',
-        body: formData,
-      });
-    }
-
-    // 2. Sur Mobile (Android / iOS) : streaming natif via expo-file-system
-    try {
-      const { File: ExpoFile, UploadType } = await import('expo-file-system');
-      const file = new ExpoFile(fileUri);
-      const res = await file.upload(url, {
-        httpMethod: 'POST',
-        uploadType: UploadType.MULTIPART,
-        fieldName: 'file',
-        mimeType,
-        headers: {
-          'x-api-key': apiKey,
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-          Accept: 'application/json',
-        },
-      });
-
-      if (res.status >= 400) {
-        let msg = `Erreur HTTP ${res.status}`;
-        try {
-          const err = JSON.parse(res.body) as { message?: string | string[] };
-          if (Array.isArray(err.message)) msg = err.message.join(', ');
-          else if (err.message) msg = err.message;
-        } catch {
-          // ignore
-        }
-        throw new Error(msg);
-      }
-
-      return JSON.parse(res.body) as T;
-    } catch (uploadErr) {
-      if (uploadErr instanceof Error && uploadErr.message.startsWith('Erreur HTTP')) {
-        throw uploadErr;
-      }
-      // Fallback FormData standard
-      const formData = new FormData();
+    // 1. Sur Mobile (Android / iOS) : Privilégier le streaming natif OkHttp / NSURLSession
+    // Cela contourne complètement JS FormData/fetch et élimine l'erreur "Unsupported FormDataPart implementation"
+    if (Platform.OS !== 'web' && typeof FileSystem.uploadAsync === 'function') {
       try {
-        const res = await fetch(fileUri);
-        const blob = await res.blob();
-        formData.append('file', blob, fileName);
-      } catch {
-        formData.append('file', {
-          uri: fileUri,
-          name: fileName,
-          type: mimeType,
-        } as unknown as Blob);
+        const res = await FileSystem.uploadAsync(url, fileUri, {
+          httpMethod: 'POST',
+          uploadType: FileSystem.FileSystemUploadType.MULTIPART,
+          fieldName: 'file',
+          mimeType: mimeType || 'application/pdf',
+          headers: {
+            'x-api-key': apiKey,
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+            Accept: 'application/json',
+          },
+        });
+
+        if (res.status >= 400) {
+          let msg = `Erreur HTTP ${res.status}`;
+          try {
+            const err = JSON.parse(res.body) as { message?: string | string[] };
+            if (Array.isArray(err.message)) msg = err.message.join(', ');
+            else if (err.message) msg = err.message;
+          } catch {
+            // ignore
+          }
+          throw new Error(msg);
+        }
+
+        return JSON.parse(res.body) as T;
+      } catch (nativeErr) {
+        if (nativeErr instanceof Error && nativeErr.message.startsWith('Erreur HTTP')) {
+          throw nativeErr;
+        }
+        console.warn('Native uploadAsync failed, falling back to multi-strategy FormData:', nativeErr);
       }
-      return this.request(endpoint, {
-        method: 'POST',
-        body: formData,
-      });
     }
+
+    // 2. Fallback FormData (Web ou environnement où uploadAsync n'est pas disponible)
+    const formData = new FormData();
+    let fileAppended = false;
+
+    // A. Sur Web ou si webFile est fourni
+    if (
+      (typeof Blob !== 'undefined' && webFile instanceof Blob) ||
+      (typeof File !== 'undefined' && webFile instanceof File)
+    ) {
+      formData.append('file', webFile as Blob, fileName);
+      fileAppended = true;
+    }
+
+    // B. Tentative via fetch(fileUri).blob() (compatible WinterCG Expo fetch)
+    if (!fileAppended) {
+      try {
+        const fileResponse = await fetch(fileUri);
+        const blob = await fileResponse.blob();
+        formData.append('file', blob, fileName);
+        fileAppended = true;
+      } catch (blobErr) {
+        console.warn('Fetch local file to blob fallback failed:', blobErr);
+      }
+    }
+
+    // C. Tentative via la classe File d'expo-file-system (implémente .bytes() pour Expo modern fetch)
+    if (!fileAppended) {
+      try {
+        if (typeof ExpoFile === 'function') {
+          const expoFile = new ExpoFile(fileUri);
+          formData.append('file', expoFile as unknown as Blob, fileName);
+          fileAppended = true;
+        }
+      } catch (expoFileErr) {
+        console.warn('ExpoFile fallback failed:', expoFileErr);
+      }
+    }
+
+    // D. Dernier recours (objet React Native classique)
+    if (!fileAppended) {
+      const cleanUri =
+        Platform.OS === 'ios' ? fileUri.replace('file://', '') : fileUri;
+      formData.append('file', {
+        uri: cleanUri,
+        name: fileName,
+        type: mimeType || 'application/pdf',
+      } as unknown as Blob);
+    }
+
+    return this.request(endpoint, {
+      method: 'POST',
+      body: formData,
+    });
   },
 
   async uploadCv(
@@ -262,13 +284,38 @@ export const ApiService = {
     fileName: string,
     webFile?: unknown,
   ): Promise<AppConfig> {
+    const safeName = fileName.toLowerCase().endsWith('.pdf')
+      ? fileName
+      : `${fileName}.pdf`;
     return this.uploadFile<AppConfig>(
       '/config/cv',
       fileUri,
-      fileName,
+      safeName,
       'application/pdf',
       webFile,
     );
+  },
+
+  async deleteCv(): Promise<{ success: boolean; message: string }> {
+    return this.request('/config/cv', {
+      method: 'DELETE',
+    });
+  },
+
+  async getCvDownloadUrl(): Promise<string> {
+    const baseUrl = await StorageService.getServerUrl();
+    const token = await StorageService.getAuthToken();
+    const apiKey = await StorageService.getApiKey();
+
+    const params = new URLSearchParams();
+    if (token) {
+      params.append('token', token);
+    } else if (apiKey) {
+      params.append('apiKey', apiKey);
+    }
+
+    const queryString = params.toString() ? `?${params.toString()}` : '';
+    return `${baseUrl}/config/cv/download${queryString}`;
   },
 
   async importSpreadsheet(
@@ -296,14 +343,34 @@ export const ApiService = {
     );
   },
 
-  async sendInitialBatch(): Promise<{
+  async sendInitialBatch(companyIds?: string[]): Promise<{
     totalFound: number;
     successCount: number;
     failedCount: number;
+    cvAttached?: boolean;
+    cvName?: string | null;
   }> {
     return this.request('/mailing/send-initial', {
       method: 'POST',
-      body: JSON.stringify({}),
+      body: JSON.stringify({ companyIds }),
+    });
+  },
+
+  async sendInitialSingle(
+    companyId: string,
+    subject?: string,
+    body?: string,
+  ): Promise<{
+    success: boolean;
+    company: Company;
+    messageId: string;
+    isSimulation?: boolean;
+    hasAttachment?: boolean;
+    attachmentName?: string | null;
+  }> {
+    return this.request(`/mailing/send-single/${companyId}`, {
+      method: 'POST',
+      body: JSON.stringify({ subject, body }),
     });
   },
 

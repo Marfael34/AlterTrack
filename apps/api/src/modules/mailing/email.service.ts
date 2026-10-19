@@ -16,6 +16,9 @@ export interface SendMailOptions {
 
 export interface SendMailResult {
   messageId: string;
+  isSimulation?: boolean;
+  hasAttachment?: boolean;
+  attachmentName?: string | null;
 }
 
 @Injectable()
@@ -75,22 +78,40 @@ export class EmailService {
       });
     }
 
-    if (!activeTransporter || !effectiveUser) {
-      const mockId = `<mock-${Date.now()}@altertrack.local>`;
-      this.logger.log(
-        `[SIMULATION ENVOI MAIL] De: ${effectiveUser ?? 'Non configuré'} | Vers: ${options.to} | Objet: "${options.subject}" | ID: ${mockId}`,
-      );
-      return { messageId: mockId };
-    }
-
     const attachments: nodemailer.SendMailOptions['attachments'] = [];
+    const hasValidAttachment = Boolean(
+      options.attachmentPath && fs.existsSync(options.attachmentPath),
+    );
+    const attachmentFileName = hasValidAttachment
+      ? options.attachmentName || 'CV.pdf'
+      : null;
 
-    if (options.attachmentPath && fs.existsSync(options.attachmentPath)) {
+    if (hasValidAttachment && options.attachmentPath) {
       attachments.push({
-        filename: options.attachmentName || 'CV.pdf',
+        filename: attachmentFileName || 'CV.pdf',
         path: options.attachmentPath,
         contentType: 'application/pdf',
       });
+      this.logger.log(
+        `[PIÈCE JOINTE CV] Fichier "${attachmentFileName}" joint avec succès (${options.attachmentPath})`,
+      );
+    } else if (options.attachmentPath) {
+      this.logger.warn(
+        `[PIÈCE JOINTE CV] Le fichier "${options.attachmentPath}" est introuvable sur le disque. Envoi sans pièce jointe.`,
+      );
+    }
+
+    if (!activeTransporter || !effectiveUser) {
+      const mockId = `<mock-${Date.now()}@altertrack.local>`;
+      this.logger.log(
+        `[SIMULATION ENVOI MAIL] De: ${effectiveUser ?? 'Non configuré'} | Vers: ${options.to} | Objet: "${options.subject}" | CV joint: ${hasValidAttachment ? attachmentFileName : 'Aucun'} | ID: ${mockId}`,
+      );
+      return {
+        messageId: mockId,
+        isSimulation: true,
+        hasAttachment: hasValidAttachment,
+        attachmentName: attachmentFileName,
+      };
     }
 
     const mailOptions: nodemailer.SendMailOptions = {
@@ -104,9 +125,14 @@ export class EmailService {
     try {
       const info = await activeTransporter.sendMail(mailOptions);
       this.logger.log(
-        `Email envoyé avec succès de ${effectiveUser} à ${options.to} (ID: ${info.messageId})`,
+        `Email envoyé avec succès de ${effectiveUser} à ${options.to} (ID: ${info.messageId}) [CV: ${hasValidAttachment ? attachmentFileName : 'Non'}]`,
       );
-      return { messageId: info.messageId };
+      return {
+        messageId: info.messageId,
+        isSimulation: false,
+        hasAttachment: hasValidAttachment,
+        attachmentName: attachmentFileName,
+      };
     } catch (err: any) {
       this.logger.error(
         `Erreur SMTP lors de l'envoi vers ${options.to}: ${err?.message}`,

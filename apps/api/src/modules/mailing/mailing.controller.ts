@@ -9,6 +9,7 @@ import {
 import { CurrentUser } from '../auth/current-user.decorator';
 import type { AuthenticatedUser } from '../auth/current-user.decorator';
 import { SendBatchDto } from './dto/send-batch.dto';
+import { SendSingleDto } from './dto/send-single.dto';
 import { SendTestEmailDto } from './dto/send-test-email.dto';
 import { TestGeminiDto } from './dto/test-gemini.dto';
 import { MailingService } from './mailing.service';
@@ -19,14 +20,38 @@ export class MailingController {
 
   @Post('send-initial')
   @HttpCode(HttpStatus.OK)
-  sendInitialBatch(@Body() sendBatchDto: SendBatchDto) {
-    return this.mailingService.sendInitialBatch(sendBatchDto.companyIds);
+  sendInitialBatch(
+    @Body() sendBatchDto: SendBatchDto,
+    @CurrentUser() user?: AuthenticatedUser,
+  ) {
+    return this.mailingService.sendInitialBatch(
+      sendBatchDto.companyIds,
+      user?.id,
+    );
+  }
+
+  @Post('send-single/:id')
+  @HttpCode(HttpStatus.OK)
+  sendSingle(
+    @Param('id') id: string,
+    @Body() sendSingleDto: SendSingleDto,
+    @CurrentUser() user?: AuthenticatedUser,
+  ) {
+    return this.mailingService.sendSingle(
+      id,
+      sendSingleDto.subject,
+      sendSingleDto.body,
+      user?.id,
+    );
   }
 
   @Post('send-follow-up/:id')
   @HttpCode(HttpStatus.OK)
-  sendFollowUp(@Param('id') id: string) {
-    return this.mailingService.sendFollowUp(id);
+  sendFollowUp(
+    @Param('id') id: string,
+    @CurrentUser() user?: AuthenticatedUser,
+  ) {
+    return this.mailingService.sendFollowUp(id, user?.id);
   }
 
   @Post('check-replies')
@@ -44,6 +69,7 @@ export class MailingController {
     return this.mailingService.testGemini(
       testDto.companyName,
       testDto.nature,
+      user?.id,
     );
   }
 

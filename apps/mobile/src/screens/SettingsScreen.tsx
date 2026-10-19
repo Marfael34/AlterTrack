@@ -5,6 +5,7 @@ import {
   ActivityIndicator,
   Alert,
   Image,
+  Linking,
   ScrollView,
   StyleSheet,
   Text,
@@ -33,13 +34,14 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
   refPoint: propRefPoint,
   onUpdateRefPoint,
 }) => {
-  const { user, updateProfile, logout } = useAuth();
+  const { user, updateProfile, refreshProfile, logout } = useAuth();
 
   const [profileFullName, setProfileFullName] = useState(user?.fullName || '');
   const [profileGmailUser, setProfileGmailUser] = useState(user?.gmailUser || '');
   const [profileGmailAppPassword, setProfileGmailAppPassword] = useState('');
   const [showGmailPassword, setShowGmailPassword] = useState(false);
   const [savingProfile, setSavingProfile] = useState(false);
+  const [testingGmail, setTestingGmail] = useState(false);
 
   const [refPoint, setRefPoint] = useState<ReferencePoint | null>(propRefPoint || null);
   const [isRefPointModalOpen, setIsRefPointModalOpen] = useState(false);
@@ -48,12 +50,18 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
   const [template, setTemplate] = useState('');
   const [activeCvName, setActiveCvName] = useState<string | null>(null);
   const [hasCv, setHasCv] = useState(false);
+  const [cvDetails, setCvDetails] = useState<{
+    fileName: string;
+    fileSize?: number;
+    uploadedAt?: string;
+  } | null>(null);
   const [pushToken, setPushToken] = useState<string | null>(null);
   const [tunnelUrl, setTunnelUrl] = useState<string>('');
 
   const [loadingConfig, setLoadingConfig] = useState(true);
   const [savingTemplate, setSavingTemplate] = useState(false);
   const [uploadingCv, setUploadingCv] = useState(false);
+  const [deletingCv, setDeletingCv] = useState(false);
   const [testingConnection, setTestingConnection] = useState(false);
   const [registeringPush, setRegisteringPush] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState<'IDLE' | 'SUCCESS' | 'ERROR'>('IDLE');
@@ -80,7 +88,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
   useEffect(() => {
     if (user) {
       setProfileFullName(user.fullName || '');
-      setProfileGmailUser(user.gmailUser || '');
+      setProfileGmailUser(user.gmailUser || user.email || '');
     }
   }, [user]);
 
@@ -111,6 +119,49 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
     }
   };
 
+  const handleTestGmail = async () => {
+    const targetEmail = user?.email || profileGmailUser.trim();
+    if (!targetEmail) {
+      Alert.alert('Erreur', 'Veuillez renseigner votre adresse e-mail.');
+      return;
+    }
+
+    setTestingGmail(true);
+    try {
+      const res = await ApiService.sendTestEmail(
+        targetEmail,
+        'Test AlterTrack',
+        'Validation de connexion Gmail — AlterTrack',
+        `Bonjour ${user?.fullName || ''},\n\nFélicitations ! Vos identifiants Gmail sont correctement configurés dans AlterTrack.\nVos futures candidatures et relances pourront être expédiées directement depuis votre compte Google (${targetEmail}).\n\nDate : ${new Date().toLocaleString('fr-FR')}`,
+      );
+
+      if (res.isSimulation) {
+        Alert.alert(
+          'Mode Simulation 🧪',
+          `L'envoi a été simulé avec succès.\n\n⚠️ Votre mot de passe d'application Google (16 lettres) n'est pas encore enregistré. Saisissez-le ci-dessus et cliquez sur "Enregistrer mes paramètres Gmail" pour activer l'envoi réel.`,
+        );
+      } else {
+        Alert.alert(
+          'Connexion Gmail Réussie ! ✉️',
+          `Un e-mail de test réel a été expédié avec succès depuis votre compte Gmail vers ${targetEmail} !\nVérifiez votre boîte de réception.`,
+        );
+      }
+    } catch (err: any) {
+      Alert.alert(
+        'Échec du test Gmail ❌',
+        err?.message || 'Erreur lors de la connexion Gmail. Assurez-vous d\'utiliser un mot de passe d\'application de 16 lettres sans espace.',
+      );
+    } finally {
+      setTestingGmail(false);
+    }
+  };
+
+  const handleOpenGoogleAppPasswords = () => {
+    Linking.openURL('https://myaccount.google.com/apppasswords').catch(() => {
+      Alert.alert('Lien', 'Rendez-vous sur https://myaccount.google.com/apppasswords');
+    });
+  };
+
   const handleLogout = () => {
     Alert.alert(
       'Déconnexion',
@@ -128,10 +179,11 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
 
   const loadInitialSettings = async () => {
     try {
-      const [url, key, savedTestEmail] = await Promise.all([
+      const [url, key, savedTestEmail, localCv] = await Promise.all([
         StorageService.getServerUrl(),
         StorageService.getApiKey(),
         StorageService.getTestEmail(),
+        StorageService.getLocalCv(),
       ]);
       setServerUrl(url);
       setApiKey(key);
@@ -140,12 +192,23 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
       }
       setTunnelUrl(StorageService.getTunnelUrl());
 
+      if (localCv) {
+        setCvDetails(localCv);
+        setActiveCvName(localCv.fileName);
+        setHasCv(true);
+      }
+
       // Charge la configuration distante si le serveur est joignable
       try {
         const config: AppConfig = await ApiService.getConfig();
         setTemplate(config.template);
-        setHasCv(config.hasCv);
-        setActiveCvName(config.cvOriginalName || null);
+        if (config.hasCv) {
+          setHasCv(true);
+          setActiveCvName(user?.cvOriginalName || config.cvOriginalName || localCv?.fileName || 'CV.pdf');
+        } else if (!localCv) {
+          setHasCv(false);
+          setActiveCvName(null);
+        }
         setPushToken(config.expoPushToken || null);
       } catch {
         // Serveur pas encore joignable ou pas encore configuré
@@ -234,7 +297,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
   const handlePickAndUploadCv = async () => {
     try {
       const result = await DocumentPicker.getDocumentAsync({
-        type: 'application/pdf',
+        type: ['application/pdf', 'application/x-pdf', '*/*'],
         copyToCacheDirectory: true,
       });
 
@@ -243,22 +306,107 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
       }
 
       const file = result.assets[0];
+      const rawName = file.name || 'CV.pdf';
+      const isPdfMime = file.mimeType
+        ? file.mimeType.toLowerCase().includes('pdf')
+        : false;
+      const isPdfExt = rawName.toLowerCase().endsWith('.pdf');
+
+      if (!isPdfMime && !isPdfExt) {
+        Alert.alert(
+          'Format non reconnu',
+          'Veuillez sélectionner un document au format PDF (.pdf).',
+        );
+        return;
+      }
+
+      const safeName = isPdfExt ? rawName : `${rawName}.pdf`;
+
       setUploadingCv(true);
 
       const updated = await ApiService.uploadCv(
         file.uri,
-        file.name,
+        safeName,
         (file as unknown as { file?: unknown }).file,
       );
-      setHasCv(true);
-      setActiveCvName(updated.cvOriginalName || file.name);
 
-      Alert.alert('CV synchronisé 🎉', `Le fichier "${file.name}" a été uploadé sur le serveur NestJS et sera joint aux prochains envois.`);
+      const localInfo = {
+        fileName: updated.cvOriginalName || rawName,
+        fileSize: file.size,
+        fileUri: file.uri,
+        uploadedAt: new Date().toISOString(),
+        isSynced: true,
+      };
+
+      await StorageService.setLocalCv(localInfo);
+      setCvDetails(localInfo);
+      setHasCv(true);
+      setActiveCvName(localInfo.fileName);
+
+      try {
+        await refreshProfile();
+      } catch {
+        // ignore offline
+      }
+
+      const formattedSize = file.size
+        ? ` (${Math.round(file.size / 1024)} Ko)`
+        : '';
+
+      Alert.alert(
+        'CV stocké et synchronisé 🎉',
+        `Le fichier "${localInfo.fileName}"${formattedSize} a été enregistré dans l'application et synchronisé sur votre serveur.\n\nIl sera joint automatiquement à toutes vos candidatures et relances.`,
+      );
     } catch (err) {
       Alert.alert('Erreur', err instanceof Error ? err.message : "Échec de l'upload du CV");
     } finally {
       setUploadingCv(false);
     }
+  };
+
+  const handleViewCv = async () => {
+    try {
+      const url = await ApiService.getCvDownloadUrl();
+      await Linking.openURL(url);
+    } catch (err: any) {
+      Alert.alert(
+        'Visualisation du CV',
+        err?.message || 'Impossible d\'ouvrir le CV.',
+      );
+    }
+  };
+
+  const handleDeleteCv = () => {
+    Alert.alert(
+      'Supprimer mon CV',
+      'Confirmez-vous la suppression de votre CV stocké sur votre téléphone et le serveur ?\n\nVos prochains e-mails seront envoyés sans pièce jointe.',
+      [
+        { text: 'Annuler', style: 'cancel' },
+        {
+          text: 'Supprimer définitivement',
+          style: 'destructive',
+          onPress: async () => {
+            setDeletingCv(true);
+            try {
+              await ApiService.deleteCv();
+              await StorageService.removeLocalCv();
+              setHasCv(false);
+              setActiveCvName(null);
+              setCvDetails(null);
+              await refreshProfile();
+              Alert.alert(
+                'CV supprimé ✅',
+                'Le fichier CV a été retiré de l\'application et du serveur.',
+              );
+            } catch (err: any) {
+              Alert.alert('Erreur', err?.message || 'Échec de la suppression');
+            } finally {
+              setDeletingCv(false);
+            }
+          },
+        },
+      ],
+    );
   };
 
   const handleSendTestEmail = async () => {
@@ -355,6 +503,33 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
             </TouchableOpacity>
           </View>
 
+          {/* Statut d'activation de l'envoi Gmail */}
+          {user?.hasGmailConfigured ? (
+            <View style={styles.gmailStatusBadgeSuccess}>
+              <Ionicons name="checkmark-circle" size={18} color={Colors.success} />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.gmailStatusTitleSuccess}>
+                  Envoi Gmail direct actif ✅
+                </Text>
+                <Text style={styles.gmailStatusTextSuccess}>
+                  Vos candidatures et relances sont expédiées réellement depuis {user.gmailUser || user.email}.
+                </Text>
+              </View>
+            </View>
+          ) : (
+            <View style={styles.gmailStatusBadgeWarning}>
+              <Ionicons name="warning" size={18} color={Colors.warning} />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.gmailStatusTitleWarning}>
+                  Envoi direct Gmail non configuré ⚠️
+                </Text>
+                <Text style={styles.gmailStatusTextWarning}>
+                  Pour envoyer vos candidatures directement depuis AlterTrack avec votre adresse Gmail ({user?.email}), renseignez votre mot de passe d'application Google (16 lettres) ci-dessous.
+                </Text>
+              </View>
+            </View>
+          )}
+
           <Text style={styles.fieldLabel}>Nom complet</Text>
           <TextInput
             style={styles.input}
@@ -401,26 +576,59 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
           {/* Guide Google App Password */}
           <View style={styles.gmailHelpCard}>
             <Ionicons name="information-circle-outline" size={16} color={Colors.brandCyan} />
-            <Text style={styles.gmailHelpText}>
-              <Text style={{ fontWeight: '700', color: Colors.text }}>Comment obtenir le mot de passe ?</Text> Activez la validation en 2 étapes sur Google, puis rendez-vous sur <Text style={{ color: Colors.brandCyan }}>myaccount.google.com/apppasswords</Text> pour générer un mot de passe pour AlterTrack.
-            </Text>
+            <View style={{ flex: 1, gap: 4 }}>
+              <Text style={styles.gmailHelpText}>
+                <Text style={{ fontWeight: '700', color: Colors.text }}>Comment obtenir le mot de passe ?</Text> Activez la validation en 2 étapes sur Google, puis générez un mot de passe d'application (16 lettres sans espace) pour AlterTrack.
+              </Text>
+              <TouchableOpacity
+                style={styles.openGoogleLinkBtn}
+                onPress={handleOpenGoogleAppPasswords}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="open-outline" size={13} color={Colors.brandCyan} />
+                <Text style={styles.openGoogleLinkBtnText}>
+                  Ouvrir la page Google App Passwords ↗
+                </Text>
+              </TouchableOpacity>
+            </View>
           </View>
 
-          <TouchableOpacity
-            style={[styles.saveProfileBtn, savingProfile && styles.buttonDisabled]}
-            onPress={handleSaveProfile}
-            disabled={savingProfile}
-            activeOpacity={0.8}
-          >
-            {savingProfile ? (
-              <ActivityIndicator color="#FFFFFF" size="small" />
-            ) : (
-              <>
-                <Ionicons name="save-outline" size={18} color="#FFFFFF" />
-                <Text style={styles.saveProfileBtnText}>Enregistrer mes paramètres Gmail</Text>
-              </>
-            )}
-          </TouchableOpacity>
+          <View style={styles.profileActionBtnsCol}>
+            <TouchableOpacity
+              style={[styles.saveProfileBtn, savingProfile && styles.buttonDisabled]}
+              onPress={handleSaveProfile}
+              disabled={savingProfile}
+              activeOpacity={0.8}
+            >
+              {savingProfile ? (
+                <ActivityIndicator color="#FFFFFF" size="small" />
+              ) : (
+                <>
+                  <Ionicons name="save-outline" size={18} color="#FFFFFF" />
+                  <Text style={styles.saveProfileBtnText}>Enregistrer mes paramètres Gmail</Text>
+                </>
+              )}
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[
+                styles.testGmailBtn,
+                testingGmail && styles.buttonDisabled,
+              ]}
+              onPress={handleTestGmail}
+              disabled={testingGmail}
+              activeOpacity={0.8}
+            >
+              {testingGmail ? (
+                <ActivityIndicator color={Colors.accent} size="small" />
+              ) : (
+                <>
+                  <Ionicons name="paper-plane-outline" size={16} color={Colors.accent} />
+                  <Text style={styles.testGmailBtnText}>Tester l'envoi Gmail vers mon adresse</Text>
+                </>
+              )}
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* Section 1 : Connexion Serveur PC / Tailscale */}
@@ -545,42 +753,89 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
           </View>
           <Text style={styles.sectionDescription}>
             Ce fichier est stocké sur votre téléphone et synchronisé sur le serveur
-            pour être joint automatiquement aux candidatures et relances.
+            afin d'être joint automatiquement à toutes vos candidatures et relances.
           </Text>
 
           <View style={styles.cvCard}>
             <Ionicons
               name={hasCv ? 'document-attach' : 'alert-circle-outline'}
-              size={28}
+              size={30}
               color={hasCv ? Colors.success : Colors.warning}
             />
             <View style={styles.cvInfo}>
-              <Text style={styles.cvStatus}>
-                {hasCv ? 'CV actif sur le serveur' : 'Aucun CV enregistré'}
-              </Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Text style={styles.cvStatus}>
+                  {hasCv ? 'CV actif & stocké sur l\'app' : 'Aucun CV enregistré'}
+                </Text>
+                {hasCv && (
+                  <View style={styles.cvSyncTag}>
+                    <Text style={styles.cvSyncTagText}>Synchronisé ✅</Text>
+                  </View>
+                )}
+              </View>
               <Text style={styles.cvName} numberOfLines={1}>
                 {activeCvName || 'Veuillez sélectionner un fichier PDF'}
               </Text>
+              {hasCv && cvDetails?.fileSize ? (
+                <Text style={styles.cvMetaText}>
+                  Taille : {Math.round(cvDetails.fileSize / 1024)} Ko • Format PDF
+                </Text>
+              ) : null}
             </View>
           </View>
 
-          <TouchableOpacity
-            style={[styles.cvButton, uploadingCv && styles.buttonDisabled]}
-            onPress={handlePickAndUploadCv}
-            disabled={uploadingCv}
-            activeOpacity={0.8}
-          >
-            {uploadingCv ? (
-              <ActivityIndicator color="#FFFFFF" size="small" />
-            ) : (
-              <>
-                <Ionicons name="cloud-upload-outline" size={18} color="#FFFFFF" />
-                <Text style={styles.cvButtonText}>
-                  {hasCv ? 'Remplacer le CV (PDF)' : 'Importer un CV (PDF)'}
-                </Text>
-              </>
+          <View style={styles.cvActionsRow}>
+            <TouchableOpacity
+              style={[
+                styles.cvButton,
+                { flex: 1 },
+                uploadingCv && styles.buttonDisabled,
+              ]}
+              onPress={handlePickAndUploadCv}
+              disabled={uploadingCv || deletingCv}
+              activeOpacity={0.8}
+            >
+              {uploadingCv ? (
+                <ActivityIndicator color="#FFFFFF" size="small" />
+              ) : (
+                <>
+                  <Ionicons name="cloud-upload-outline" size={17} color="#FFFFFF" />
+                  <Text style={styles.cvButtonText}>
+                    {hasCv ? 'Remplacer le CV' : 'Importer mon CV (PDF)'}
+                  </Text>
+                </>
+              )}
+            </TouchableOpacity>
+
+            {hasCv && (
+              <TouchableOpacity
+                style={styles.viewCvBtn}
+                onPress={handleViewCv}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="eye-outline" size={16} color={Colors.accent} />
+                <Text style={styles.viewCvBtnText}>Voir</Text>
+              </TouchableOpacity>
             )}
-          </TouchableOpacity>
+
+            {hasCv && (
+              <TouchableOpacity
+                style={[
+                  styles.deleteCvBtn,
+                  deletingCv && styles.buttonDisabled,
+                ]}
+                onPress={handleDeleteCv}
+                disabled={deletingCv || uploadingCv}
+                activeOpacity={0.8}
+              >
+                {deletingCv ? (
+                  <ActivityIndicator color={Colors.danger} size="small" />
+                ) : (
+                  <Ionicons name="trash-outline" size={17} color={Colors.danger} />
+                )}
+              </TouchableOpacity>
+            )}
+          </View>
         </View>
 
         {/* Section : Adresse fixe de référence (Distance) */}
@@ -1024,6 +1279,55 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     fontSize: 13,
   },
+  cvSyncTag: {
+    backgroundColor: `${Colors.success}20`,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: `${Colors.success}40`,
+  },
+  cvSyncTagText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: Colors.success,
+  },
+  cvMetaText: {
+    fontSize: 11,
+    color: Colors.textMuted,
+    marginTop: 3,
+  },
+  cvActionsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  viewCvBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: `${Colors.accent}18`,
+    borderWidth: 1,
+    borderColor: `${Colors.accent}50`,
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+  viewCvBtnText: {
+    color: Colors.accent,
+    fontWeight: '700',
+    fontSize: 13,
+  },
+  deleteCvBtn: {
+    backgroundColor: `${Colors.danger}15`,
+    borderWidth: 1,
+    borderColor: `${Colors.danger}40`,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   saveTemplateButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1272,6 +1576,67 @@ const styles = StyleSheet.create({
     color: Colors.textSecondary,
     lineHeight: 16,
   },
+  gmailStatusBadgeSuccess: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: `${Colors.success}15`,
+    borderWidth: 1,
+    borderColor: `${Colors.success}50`,
+    borderRadius: 10,
+    padding: 12,
+    marginBottom: 14,
+  },
+  gmailStatusTitleSuccess: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: Colors.success,
+    marginBottom: 2,
+  },
+  gmailStatusTextSuccess: {
+    fontSize: 11.5,
+    color: Colors.textSecondary,
+    lineHeight: 16,
+  },
+  gmailStatusBadgeWarning: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: `${Colors.warning}15`,
+    borderWidth: 1,
+    borderColor: `${Colors.warning}50`,
+    borderRadius: 10,
+    padding: 12,
+    marginBottom: 14,
+  },
+  gmailStatusTitleWarning: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: Colors.warning,
+    marginBottom: 2,
+  },
+  gmailStatusTextWarning: {
+    fontSize: 11.5,
+    color: Colors.textSecondary,
+    lineHeight: 16,
+  },
+  openGoogleLinkBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    alignSelf: 'flex-start',
+    marginTop: 4,
+    paddingVertical: 2,
+  },
+  openGoogleLinkBtnText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: Colors.brandCyan,
+    textDecorationLine: 'underline',
+  },
+  profileActionBtnsCol: {
+    gap: 10,
+  },
   saveProfileBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1285,5 +1650,21 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontWeight: '700',
     fontSize: 14,
+  },
+  testGmailBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: `${Colors.accent}18`,
+    borderWidth: 1,
+    borderColor: `${Colors.accent}50`,
+    borderRadius: 10,
+    paddingVertical: 11,
+    gap: 8,
+  },
+  testGmailBtnText: {
+    color: Colors.accent,
+    fontWeight: '700',
+    fontSize: 13,
   },
 });

@@ -19,6 +19,7 @@ import { EmailPreviewModal } from '../components/EmailPreviewModal';
 import { ReferencePointModal } from '../components/ReferencePointModal';
 import { StatusBadge } from '../components/StatusBadge';
 import { Colors } from '../constants/colors';
+import { useAuth } from '../context/AuthContext';
 import { ApiService } from '../services/api.service';
 import { LocationService, ReferencePoint } from '../services/location.service';
 import { STATUS_LABELS, Company, Status } from '../types/company';
@@ -48,6 +49,7 @@ export const CompanyDetailScreen: React.FC<CompanyDetailScreenProps> = ({
   refPoint: propRefPoint,
   onUpdateRefPoint,
 }) => {
+  const { user } = useAuth();
   const [company, setCompany] = useState<Company>(initialCompany);
   const [name, setName] = useState(initialCompany.name);
   const [address, setAddress] = useState(initialCompany.address || '');
@@ -68,6 +70,7 @@ export const CompanyDetailScreen: React.FC<CompanyDetailScreenProps> = ({
   const [status, setStatus] = useState<Status>(initialCompany.status);
   const [saving, setSaving] = useState(false);
   const [sendingFollowUp, setSendingFollowUp] = useState(false);
+  const [sendingInitial, setSendingInitial] = useState(false);
   const [refPoint, setRefPoint] = useState<ReferencePoint | null>(propRefPoint || null);
   const [isRefPointModalOpen, setIsRefPointModalOpen] = useState(false);
   const [distanceKm, setDistanceKm] = useState<number | null>(null);
@@ -173,6 +176,32 @@ export const CompanyDetailScreen: React.FC<CompanyDetailScreenProps> = ({
     }
   };
 
+  const handleOpenGmailApp = async () => {
+    const targetEmail = email.trim() || company.email;
+    if (!targetEmail || targetEmail.endsWith('@sans-email.altertrack')) {
+      Alert.alert(
+        'Adresse e-mail requise',
+        'Veuillez renseigner une adresse e-mail valide pour cette entreprise.',
+      );
+      return;
+    }
+
+    const subject = `Candidature Alternance — ${company.name}`;
+    const gmailAppUrl = `googlegmail:///co?to=${encodeURIComponent(targetEmail)}&subject=${encodeURIComponent(subject)}`;
+    const mailtoUrl = `mailto:${encodeURIComponent(targetEmail)}?subject=${encodeURIComponent(subject)}`;
+
+    try {
+      const canOpenGmail = await Linking.canOpenURL(gmailAppUrl).catch(() => false);
+      if (canOpenGmail) {
+        await Linking.openURL(gmailAppUrl);
+      } else {
+        await Linking.openURL(mailtoUrl);
+      }
+    } catch {
+      Alert.alert('Erreur', 'Impossible d\'ouvrir l\'application Gmail.');
+    }
+  };
+
   const handleUpdateStatus = async (newStatus: Status) => {
     try {
       const updated = await ApiService.updateCompanyStatus(company.id, newStatus);
@@ -223,10 +252,115 @@ export const CompanyDetailScreen: React.FC<CompanyDetailScreenProps> = ({
     }
   };
 
+  const handleSendInitial = () => {
+    const targetEmail = email.trim() || company.email;
+    if (!targetEmail || targetEmail.endsWith('@sans-email.altertrack')) {
+      Alert.alert(
+        'Adresse e-mail requise',
+        'Veuillez d\'abord renseigner une adresse e-mail valide pour cette entreprise.',
+      );
+      return;
+    }
+
+    const cvNotice = user?.hasCv
+      ? `\n\n📎 Pièce jointe : Votre CV (${user.cvOriginalName || 'CV.pdf'}) sera joint automatiquement.`
+      : `\n\n⚠️ Attention : Aucun CV n'est stocké dans l'application. La candidature partira sans pièce jointe.`;
+
+    Alert.alert(
+      'Envoi de la candidature',
+      `Confirmez-vous l'envoi de votre candidature personnalisée à ${company.name} (${targetEmail}) ?${cvNotice}`,
+      [
+        { text: 'Annuler', style: 'cancel' },
+        ...(!user?.hasCv
+          ? [
+              {
+                text: 'Aperçu & Ajouter CV 📎',
+                onPress: () => setIsPreviewModalOpen(true),
+              },
+            ]
+          : []),
+        {
+          text: 'Envoyer maintenant',
+          onPress: async () => {
+            setSendingInitial(true);
+            try {
+              const res = await ApiService.sendInitialSingle(company.id);
+              setCompany(res.company);
+              setStatus(res.company.status);
+              onUpdated();
+              const attachMsg = res.hasAttachment
+                ? ` (avec votre CV ${res.attachmentName || ''} joint)`
+                : '';
+              if (res.isSimulation) {
+                Alert.alert(
+                  'Candidature marquée (Mode Simulation) 🧪',
+                  `La candidature pour ${company.name} a bien été enregistrée et marquée "En attente de réponse"${attachMsg}.\n\n⚠️ Vos identifiants Gmail SMTP ne sont pas encore configurés pour l'envoi réel. Rendez-vous dans Paramètres > Mon Compte & Envoi Gmail pour saisir votre mot de passe d'application Google (16 lettres), ou utilisez le bouton "Gmail" pour envoyer directement depuis votre application mobile.`,
+                );
+              } else {
+                Alert.alert(
+                  'Candidature envoyée ✅',
+                  `Votre e-mail de candidature a été expédié avec succès depuis Gmail à ${company.name}${attachMsg} !`,
+                );
+              }
+            } catch (err: any) {
+              Alert.alert(
+                'Échec de l\'envoi',
+                err?.message || 'Erreur lors de l\'envoi de la candidature',
+              );
+            } finally {
+              setSendingInitial(false);
+            }
+          },
+        },
+      ],
+    );
+  };
+
+  const handleSendCustomToCompany = async (
+    customSubject: string,
+    customBody: string,
+  ) => {
+    setSendingInitial(true);
+    try {
+      const res = await ApiService.sendInitialSingle(
+        company.id,
+        customSubject,
+        customBody,
+      );
+      setCompany(res.company);
+      setStatus(res.company.status);
+      onUpdated();
+      setIsPreviewModalOpen(false);
+      if (res.isSimulation) {
+        Alert.alert(
+          'Candidature marquée (Mode Simulation) 🧪',
+          `La candidature pour ${company.name} a bien été enregistrée et marquée "En attente de réponse".\n\n⚠️ Vos identifiants Gmail SMTP ne sont pas encore configurés pour l'envoi réel. Rendez-vous dans Paramètres > Mon Compte & Envoi Gmail pour saisir votre mot de passe d'application Google (16 lettres), ou utilisez le bouton "Ouvrir dans l'app Gmail".`,
+        );
+      } else {
+        Alert.alert(
+          'Candidature envoyée ✅',
+          `Votre e-mail de candidature a été expédié avec succès depuis Gmail à ${company.name} !`,
+        );
+      }
+    } catch (err: any) {
+      Alert.alert(
+        'Échec de l\'envoi',
+        err?.message || 'Erreur lors de l\'envoi de la candidature',
+      );
+      throw err;
+    } finally {
+      setSendingInitial(false);
+    }
+  };
+
   const handleSendFollowUp = () => {
+    const cvNotice = user?.hasCv
+      ? `\n\n📎 Votre CV (${user.cvOriginalName || 'CV.pdf'}) sera joint au mail de relance.`
+      : '';
+
     Alert.alert(
       'Envoi de la relance',
-      `Confirmez-vous la génération par IA et l'envoi du mail de relance avec votre CV à ${company.name} ?`,
+      `Confirmez-vous la génération par IA et l'envoi du mail de relance à ${company.name} ?${cvNotice}`,
       [
         { text: 'Annuler', style: 'cancel' },
         {
@@ -238,7 +372,7 @@ export const CompanyDetailScreen: React.FC<CompanyDetailScreenProps> = ({
               setCompany(updated);
               setStatus(updated.status);
               onUpdated();
-              Alert.alert('Relance envoyée', 'Le mail de relance a été expédié avec succès.');
+              Alert.alert('Relance envoyée ✅', 'Le mail de relance avec votre CV joint a été expédié avec succès.');
             } catch (err) {
               Alert.alert('Erreur', err instanceof Error ? err.message : "Échec de l'envoi");
             } finally {
@@ -359,7 +493,7 @@ export const CompanyDetailScreen: React.FC<CompanyDetailScreenProps> = ({
           </TouchableOpacity>
         )}
 
-        {/* Bannière de prévisualisation et test pour candidature à envoyer */}
+        {/* Bannière de prévisualisation et envoi pour candidature à envoyer */}
         {status === 'TO_SEND' && (
           <View style={styles.toSendBanner}>
             <View style={styles.toSendHeaderRow}>
@@ -367,16 +501,38 @@ export const CompanyDetailScreen: React.FC<CompanyDetailScreenProps> = ({
               <Text style={styles.toSendTitle}>Candidature en attente d'envoi</Text>
             </View>
             <Text style={styles.toSendSubtitle}>
-              Prévisualisez la lettre générée par Gemini et testez l'envoi sur votre boîte personnelle avant tout contact direct.
+              Envoyez votre candidature personnalisée avec votre CV directement à cette entreprise, ou prévisualisez l'e-mail au préalable.
             </Text>
-            <TouchableOpacity
-              style={styles.previewMailBtn}
-              onPress={() => setIsPreviewModalOpen(true)}
-              activeOpacity={0.8}
-            >
-              <Ionicons name="eye-outline" size={16} color="#FFFFFF" />
-              <Text style={styles.previewMailBtnText}>Aperçu & Tester l'e-mail IA</Text>
-            </TouchableOpacity>
+            <View style={styles.toSendActionsRow}>
+              <TouchableOpacity
+                style={[
+                  styles.sendInitialBtn,
+                  sendingInitial && styles.buttonDisabled,
+                ]}
+                onPress={handleSendInitial}
+                disabled={sendingInitial}
+                activeOpacity={0.8}
+              >
+                {sendingInitial ? (
+                  <ActivityIndicator color="#FFFFFF" size="small" />
+                ) : (
+                  <>
+                    <Ionicons name="paper-plane" size={16} color="#FFFFFF" />
+                    <Text style={styles.sendInitialBtnText}>
+                      Envoyer la candidature
+                    </Text>
+                  </>
+                )}
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.previewMailBtn}
+                onPress={() => setIsPreviewModalOpen(true)}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="eye-outline" size={15} color={Colors.accent} />
+                <Text style={styles.previewMailBtnText}>Aperçu / Test</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         )}
 
@@ -525,14 +681,24 @@ export const CompanyDetailScreen: React.FC<CompanyDetailScreenProps> = ({
 
           <View style={styles.emailLabelRow}>
             <Text style={styles.fieldLabelInline}>Adresse e-mail de contact *</Text>
-            <TouchableOpacity
-              style={styles.inlinePreviewBtn}
-              onPress={() => setIsPreviewModalOpen(true)}
-              activeOpacity={0.7}
-            >
-              <Ionicons name="sparkles" size={12} color={Colors.accent} />
-              <Text style={styles.inlinePreviewText}>Tester l'e-mail IA</Text>
-            </TouchableOpacity>
+            <View style={styles.inlineEmailActionsRow}>
+              <TouchableOpacity
+                style={styles.inlineGmailBtn}
+                onPress={handleOpenGmailApp}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="mail" size={12} color="#EA4335" />
+                <Text style={styles.inlineGmailText}>Gmail</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.inlinePreviewBtn}
+                onPress={() => setIsPreviewModalOpen(true)}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="sparkles" size={12} color={Colors.accent} />
+                <Text style={styles.inlinePreviewText}>Tester l'e-mail IA</Text>
+              </TouchableOpacity>
+            </View>
           </View>
           <TextInput
             style={styles.input}
@@ -637,7 +803,13 @@ export const CompanyDetailScreen: React.FC<CompanyDetailScreenProps> = ({
         visible={isPreviewModalOpen}
         onClose={() => setIsPreviewModalOpen(false)}
         companyName={company.name}
+        companyEmail={email || company.email}
+        onSendToCompany={
+          status === 'TO_SEND' ? handleSendCustomToCompany : undefined
+        }
         nature={status === 'TO_FOLLOW_UP' ? 'FOLLOW_UP' : 'FIRST_CONTACT'}
+        hasCv={user?.hasCv ?? false}
+        cvOriginalName={user?.cvOriginalName}
       />
     </View>
   );
@@ -784,15 +956,35 @@ const styles = StyleSheet.create({
     fontSize: 12,
     lineHeight: 16,
   },
+  toSendActionsRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 6,
+  },
+  sendInitialBtn: {
+    flex: 1.4,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.brandBlue,
+    paddingVertical: 10,
+    borderRadius: 10,
+    gap: 6,
+  },
+  sendInitialBtnText: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+    fontSize: 13,
+  },
   previewMailBtn: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: Colors.accent,
     paddingVertical: 10,
     borderRadius: 10,
-    gap: 8,
-    marginTop: 4,
+    gap: 6,
   },
   previewMailBtnText: {
     color: '#FFFFFF',
@@ -886,6 +1078,25 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: Colors.textSecondary,
     fontWeight: '500',
+  },
+  inlineEmailActionsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  inlineGmailBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#EA433518',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  inlineGmailText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#EA4335',
   },
   inlinePreviewBtn: {
     flexDirection: 'row',

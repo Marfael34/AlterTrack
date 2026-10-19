@@ -21,6 +21,7 @@ import { ReferencePointModal } from '../components/ReferencePointModal';
 import { CityItem } from '../components/CityFilterBar';
 import { FilterTabs } from '../components/FilterTabs';
 import { Colors } from '../constants/colors';
+import { useAuth } from '../context/AuthContext';
 import { ApiService } from '../services/api.service';
 import { FilterStorageService } from '../services/filterStorage.service';
 import { StorageService } from '../services/storage.service';
@@ -52,6 +53,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   const [stats, setStats] = useState<CompanyStats | undefined>(undefined);
   const [cities, setCities] = useState<CityItem[]>([]);
   const [totalCount, setTotalCount] = useState<number>(0);
+  const { user } = useAuth();
 
   // Initialisation instantanée depuis la mémoire pour préserver les filtres lors des navigations
   const initialFilters = FilterStorageService.getFiltersSync();
@@ -410,9 +412,34 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   const handleSendBatch = () => {
     if (toSendCount === 0) return;
 
+    if (!user?.hasCv) {
+      Alert.alert(
+        'Aucun CV attaché',
+        'Vous n\'avez pas encore importé de CV en format PDF. Les candidatures seront envoyées sans pièce jointe.\n\nSouhaitez-vous d\'abord configurer et enregistrer votre CV dans les Paramètres ?',
+        [
+          { text: 'Ajouter mon CV 📄', onPress: () => onOpenSettings() },
+          {
+            text: 'Envoyer quand même sans CV',
+            style: 'destructive',
+            onPress: () => confirmAndSendBatch(false),
+          },
+          { text: 'Annuler', style: 'cancel' },
+        ],
+      );
+      return;
+    }
+
+    confirmAndSendBatch(true);
+  };
+
+  const confirmAndSendBatch = (hasCv: boolean) => {
     Alert.alert(
       'Envoi groupé en 1 clic',
-      `Confirmez-vous l'envoi de votre candidature et CV à ${toSendCount} entreprise(s) ?\n\n💡 Recommandation : vous pouvez tester la réception sur votre boîte personnelle avant tout envoi réel.`,
+      `Confirmez-vous l'envoi de votre candidature à ${toSendCount} entreprise(s) ?\n\n${
+        hasCv
+          ? `📎 CV joint : ${user?.cvOriginalName || 'CV.pdf'}`
+          : '⚠️ Attention : aucun CV ne sera joint.'
+      }\n\n💡 Recommandation : vous pouvez tester la réception sur votre boîte personnelle avant tout envoi réel.`,
       [
         { text: 'Annuler', style: 'cancel' },
         {
@@ -426,9 +453,12 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             setSendingBatch(true);
             try {
               const res = await ApiService.sendInitialBatch();
+              const cvMsg = res.cvAttached
+                ? `\n📎 CV joint (${res.cvName || 'CV.pdf'})`
+                : '';
               Alert.alert(
                 'Envoi terminé',
-                `Succès : ${res.successCount}\nÉchecs : ${res.failedCount}`,
+                `Succès : ${res.successCount}\nÉchecs : ${res.failedCount}${cvMsg}`,
               );
               void loadData();
             } catch (err) {

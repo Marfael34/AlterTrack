@@ -12,13 +12,7 @@ import { MailingService } from './mailing.service';
 
 describe('MailingService', () => {
   let service: MailingService;
-  let prisma: {
-    company: {
-      findMany: jest.Mock;
-      findUnique: jest.Mock;
-      update: jest.Mock<Promise<unknown>, [Prisma.CompanyUpdateArgs]>;
-    };
-  };
+  let prisma: any;
   let geminiService: {
     generateEmail: jest.Mock;
   };
@@ -50,12 +44,16 @@ describe('MailingService', () => {
       company: {
         findMany: jest.fn().mockResolvedValue([mockCompany]),
         findUnique: jest.fn().mockResolvedValue(mockCompany),
+        findFirst: jest.fn().mockResolvedValue(mockCompany),
         update: jest
           .fn<Promise<unknown>, [Prisma.CompanyUpdateArgs]>()
           .mockResolvedValue({
             ...mockCompany,
             status: Status.WAITING_FOR_REPLY,
           }),
+      },
+      user: {
+        findUnique: jest.fn().mockResolvedValue(null),
       },
     };
 
@@ -69,6 +67,8 @@ describe('MailingService', () => {
     emailService = {
       sendMail: jest.fn().mockResolvedValue({
         messageId: '<msg-123@gmail.com>',
+        hasAttachment: true,
+        attachmentName: 'CV.pdf',
       }),
       isConfigured: jest.fn().mockReturnValue({
         configured: true,
@@ -138,7 +138,7 @@ describe('MailingService', () => {
 
   describe('sendFollowUp (Règle Anti-Spam)', () => {
     it('should throw BadRequestException if followUpSentAt is already populated', async () => {
-      prisma.company.findUnique.mockResolvedValueOnce({
+      prisma.company.findFirst.mockResolvedValueOnce({
         ...mockCompany,
         followUpSentAt: new Date(),
       });
@@ -149,7 +149,7 @@ describe('MailingService', () => {
     });
 
     it('should throw NotFoundException if company does not exist', async () => {
-      prisma.company.findUnique.mockResolvedValueOnce(null);
+      prisma.company.findFirst.mockResolvedValueOnce(null);
 
       await expect(service.sendFollowUp('invalid-id')).rejects.toThrow(
         NotFoundException,
@@ -157,6 +157,7 @@ describe('MailingService', () => {
     });
 
     it('should send follow-up and update followUpSentAt when valid', async () => {
+      prisma.company.findFirst.mockResolvedValueOnce(mockCompany);
       const result = await service.sendFollowUp('comp-1');
 
       expect(geminiService.generateEmail).toHaveBeenCalledWith(

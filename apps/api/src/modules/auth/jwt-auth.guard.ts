@@ -31,10 +31,13 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
     }
 
     const request = context.switchToHttp().getRequest();
-    const apiKeyHeader = request.headers['x-api-key'];
+    const apiKeyHeader =
+      request.headers['x-api-key'] ||
+      request.query?.apiKey ||
+      request.query?.['x-api-key'];
     const expectedKey = this.configService.get<string>('apiKey');
 
-    // Autoriser les scripts système ou watchdogs authentifiés par API_KEY (timing-safe)
+    // Autoriser les scripts système, requêtes web ou liens directs authentifiés par API_KEY (timing-safe)
     if (apiKeyHeader && expectedKey && typeof apiKeyHeader === 'string') {
       const headerBuffer = Buffer.from(apiKeyHeader);
       const expectedBuffer = Buffer.from(expectedKey);
@@ -64,6 +67,16 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
           return true;
         }
       }
+    }
+
+    // Support du token JWT via query parameter (pour l'ouverture de documents/liens dans le navigateur externe)
+    const queryToken = request.query?.token;
+    if (
+      queryToken &&
+      typeof queryToken === 'string' &&
+      !request.headers['authorization']
+    ) {
+      request.headers['authorization'] = `Bearer ${queryToken}`;
     }
 
     // Sinon, authentification JWT standard
