@@ -19,7 +19,8 @@ const ALL_STATUSES: Array<{
 }> = [
   { key: 'REPLY_RECEIVED', icon: 'chatbubble-ellipses' }, // Mis en avant car urgent !
   { key: 'TO_CALL', icon: 'call' }, // Mis en avant car urgent !
-  { key: 'TO_SEND', icon: 'mail-unread' },
+  { key: 'AUTO_SEND', icon: 'flash' }, // Envoi automatique
+  { key: 'TO_SEND', icon: 'mail-unread' }, // Envoi manuel
   { key: 'WAITING_FOR_REPLY', icon: 'time' },
   { key: 'TO_FOLLOW_UP', icon: 'refresh-circle' },
   { key: 'ACCEPTED', icon: 'checkmark-circle' },

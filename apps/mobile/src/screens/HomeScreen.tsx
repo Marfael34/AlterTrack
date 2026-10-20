@@ -405,17 +405,18 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
     }
   };
 
+  const autoSendCount = stats ? stats.AUTO_SEND : 0;
   const toSendCount = stats ? stats.TO_SEND : 0;
   const replyReceivedCount = stats ? stats.REPLY_RECEIVED : 0;
   const toCallCount = stats ? stats.TO_CALL : 0;
 
   const handleSendBatch = () => {
-    if (toSendCount === 0) return;
+    if (autoSendCount === 0) return;
 
     if (!user?.hasCv) {
       Alert.alert(
         'Aucun CV attaché',
-        'Vous n\'avez pas encore importé de CV en format PDF. Les candidatures seront envoyées sans pièce jointe.\n\nSouhaitez-vous d\'abord configurer et enregistrer votre CV dans les Paramètres ?',
+        'Vous n\'avez pas encore importé de CV en format PDF. Les candidatures automatiques seront envoyées sans pièce jointe.\n\nSouhaitez-vous d\'abord configurer et enregistrer votre CV dans les Paramètres ?',
         [
           { text: 'Ajouter mon CV 📄', onPress: () => onOpenSettings() },
           {
@@ -434,8 +435,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
   const confirmAndSendBatch = (hasCv: boolean) => {
     Alert.alert(
-      'Envoi groupé en 1 clic',
-      `Confirmez-vous l'envoi de votre candidature à ${toSendCount} entreprise(s) ?\n\n${
+      'Lancer l\'envoi automatique groupé',
+      `Confirmez-vous l'envoi immédiat du lot de ${autoSendCount} candidature(s) en attente d'envoi automatique ?\n\n${
         hasCv
           ? `📎 CV joint : ${user?.cvOriginalName || 'CV.pdf'}`
           : '⚠️ Attention : aucun CV ne sera joint.'
@@ -447,7 +448,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           onPress: () => onOpenSettings(),
         },
         {
-          text: 'Envoyer',
+          text: 'Lancer le lot',
           style: 'default',
           onPress: async () => {
             setSendingBatch(true);
@@ -457,7 +458,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                 ? `\n📎 CV joint (${res.cvName || 'CV.pdf'})`
                 : '';
               Alert.alert(
-                'Envoi terminé',
+                'Envoi automatique terminé',
                 `Succès : ${res.successCount}\nÉchecs : ${res.failedCount}${cvMsg}`,
               );
               void loadData();
@@ -617,20 +618,20 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           />
         </View>
         <View style={styles.headerActions}>
-          {toSendCount > 0 && (
+          {autoSendCount > 0 && (
             <TouchableOpacity
-              style={styles.headerSendBatchBtn}
+              style={[styles.headerSendBatchBtn, { backgroundColor: Colors.status.AUTO_SEND }]}
               onPress={handleSendBatch}
               disabled={sendingBatch}
               activeOpacity={0.8}
-              accessibilityLabel={`Envoyer les ${toSendCount} candidatures prêtes`}
+              accessibilityLabel={`Lancer l'envoi automatique pour ${autoSendCount} candidatures`}
             >
               {sendingBatch ? (
                 <ActivityIndicator size="small" color="#FFFFFF" />
               ) : (
                 <>
-                  <Ionicons name="paper-plane" size={13} color="#FFFFFF" />
-                  <Text style={styles.headerSendBatchText}>{toSendCount}</Text>
+                  <Ionicons name="flash" size={13} color="#FFFFFF" />
+                  <Text style={styles.headerSendBatchText}>{autoSendCount}</Text>
                 </>
               )}
             </TouchableOpacity>

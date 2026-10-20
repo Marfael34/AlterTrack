@@ -17,6 +17,7 @@ describe('SchedulerService', () => {
   let mailingService: {
     sendFollowUp: jest.Mock;
     checkIncomingReplies: jest.Mock;
+    sendInitialBatch: jest.Mock;
   };
 
   beforeEach(async () => {
@@ -36,6 +37,11 @@ describe('SchedulerService', () => {
         messagesScanned: 5,
         repliesDetected: 1,
         matchedCompanies: [],
+      }),
+      sendInitialBatch: jest.fn().mockResolvedValue({
+        totalFound: 1,
+        successCount: 1,
+        failedCount: 0,
       }),
     };
 
@@ -59,6 +65,25 @@ describe('SchedulerService', () => {
   });
 
   describe('runStateMachineTransitions', () => {
+    it('should trigger sendInitialBatch for AUTO_SEND companies', async () => {
+      const autoSendCompany = {
+        id: 'comp-auto',
+        name: 'Entreprise Auto',
+        status: Status.AUTO_SEND,
+      };
+
+      prisma.company.findMany
+        .mockResolvedValueOnce([autoSendCompany]) // AUTO_SEND query
+        .mockResolvedValueOnce([]) // J+7 query
+        .mockResolvedValueOnce([]) // J+8 query
+        .mockResolvedValueOnce([]); // J+15 query
+
+      const result = await service.runStateMachineTransitions();
+
+      expect(result.autoSentBatchCount).toBe(1);
+      expect(mailingService.sendInitialBatch).toHaveBeenCalled();
+    });
+
     it('should transition J+7 companies from WAITING_FOR_REPLY to TO_FOLLOW_UP', async () => {
       const j7Company = {
         id: 'comp-j7',
@@ -69,6 +94,7 @@ describe('SchedulerService', () => {
       };
 
       prisma.company.findMany
+        .mockResolvedValueOnce([]) // AUTO_SEND query
         .mockResolvedValueOnce([j7Company]) // J+7 query
         .mockResolvedValueOnce([]) // J+8 query
         .mockResolvedValueOnce([]); // J+15 query
@@ -91,6 +117,7 @@ describe('SchedulerService', () => {
       };
 
       prisma.company.findMany
+        .mockResolvedValueOnce([]) // AUTO_SEND query
         .mockResolvedValueOnce([]) // J+7 query
         .mockResolvedValueOnce([j8Company]) // J+8 query
         .mockResolvedValueOnce([]); // J+15 query
@@ -111,6 +138,7 @@ describe('SchedulerService', () => {
       };
 
       prisma.company.findMany
+        .mockResolvedValueOnce([]) // AUTO_SEND query
         .mockResolvedValueOnce([]) // J+7 query
         .mockResolvedValueOnce([]) // J+8 query
         .mockResolvedValueOnce([j15Company]); // J+15 query

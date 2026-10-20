@@ -99,12 +99,14 @@ export class MailingService {
     const config = await this.appConfigService.getOrCreateConfig();
 
     const whereClause: any = {
-      status: Status.TO_SEND,
       ...(userId ? { userId } : {}),
     };
 
     if (companyIds && companyIds.length > 0) {
       whereClause.id = { in: companyIds };
+      whereClause.status = { in: [Status.AUTO_SEND, Status.TO_SEND] };
+    } else {
+      whereClause.status = Status.AUTO_SEND;
     }
 
     const companies = await this.prisma.company.findMany({
@@ -113,7 +115,7 @@ export class MailingService {
     });
 
     this.logger.log(
-      `Démarrage de l'envoi groupé pour ${companies.length} entreprise(s) au statut À envoyer`,
+      `Démarrage de l'envoi groupé pour ${companies.length} entreprise(s) (statut AUTO_SEND/lot)`,
     );
 
     const successful: string[] = [];

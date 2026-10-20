@@ -71,7 +71,7 @@ describe('CompaniesService', () => {
   });
 
   describe('create', () => {
-    it('should create a company with default status TO_SEND', async () => {
+    it('should create a company with default status AUTO_SEND', async () => {
       const result = await service.create({
         name: 'Entreprise Test',
         email: 'contact@test.com',
@@ -81,10 +81,14 @@ describe('CompaniesService', () => {
         data: {
           name: 'Entreprise Test',
           email: 'contact@test.com',
+          address: undefined,
           city: undefined,
+          latitude: undefined,
+          longitude: undefined,
           phone: undefined,
           notes: undefined,
-          status: Status.TO_SEND,
+          status: Status.AUTO_SEND,
+          userId: undefined,
         },
       });
       expect(result).toEqual(mockCompany);
@@ -192,6 +196,7 @@ describe('CompaniesService', () => {
     it('should return aggregated counts for all statuses', async () => {
       const stats = await service.getStats();
       expect(stats.TO_SEND).toBe(1);
+      expect(stats.AUTO_SEND).toBe(0);
       expect(stats.ACCEPTED).toBe(0);
     });
   });

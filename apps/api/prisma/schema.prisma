@@ -11,7 +11,8 @@ datasource db {
 }
 
 enum Status {
-  TO_SEND            // À envoyer
+  AUTO_SEND          // Envoi automatique
+  TO_SEND            // À envoyer (manuel)
   WAITING_FOR_REPLY  // En attente de réponse
   TO_FOLLOW_UP       // À relancer
   TO_CALL            // À appeler
@@ -49,7 +50,7 @@ model Company {
   longitude       Float?
   phone           String?
   notes           String?
-  status          Status    @default(TO_SEND)
+  status          Status    @default(AUTO_SEND)
   firstMailSentAt DateTime?
   followUpReadyAt DateTime?
   followUpSentAt  DateTime?

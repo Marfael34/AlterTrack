@@ -32,6 +32,7 @@ interface FiltersModalProps {
 }
 
 const ALL_STATUSES: Status[] = [
+  'AUTO_SEND',
   'TO_SEND',
   'WAITING_FOR_REPLY',
   'TO_FOLLOW_UP',

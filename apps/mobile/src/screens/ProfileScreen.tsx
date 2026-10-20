@@ -180,7 +180,8 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
   const standardCvName = formatStandardCvName(user?.fullName);
 
   const totalTracked = stats
-    ? stats.TO_SEND +
+    ? stats.AUTO_SEND +
+      stats.TO_SEND +
       stats.WAITING_FOR_REPLY +
       stats.TO_FOLLOW_UP +
       stats.TO_CALL +

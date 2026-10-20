@@ -29,7 +29,8 @@ interface AddCompanyScreenProps {
 }
 
 const STATUS_CHOICES: Array<{ key: Status; label: string; color: string }> = [
-  { key: 'TO_SEND', label: 'À envoyer', color: Colors.status.TO_SEND },
+  { key: 'AUTO_SEND', label: 'Envoi automatique', color: Colors.status.AUTO_SEND },
+  { key: 'TO_SEND', label: 'À envoyer (manuel)', color: Colors.status.TO_SEND },
   { key: 'WAITING_FOR_REPLY', label: 'En attente', color: Colors.status.WAITING_FOR_REPLY },
   { key: 'TO_FOLLOW_UP', label: 'À relancer', color: Colors.status.TO_FOLLOW_UP },
   { key: 'TO_CALL', label: 'À appeler', color: Colors.status.TO_CALL },
@@ -51,7 +52,7 @@ export const AddCompanyScreen: React.FC<AddCompanyScreenProps> = ({
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [notes, setNotes] = useState('');
-  const [status, setStatus] = useState<Status>('TO_SEND');
+  const [status, setStatus] = useState<Status>('AUTO_SEND');
   const [loading, setLoading] = useState(false);
   const [importing, setImporting] = useState(false);
 

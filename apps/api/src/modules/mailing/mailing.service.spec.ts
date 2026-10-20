@@ -32,7 +32,7 @@ describe('MailingService', () => {
     id: 'comp-1',
     name: 'Tech Corp',
     email: 'contact@techcorp.fr',
-    status: Status.TO_SEND,
+    status: Status.AUTO_SEND,
     firstMailSentAt: null,
     followUpReadyAt: null,
     followUpSentAt: null,
@@ -112,7 +112,7 @@ describe('MailingService', () => {
   });
 
   describe('sendInitialBatch', () => {
-    it('should process TO_SEND companies, generate email, send it and update status', async () => {
+    it('should process AUTO_SEND companies, generate email, send it and update status', async () => {
       const result = await service.sendInitialBatch();
 
       expect(prisma.company.findMany).toHaveBeenCalled();

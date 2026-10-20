@@ -1,4 +1,5 @@
 export type Status =
+  | 'AUTO_SEND'
   | 'TO_SEND'
   | 'WAITING_FOR_REPLY'
   | 'TO_FOLLOW_UP'
@@ -27,6 +28,7 @@ export interface Company {
 }
 
 export interface CompanyStats {
+  AUTO_SEND: number;
   TO_SEND: number;
   WAITING_FOR_REPLY: number;
   TO_FOLLOW_UP: number;
@@ -37,7 +39,8 @@ export interface CompanyStats {
 }
 
 export const STATUS_LABELS: Record<Status, string> = {
-  TO_SEND: 'À envoyer',
+  AUTO_SEND: 'Envoi automatique',
+  TO_SEND: 'À envoyer (manuel)',
   WAITING_FOR_REPLY: 'En attente',
   TO_FOLLOW_UP: 'À relancer',
   REPLY_RECEIVED: 'Réponse reçue',

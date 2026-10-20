@@ -141,7 +141,7 @@ export class CompaniesService {
         longitude: lon,
         phone: createDto.phone,
         notes: createDto.notes,
-        status: createDto.status ?? Status.TO_SEND,
+        status: createDto.status ?? Status.AUTO_SEND,
         userId: userId ?? undefined,
       },
     });
@@ -305,6 +305,7 @@ export class CompaniesService {
     })) as Array<{ status: Status; _count: { id: number } }>;
 
     const stats: Record<string, number> = {
+      AUTO_SEND: 0,
       TO_SEND: 0,
       WAITING_FOR_REPLY: 0,
       TO_FOLLOW_UP: 0,
@@ -944,10 +945,17 @@ export class CompaniesService {
         seenEmailsInBatch.add(rowKey);
 
         // Résolution intelligente du statut
-        let parsedStatus: Status = Status.TO_SEND;
+        let parsedStatus: Status = Status.AUTO_SEND;
         if (rawStatus) {
           const s = normalizeStr(rawStatus);
           if (
+            s.includes('auto') ||
+            s.includes('auto_send') ||
+            s.includes('envoi auto')
+          ) {
+            parsedStatus = Status.AUTO_SEND;
+          } else if (
+            s.includes('manuel') ||
             s.includes('a envoyer') ||
             s.includes('to_send') ||
             s.includes('to send') ||

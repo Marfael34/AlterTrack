@@ -22,6 +22,7 @@ export const Colors = {
 
   // Statuts métier
   status: {
+    AUTO_SEND: '#8B5CF6', // Violet dynamique (automatisation / batch)
     TO_SEND: '#0066FF', // Primary Blue officiel
     WAITING_FOR_REPLY: '#F59E0B', // Jaune ambré
     TO_FOLLOW_UP: '#F97316', // Orange vif

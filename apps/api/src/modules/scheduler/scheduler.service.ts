@@ -61,10 +61,34 @@ export class SchedulerService {
     const now = new Date();
 
     const result = {
+      autoSentBatchCount: 0,
       transitionedToFollowUpJ7: 0,
       followUpsSentJ8: 0,
       transitionedToCallJ15: 0,
     };
+
+    // -------------------------------------------------------------------------
+    // 0. Envoi automatique quotidien : Candidatures au statut AUTO_SEND
+    // -------------------------------------------------------------------------
+    const autoSendCompanies = await this.prisma.company.findMany({
+      where: {
+        status: Status.AUTO_SEND,
+      },
+    });
+
+    if (autoSendCompanies.length > 0) {
+      this.logger.log(
+        `09:00 - Envoi automatique pour ${autoSendCompanies.length} entreprise(s) au statut Envoi automatique`,
+      );
+      try {
+        const batchResult = await this.mailingService.sendInitialBatch();
+        result.autoSentBatchCount = batchResult.successCount;
+      } catch (err) {
+        this.logger.error(
+          `Échec de l'envoi groupé automatique : ${err instanceof Error ? err.message : String(err)}`,
+        );
+      }
+    }
 
     // -------------------------------------------------------------------------
     // 1. Transition J+7 : Premier contact envoyé depuis >= 7 jours sans relance
@@ -167,7 +191,7 @@ export class SchedulerService {
     }
 
     this.logger.log(
-      `--- Fin du cycle quotidien : J+7=${result.transitionedToFollowUpJ7}, J+8=${result.followUpsSentJ8}, J+15=${result.transitionedToCallJ15} ---`,
+      `--- Fin du cycle quotidien : AUTO_SEND=${result.autoSentBatchCount}, J+7=${result.transitionedToFollowUpJ7}, J+8=${result.followUpsSentJ8}, J+15=${result.transitionedToCallJ15} ---`,
     );
 
     return result;
@@ -178,7 +202,12 @@ export class SchedulerService {
     const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
     const eightDaysAgo = new Date(now.getTime() - 8 * 24 * 60 * 60 * 1000);
 
-    const [j7Pending, j8Pending, j15Pending] = await Promise.all([
+    const [autoSendPending, j7Pending, j8Pending, j15Pending] = await Promise.all([
+      this.prisma.company.count({
+        where: {
+          status: Status.AUTO_SEND,
+        },
+      }),
       this.prisma.company.count({
         where: {
           status: Status.WAITING_FOR_REPLY,
@@ -209,6 +238,7 @@ export class SchedulerService {
         periodicImapCheck: 'Toutes les 10 minutes (*/10 * * * *)',
       },
       readyForTransition: {
+        autoSendPending,
         j7ToFollowUp: j7Pending,
         j8AutoRelance: j8Pending,
         j15ToCall: j15Pending,

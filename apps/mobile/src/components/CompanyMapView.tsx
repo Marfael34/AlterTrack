@@ -38,6 +38,7 @@ interface CompanyMapViewProps {
 type DistanceFilter = 'ALL' | 15 | 30 | 50;
 
 const ALL_STATUS_KEYS: Status[] = [
+  'AUTO_SEND',
   'TO_SEND',
   'WAITING_FOR_REPLY',
   'TO_FOLLOW_UP',

@@ -35,6 +35,7 @@ interface CompanyDetailScreenProps {
 }
 
 const ALL_STATUSES: Status[] = [
+  'AUTO_SEND',
   'TO_SEND',
   'WAITING_FOR_REPLY',
   'TO_FOLLOW_UP',
@@ -505,15 +506,59 @@ export const CompanyDetailScreen: React.FC<CompanyDetailScreenProps> = ({
           </TouchableOpacity>
         )}
 
-        {/* Bannière de prévisualisation et envoi pour candidature à envoyer */}
+        {/* Bannière de prévisualisation et envoi pour candidature en envoi automatique */}
+        {status === 'AUTO_SEND' && (
+          <View style={[styles.toSendBanner, { borderColor: `${Colors.status.AUTO_SEND}55`, backgroundColor: `${Colors.status.AUTO_SEND}10` }]}>
+            <View style={styles.toSendHeaderRow}>
+              <Ionicons name="flash" size={17} color={Colors.status.AUTO_SEND} />
+              <Text style={[styles.toSendTitle, { color: Colors.status.AUTO_SEND }]}>Candidature en envoi automatique</Text>
+            </View>
+            <Text style={styles.toSendSubtitle}>
+              Cette candidature sera envoyée automatiquement lors du prochain lot matinal (9h) ou via l'envoi groupé. Vous pouvez aussi l'expédier manuellement dès maintenant.
+            </Text>
+            <View style={styles.toSendActionsRow}>
+              <TouchableOpacity
+                style={[
+                  styles.sendInitialBtn,
+                  { backgroundColor: Colors.status.AUTO_SEND },
+                  sendingInitial && styles.buttonDisabled,
+                ]}
+                onPress={handleSendInitial}
+                disabled={sendingInitial}
+                activeOpacity={0.8}
+              >
+                {sendingInitial ? (
+                  <ActivityIndicator color="#FFFFFF" size="small" />
+                ) : (
+                  <>
+                    <Ionicons name="paper-plane" size={16} color="#FFFFFF" />
+                    <Text style={styles.sendInitialBtnText}>
+                      Envoyer maintenant
+                    </Text>
+                  </>
+                )}
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.previewMailBtn, { borderColor: `${Colors.status.AUTO_SEND}66` }]}
+                onPress={() => setIsPreviewModalOpen(true)}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="eye-outline" size={15} color={Colors.status.AUTO_SEND} />
+                <Text style={[styles.previewMailBtnText, { color: Colors.status.AUTO_SEND }]}>Aperçu / Test</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
+
+        {/* Bannière de prévisualisation et envoi pour candidature à envoyer manuellement */}
         {status === 'TO_SEND' && (
           <View style={styles.toSendBanner}>
             <View style={styles.toSendHeaderRow}>
-              <Ionicons name="sparkles" size={17} color={Colors.accent} />
-              <Text style={styles.toSendTitle}>Candidature en attente d'envoi</Text>
+              <Ionicons name="mail" size={17} color={Colors.accent} />
+              <Text style={styles.toSendTitle}>Candidature à envoyer (manuel)</Text>
             </View>
             <Text style={styles.toSendSubtitle}>
-              Envoyez votre candidature personnalisée avec votre CV directement à cette entreprise, ou prévisualisez l'e-mail au préalable.
+              Cette candidature est réservée à un envoi manuel. Envoyez votre candidature personnalisée avec votre CV directement à cette entreprise, ou prévisualisez l'e-mail au préalable.
             </Text>
             <View style={styles.toSendActionsRow}>
               <TouchableOpacity
@@ -816,7 +861,7 @@ export const CompanyDetailScreen: React.FC<CompanyDetailScreenProps> = ({
         companyName={company.name}
         companyEmail={email || company.email}
         onSendToCompany={
-          status === 'TO_SEND' ? handleSendCustomToCompany : undefined
+          status === 'TO_SEND' || status === 'AUTO_SEND' ? handleSendCustomToCompany : undefined
         }
         nature={status === 'TO_FOLLOW_UP' ? 'FOLLOW_UP' : 'FIRST_CONTACT'}
         hasCv={user?.hasCv ?? false}
