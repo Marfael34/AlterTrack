@@ -2,24 +2,26 @@ import { Ionicons } from '@expo/vector-icons';
 import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Keyboard,
   KeyboardAvoidingView,
   Linking,
   Platform,
-  ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
 import { AddressFieldAssistant } from '../components/AddressFieldAssistant';
 import { EmailPreviewModal } from '../components/EmailPreviewModal';
+import {
+  CenteredTextInput,
+  KeyboardAwareCenteredScrollView,
+} from '../components/KeyboardAwareCenteredScrollView';
 import { ReferencePointModal } from '../components/ReferencePointModal';
 import { StatusBadge } from '../components/StatusBadge';
 import { Colors } from '../constants/colors';
 import { useAuth } from '../context/AuthContext';
+import { AlertService as Alert } from '../services/alert.service';
 import { ApiService } from '../services/api.service';
 import { LocationService, ReferencePoint } from '../services/location.service';
 import { STATUS_LABELS, Company, Status } from '../types/company';
@@ -76,7 +78,7 @@ export const CompanyDetailScreen: React.FC<CompanyDetailScreenProps> = ({
   const [distanceKm, setDistanceKm] = useState<number | null>(null);
   const [isPreviewModalOpen, setIsPreviewModalOpen] = useState(false);
 
-  const scrollViewRef = useRef<ScrollView>(null);
+  const scrollViewRef = useRef<any>(null);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
   const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
 
@@ -427,13 +429,9 @@ export const CompanyDetailScreen: React.FC<CompanyDetailScreenProps> = ({
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         keyboardVerticalOffset={Platform.OS === 'ios' ? 88 : 0}
       >
-        <ScrollView
+        <KeyboardAwareCenteredScrollView
           ref={scrollViewRef}
-          contentContainerStyle={[
-            styles.scrollContent,
-            { paddingBottom: isKeyboardVisible ? keyboardHeight + 80 : 40 },
-          ]}
-          keyboardShouldPersistTaps="handled"
+          contentContainerStyle={styles.scrollContent}
           keyboardDismissMode="on-drag"
         >
         {/* BANNIÈRE CONTEXTUELLE : RÉPONSE REÇUE (Section 3.7 du CDC) */}
@@ -657,7 +655,7 @@ export const CompanyDetailScreen: React.FC<CompanyDetailScreenProps> = ({
           <Text style={styles.sectionTitle}>Informations de l'entreprise</Text>
 
           <Text style={styles.fieldLabel}>Nom de l'entreprise *</Text>
-          <TextInput
+          <CenteredTextInput
             style={styles.input}
             value={name}
             onChangeText={setName}
@@ -700,7 +698,7 @@ export const CompanyDetailScreen: React.FC<CompanyDetailScreenProps> = ({
               </TouchableOpacity>
             </View>
           </View>
-          <TextInput
+          <CenteredTextInput
             style={styles.input}
             value={email}
             onChangeText={setEmail}
@@ -711,7 +709,7 @@ export const CompanyDetailScreen: React.FC<CompanyDetailScreenProps> = ({
           />
 
           <Text style={styles.fieldLabel}>Numéro de téléphone</Text>
-          <TextInput
+          <CenteredTextInput
             style={styles.input}
             value={phone}
             onChangeText={setPhone}
@@ -721,11 +719,10 @@ export const CompanyDetailScreen: React.FC<CompanyDetailScreenProps> = ({
           />
 
           <Text style={styles.fieldLabel}>Notes personnelles (Non transmis à l'IA)</Text>
-          <TextInput
+          <CenteredTextInput
             style={[styles.input, styles.textArea]}
             value={notes}
             onChangeText={setNotes}
-            onFocus={handleNotesFocus}
             placeholder="Notes internes, nom du responsable RH, détails de l'offre..."
             placeholderTextColor={Colors.textMuted}
             multiline
@@ -773,7 +770,7 @@ export const CompanyDetailScreen: React.FC<CompanyDetailScreenProps> = ({
             <Text style={styles.saveButtonText}>Enregistrer les modifications</Text>
           )}
         </TouchableOpacity>
-      </ScrollView>
+      </KeyboardAwareCenteredScrollView>
     </KeyboardAvoidingView>
 
       {/* Barre d'action rapide pour fermer le clavier */}

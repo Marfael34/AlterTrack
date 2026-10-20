@@ -2,7 +2,6 @@ import { Ionicons } from '@expo/vector-icons';
 import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Keyboard,
   Modal,
   SafeAreaView,
@@ -14,6 +13,7 @@ import {
   View,
 } from 'react-native';
 import { Colors } from '../constants/colors';
+import { AlertService as Alert } from '../services/alert.service';
 import { GeocodeResult, LocationService, ReferencePoint } from '../services/location.service';
 
 interface ReferencePointModalProps {

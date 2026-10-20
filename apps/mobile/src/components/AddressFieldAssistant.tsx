@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { Colors } from '../constants/colors';
 import { GeocodeResult, LocationService, ReferencePoint } from '../services/location.service';
+import { CenteredTextInput } from './KeyboardAwareCenteredScrollView';
 
 interface AddressFieldAssistantProps {
   address: string;
@@ -246,7 +247,7 @@ export const AddressFieldAssistant: React.FC<AddressFieldAssistantProps> = ({
       {/* Barre de recherche intelligente avec autocomplétion instantanée */}
       <View style={styles.searchBox}>
         <Ionicons name="search" size={18} color={Colors.accent} style={styles.searchIcon} />
-        <TextInput
+        <CenteredTextInput
           style={styles.searchInput}
           placeholder="Rechercher une adresse, une rue ou une ville..."
           placeholderTextColor={Colors.textMuted}
@@ -417,7 +418,7 @@ export const AddressFieldAssistant: React.FC<AddressFieldAssistantProps> = ({
           <Text style={styles.fieldLabel}>Ville ou commune</Text>
           <View style={styles.inputWrap}>
             <Ionicons name="business-outline" size={16} color={Colors.textMuted} style={styles.fieldIcon} />
-            <TextInput
+            <CenteredTextInput
               style={styles.fieldInput}
               value={city}
               onChangeText={handleCityChangeText}
@@ -469,7 +470,7 @@ export const AddressFieldAssistant: React.FC<AddressFieldAssistantProps> = ({
           <Text style={styles.fieldLabel}>Adresse postale (facultatif)</Text>
           <View style={styles.inputWrap}>
             <Ionicons name="map-outline" size={16} color={Colors.textMuted} style={styles.fieldIcon} />
-            <TextInput
+            <CenteredTextInput
               style={styles.fieldInput}
               value={address}
               onChangeText={handleAddressChangeText}

@@ -2,7 +2,6 @@ import { Ionicons } from '@expo/vector-icons';
 import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   KeyboardAvoidingView,
   Linking,
   Modal,
@@ -11,13 +10,17 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
+import {
+  CenteredTextInput,
+  KeyboardAwareCenteredScrollView,
+} from '../components/KeyboardAwareCenteredScrollView';
 import { ReferencePointModal } from '../components/ReferencePointModal';
 import { Colors } from '../constants/colors';
 import { useAuth } from '../context/AuthContext';
+import { AlertService as Alert } from '../services/alert.service';
 import { ApiService } from '../services/api.service';
 import { LocationService, ReferencePoint } from '../services/location.service';
 import { formatStandardCvName } from '../services/storage.service';
@@ -512,9 +515,9 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
               </TouchableOpacity>
             </View>
 
-            <ScrollView contentContainerStyle={styles.modalBody}>
+            <KeyboardAwareCenteredScrollView contentContainerStyle={styles.modalBody}>
               <Text style={styles.inputLabel}>Nom complet (Prénom et Nom)</Text>
-              <TextInput
+              <CenteredTextInput
                 style={styles.textInput}
                 value={editFullName}
                 onChangeText={setEditFullName}
@@ -529,7 +532,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
               <Text style={[styles.inputLabel, { marginTop: 16 }]}>
                 Adresse Gmail d'envoi
               </Text>
-              <TextInput
+              <CenteredTextInput
                 style={styles.textInput}
                 value={editGmailUser}
                 onChangeText={setEditGmailUser}
@@ -543,7 +546,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
                 Mot de passe d'application Google (16 caractères)
               </Text>
               <View style={styles.passwordWrapper}>
-                <TextInput
+                <CenteredTextInput
                   style={[styles.textInput, { flex: 1, marginBottom: 0 }]}
                   value={editGmailAppPassword}
                   onChangeText={setEditGmailAppPassword}
@@ -588,7 +591,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
                   )}
                 </TouchableOpacity>
               </View>
-            </ScrollView>
+            </KeyboardAwareCenteredScrollView>
           </View>
         </KeyboardAvoidingView>
       </Modal>

@@ -2,7 +2,6 @@ import { Ionicons } from '@expo/vector-icons';
 import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Linking,
   Modal,
   Platform,
@@ -15,8 +14,13 @@ import {
 } from 'react-native';
 import { Colors } from '../constants/colors';
 import { useAuth } from '../context/AuthContext';
+import { AlertService as Alert } from '../services/alert.service';
 import { ApiService } from '../services/api.service';
 import { StorageService, formatStandardCvName } from '../services/storage.service';
+import {
+  CenteredTextInput,
+  KeyboardAwareCenteredScrollView,
+} from './KeyboardAwareCenteredScrollView';
 
 interface EmailPreviewModalProps {
   visible: boolean;
@@ -319,7 +323,7 @@ export const EmailPreviewModal: React.FC<EmailPreviewModalProps> = ({
               </Text>
             </View>
           ) : (
-            <ScrollView
+            <KeyboardAwareCenteredScrollView
               contentContainerStyle={styles.scrollContent}
               keyboardShouldPersistTaps="handled"
             >
@@ -385,7 +389,7 @@ export const EmailPreviewModal: React.FC<EmailPreviewModalProps> = ({
                     <Text style={styles.refreshChipText}>Régénérer</Text>
                   </TouchableOpacity>
                 </View>
-                <TextInput
+                <CenteredTextInput
                   style={styles.subjectInput}
                   value={subject}
                   onChangeText={setSubject}
@@ -397,7 +401,7 @@ export const EmailPreviewModal: React.FC<EmailPreviewModalProps> = ({
               {/* Corps du message */}
               <View style={styles.fieldBlock}>
                 <Text style={styles.fieldLabel}>Corps du message (modifiable) :</Text>
-                <TextInput
+                <CenteredTextInput
                   style={styles.bodyInput}
                   value={body}
                   onChangeText={setBody}
@@ -527,7 +531,7 @@ export const EmailPreviewModal: React.FC<EmailPreviewModalProps> = ({
                   </View>
                 )}
               </View>
-            </ScrollView>
+            </KeyboardAwareCenteredScrollView>
           )}
 
           {/* Footer */}

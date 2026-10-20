@@ -4,13 +4,15 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
-  ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
+import {
+  CenteredTextInput,
+  KeyboardAwareCenteredScrollView,
+} from '../components/KeyboardAwareCenteredScrollView';
 import { Colors } from '../constants/colors';
 import { useAuth } from '../context/AuthContext';
 
@@ -89,7 +91,7 @@ export const AuthScreen: React.FC = () => {
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
-      <ScrollView
+      <KeyboardAwareCenteredScrollView
         contentContainerStyle={styles.scrollContent}
         keyboardShouldPersistTaps="handled"
       >
@@ -177,7 +179,7 @@ export const AuthScreen: React.FC = () => {
                   color={Colors.textMuted}
                   style={styles.inputIcon}
                 />
-                <TextInput
+                <CenteredTextInput
                   style={styles.input}
                   placeholder="ex: Rafael Martinez"
                   placeholderTextColor={Colors.textMuted}
@@ -198,7 +200,7 @@ export const AuthScreen: React.FC = () => {
                 color={Colors.textMuted}
                 style={styles.inputIcon}
               />
-              <TextInput
+              <CenteredTextInput
                 style={styles.input}
                 placeholder="candidat@domaine.fr"
                 placeholderTextColor={Colors.textMuted}
@@ -219,7 +221,7 @@ export const AuthScreen: React.FC = () => {
                 color={Colors.textMuted}
                 style={styles.inputIcon}
               />
-              <TextInput
+              <CenteredTextInput
                 style={[styles.input, { color: '#FFFFFF' }]}
                 placeholder={showPassword ? 'Votre mot de passe' : '••••••••'}
                 placeholderTextColor={Colors.textMuted}
@@ -268,7 +270,7 @@ export const AuthScreen: React.FC = () => {
                   }
                   style={styles.inputIcon}
                 />
-                <TextInput
+                <CenteredTextInput
                   style={[styles.input, { color: '#FFFFFF' }]}
                   placeholder={
                     showConfirmPassword
@@ -343,7 +345,7 @@ export const AuthScreen: React.FC = () => {
                   <View style={styles.fieldGroup}>
                     <Text style={styles.subLabel}>Compte Gmail</Text>
                     <View style={styles.inputWrapper}>
-                      <TextInput
+                      <CenteredTextInput
                         style={styles.input}
                         placeholder="votre.adresse@gmail.com"
                         placeholderTextColor={Colors.textMuted}
@@ -360,7 +362,7 @@ export const AuthScreen: React.FC = () => {
                       Mot de passe d'application Google (16 lettres)
                     </Text>
                     <View style={styles.inputWrapper}>
-                      <TextInput
+                      <CenteredTextInput
                         style={styles.input}
                         placeholder="abcd efgh ijkl mnop"
                         placeholderTextColor={Colors.textMuted}
@@ -416,7 +418,7 @@ export const AuthScreen: React.FC = () => {
           Vos données de connexion et mots de passe d'application sont sécurisés et
           isolés pour chaque utilisateur.
         </Text>
-      </ScrollView>
+      </KeyboardAwareCenteredScrollView>
     </KeyboardAvoidingView>
   );
 };

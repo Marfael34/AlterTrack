@@ -3,19 +3,21 @@ import * as DocumentPicker from 'expo-document-picker';
 import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Keyboard,
   KeyboardAvoidingView,
   Platform,
-  ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
 import { AddressFieldAssistant } from '../components/AddressFieldAssistant';
+import {
+  CenteredTextInput,
+  KeyboardAwareCenteredScrollView,
+} from '../components/KeyboardAwareCenteredScrollView';
 import { Colors } from '../constants/colors';
+import { AlertService as Alert } from '../services/alert.service';
 import { ApiService } from '../services/api.service';
 import { ReferencePoint } from '../services/location.service';
 import { Status } from '../types/company';
@@ -53,7 +55,7 @@ export const AddCompanyScreen: React.FC<AddCompanyScreenProps> = ({
   const [loading, setLoading] = useState(false);
   const [importing, setImporting] = useState(false);
 
-  const scrollViewRef = useRef<ScrollView>(null);
+  const scrollViewRef = useRef<any>(null);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
   const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
 
@@ -198,13 +200,9 @@ export const AddCompanyScreen: React.FC<AddCompanyScreenProps> = ({
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         keyboardVerticalOffset={Platform.OS === 'ios' ? 88 : 0}
       >
-        <ScrollView
+        <KeyboardAwareCenteredScrollView
           ref={scrollViewRef}
-          contentContainerStyle={[
-            styles.scrollContent,
-            { paddingBottom: isKeyboardVisible ? keyboardHeight + 80 : 40 },
-          ]}
-          keyboardShouldPersistTaps="handled"
+          contentContainerStyle={styles.scrollContent}
           keyboardDismissMode="on-drag"
         >
         {/* Raccourci import tableur */}
@@ -241,7 +239,7 @@ export const AddCompanyScreen: React.FC<AddCompanyScreenProps> = ({
         </View>
 
         <Text style={styles.fieldLabel}>Nom de l'entreprise *</Text>
-        <TextInput
+        <CenteredTextInput
           style={styles.input}
           value={name}
           onChangeText={setName}
@@ -265,7 +263,7 @@ export const AddCompanyScreen: React.FC<AddCompanyScreenProps> = ({
         />
 
         <Text style={styles.fieldLabel}>Adresse e-mail de contact *</Text>
-        <TextInput
+        <CenteredTextInput
           style={styles.input}
           value={email}
           onChangeText={setEmail}
@@ -276,7 +274,7 @@ export const AddCompanyScreen: React.FC<AddCompanyScreenProps> = ({
         />
 
         <Text style={styles.fieldLabel}>Numéro de téléphone</Text>
-        <TextInput
+        <CenteredTextInput
           style={styles.input}
           value={phone}
           onChangeText={setPhone}
@@ -323,11 +321,10 @@ export const AddCompanyScreen: React.FC<AddCompanyScreenProps> = ({
         </View>
 
         <Text style={styles.fieldLabel}>Note / Description personnelle</Text>
-        <TextInput
+        <CenteredTextInput
           style={[styles.input, styles.textArea]}
           value={notes}
           onChangeText={setNotes}
-          onFocus={handleNotesFocus}
           placeholder="Texte libre strictement personnel (non transmis à l'IA)..."
           placeholderTextColor={Colors.textMuted}
           multiline
@@ -347,7 +344,7 @@ export const AddCompanyScreen: React.FC<AddCompanyScreenProps> = ({
             <Text style={styles.createButtonText}>Créer la fiche entreprise</Text>
           )}
         </TouchableOpacity>
-      </ScrollView>
+      </KeyboardAwareCenteredScrollView>
     </KeyboardAvoidingView>
 
       {/* Barre d'action rapide pour fermer le clavier */}

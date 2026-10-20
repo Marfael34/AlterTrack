@@ -3,7 +3,6 @@ import * as DocumentPicker from 'expo-document-picker';
 import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   FlatList,
   Image,
   RefreshControl,
@@ -22,6 +21,7 @@ import { CityItem } from '../components/CityFilterBar';
 import { FilterTabs } from '../components/FilterTabs';
 import { Colors } from '../constants/colors';
 import { useAuth } from '../context/AuthContext';
+import { AlertService as Alert } from '../services/alert.service';
 import { ApiService } from '../services/api.service';
 import { FilterStorageService } from '../services/filterStorage.service';
 import { StorageService } from '../services/storage.service';

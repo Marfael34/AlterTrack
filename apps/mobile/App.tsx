@@ -4,6 +4,7 @@ import { ActivityIndicator, Platform, StyleSheet, View } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { MainTabBar, MainTabType } from './src/components/MainTabBar';
 import { Colors } from './src/constants/colors';
+import { AlertProvider } from './src/context/AlertContext';
 import { AuthProvider, useAuth } from './src/context/AuthContext';
 import { AddCompanyScreen } from './src/screens/AddCompanyScreen';
 import { AuthScreen } from './src/screens/AuthScreen';
@@ -167,9 +168,11 @@ function AppContent() {
 export default function App() {
   return (
     <SafeAreaProvider>
-      <AuthProvider>
-        <AppContent />
-      </AuthProvider>
+      <AlertProvider>
+        <AuthProvider>
+          <AppContent />
+        </AuthProvider>
+      </AlertProvider>
     </SafeAreaProvider>
   );
 }

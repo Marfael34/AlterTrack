@@ -3,25 +3,27 @@ import * as DocumentPicker from 'expo-document-picker';
 import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Image,
   Linking,
-  ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
+import {
+  CenteredTextInput,
+  KeyboardAwareCenteredScrollView,
+} from '../components/KeyboardAwareCenteredScrollView';
 import { EmailPreviewModal } from '../components/EmailPreviewModal';
 import { ReferencePointModal } from '../components/ReferencePointModal';
 import { Colors } from '../constants/colors';
+import { useAuth } from '../context/AuthContext';
+import { AlertService as Alert } from '../services/alert.service';
 import { ApiService } from '../services/api.service';
 import { LocationService, ReferencePoint } from '../services/location.service';
 import { NotificationService } from '../services/notification.service';
 import { StorageService, formatStandardCvName } from '../services/storage.service';
 import { AppConfig } from '../types/config';
-import { useAuth } from '../context/AuthContext';
 
 interface SettingsScreenProps {
   onBack: () => void;
@@ -471,7 +473,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
         <View style={{ width: 38 }} />
       </View>
 
-      <ScrollView contentContainerStyle={styles.scrollContent}>
+      <KeyboardAwareCenteredScrollView contentContainerStyle={styles.scrollContent}>
         {/* Section 0 : Mon Compte & Envoi d'E-mails */}
         <View style={styles.section}>
           <View style={styles.sectionHeaderRow}>
@@ -533,7 +535,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
           )}
 
           <Text style={styles.fieldLabel}>Nom complet</Text>
-          <TextInput
+          <CenteredTextInput
             style={styles.input}
             value={profileFullName}
             onChangeText={setProfileFullName}
@@ -542,7 +544,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
           />
 
           <Text style={styles.fieldLabel}>Adresse Gmail d'envoi</Text>
-          <TextInput
+          <CenteredTextInput
             style={styles.input}
             value={profileGmailUser}
             onChangeText={setProfileGmailUser}
@@ -554,7 +556,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
 
           <Text style={styles.fieldLabel}>Mot de passe d'application Google (16 lettres)</Text>
           <View style={styles.passwordInputWrapper}>
-            <TextInput
+            <CenteredTextInput
               style={[styles.input, { flex: 1, borderWidth: 0, marginBottom: 0 }]}
               value={profileGmailAppPassword}
               onChangeText={setProfileGmailAppPassword}
@@ -641,7 +643,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
           </View>
 
           <Text style={styles.fieldLabel}>URL du serveur NestJS</Text>
-          <TextInput
+          <CenteredTextInput
             style={styles.input}
             value={serverUrl}
             onChangeText={setServerUrl}
@@ -710,7 +712,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
           </View>
 
           <Text style={styles.fieldLabel}>Clé d'API statique (x-api-key)</Text>
-          <TextInput
+          <CenteredTextInput
             style={styles.input}
             value={apiKey}
             onChangeText={setApiKey}
@@ -923,7 +925,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
             <ActivityIndicator color={Colors.primary} style={{ marginVertical: 20 }} />
           ) : (
             <>
-              <TextInput
+              <CenteredTextInput
                 style={[styles.input, styles.templateArea]}
                 value={template}
                 onChangeText={setTemplate}
@@ -966,7 +968,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
           </Text>
 
           <Text style={styles.fieldLabel}>Adresse e-mail destinataire *</Text>
-          <TextInput
+          <CenteredTextInput
             style={styles.input}
             value={testEmail}
             onChangeText={setTestEmail}
@@ -978,7 +980,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
           />
 
           <Text style={styles.fieldLabel}>Entreprise cible pour la personnalisation</Text>
-          <TextInput
+          <CenteredTextInput
             style={styles.input}
             value={testCompany}
             onChangeText={setTestCompany}
@@ -1123,7 +1125,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
           />
           <Text style={styles.footerVersion}>AlterTrack v1.0.0 — Auto-hébergé</Text>
         </View>
-      </ScrollView>
+      </KeyboardAwareCenteredScrollView>
 
       {/* Modal de définition d'adresse fixe */}
       <ReferencePointModal
