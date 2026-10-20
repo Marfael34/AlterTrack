@@ -246,7 +246,21 @@ export const CompanyDetailScreen: React.FC<CompanyDetailScreenProps> = ({
 
       setCompany(updated);
       onUpdated();
-      Alert.alert('Succès', 'Fiche entreprise enregistrée avec succès');
+      Alert.alert(
+        'Fiche modifiée avec succès ✅',
+        'Vos modifications ont bien été enregistrées. Que souhaitez-vous faire ?',
+        [
+          {
+            text: 'Rester sur la fiche',
+            style: 'cancel',
+          },
+          {
+            text: 'Retour à l\'accueil',
+            style: 'default',
+            onPress: () => onBack(),
+          },
+        ],
+      );
     } catch (err) {
       Alert.alert('Erreur', err instanceof Error ? err.message : 'Échec de la sauvegarde');
     } finally {

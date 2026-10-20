@@ -217,7 +217,14 @@ export const CustomAlertModal: React.FC<CustomAlertModalProps> = ({
                       onPress={() => handleButtonPress(btn)}
                       activeOpacity={0.8}
                     >
-                      <Text style={[styles.btnTextBase, btnTextStyle]} numberOfLines={1}>
+                      <Text
+                        style={[
+                          styles.btnTextBase,
+                          btnTextStyle,
+                          { textAlign: 'center', width: '100%' },
+                        ]}
+                        numberOfLines={2}
+                      >
                         {btn.text}
                       </Text>
                     </TouchableOpacity>
@@ -319,13 +326,16 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   btnTextBase: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '700',
+    textAlign: 'center',
   },
   btnTextPrimary: {
     fontWeight: '800',
+    textAlign: 'center',
   },
   btnTextSecondary: {
     fontWeight: '600',
+    textAlign: 'center',
   },
 });
