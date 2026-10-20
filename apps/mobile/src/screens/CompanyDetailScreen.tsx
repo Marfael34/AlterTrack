@@ -19,12 +19,15 @@ import {
 } from '../components/KeyboardAwareCenteredScrollView';
 import { ReferencePointModal } from '../components/ReferencePointModal';
 import { StatusBadge } from '../components/StatusBadge';
+import { AddActivityModal } from '../components/AddActivityModal';
+import { CompanyActivityTimeline } from '../components/CompanyActivityTimeline';
+import { EditActivityModal } from '../components/EditActivityModal';
 import { Colors } from '../constants/colors';
 import { useAuth } from '../context/AuthContext';
 import { AlertService as Alert } from '../services/alert.service';
 import { ApiService } from '../services/api.service';
 import { LocationService, ReferencePoint } from '../services/location.service';
-import { STATUS_LABELS, Company, Status } from '../types/company';
+import { STATUS_LABELS, Company, CompanyActivity, Status } from '../types/company';
 
 interface CompanyDetailScreenProps {
   company: Company;
@@ -78,6 +81,28 @@ export const CompanyDetailScreen: React.FC<CompanyDetailScreenProps> = ({
   const [isRefPointModalOpen, setIsRefPointModalOpen] = useState(false);
   const [distanceKm, setDistanceKm] = useState<number | null>(null);
   const [isPreviewModalOpen, setIsPreviewModalOpen] = useState(false);
+  const [activities, setActivities] = useState<CompanyActivity[]>(
+    initialCompany.activities || [],
+  );
+  const [loadingActivities, setLoadingActivities] = useState(false);
+  const [isAddActivityModalOpen, setIsAddActivityModalOpen] = useState(false);
+  const [editingActivity, setEditingActivity] = useState<CompanyActivity | null>(null);
+
+  const loadActivities = async () => {
+    setLoadingActivities(true);
+    try {
+      const data = await ApiService.getCompanyActivities(company.id);
+      setActivities(data);
+    } catch {
+      // Ignorer si hors ligne
+    } finally {
+      setLoadingActivities(false);
+    }
+  };
+
+  useEffect(() => {
+    void loadActivities();
+  }, [company.id]);
 
   const scrollViewRef = useRef<any>(null);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
@@ -176,6 +201,14 @@ export const CompanyDetailScreen: React.FC<CompanyDetailScreenProps> = ({
       Linking.openURL(`tel:${phone}`).catch(() => {
         Alert.alert('Erreur', "Impossible de lancer l'appel téléphonique");
       });
+
+      void ApiService.addCompanyActivity(company.id, {
+        type: 'CALL',
+        title: 'Appel téléphonique passé',
+        description: `Appel émis vers le ${phone}`,
+      })
+        .then(() => loadActivities())
+        .catch(() => {});
     }
   };
 
@@ -211,6 +244,7 @@ export const CompanyDetailScreen: React.FC<CompanyDetailScreenProps> = ({
       setStatus(newStatus);
       setCompany(updated);
       onUpdated();
+      void loadActivities();
       Alert.alert('Statut mis à jour', `La fiche est désormais : ${STATUS_LABELS[newStatus]}`);
     } catch (err) {
       Alert.alert('Erreur', err instanceof Error ? err.message : 'Échec de la mise à jour');
@@ -247,6 +281,7 @@ export const CompanyDetailScreen: React.FC<CompanyDetailScreenProps> = ({
 
       setCompany(updated);
       onUpdated();
+      void loadActivities();
       Alert.alert(
         'Fiche modifiée avec succès ✅',
         'Vos modifications ont bien été enregistrées. Que souhaitez-vous faire ?',
@@ -305,6 +340,7 @@ export const CompanyDetailScreen: React.FC<CompanyDetailScreenProps> = ({
               setCompany(res.company);
               setStatus(res.company.status);
               onUpdated();
+              void loadActivities();
               const attachMsg = res.hasAttachment
                 ? ` (avec votre CV ${res.attachmentName || ''} joint)`
                 : '';
@@ -347,6 +383,7 @@ export const CompanyDetailScreen: React.FC<CompanyDetailScreenProps> = ({
       setCompany(res.company);
       setStatus(res.company.status);
       onUpdated();
+      void loadActivities();
       setIsPreviewModalOpen(false);
       if (res.isSimulation) {
         Alert.alert(
@@ -389,6 +426,7 @@ export const CompanyDetailScreen: React.FC<CompanyDetailScreenProps> = ({
               setCompany(updated);
               setStatus(updated.status);
               onUpdated();
+              void loadActivities();
               Alert.alert('Relance envoyée ✅', 'Le mail de relance avec votre CV joint a été expédié avec succès.');
             } catch (err) {
               Alert.alert('Erreur', err instanceof Error ? err.message : "Échec de l'envoi");
@@ -399,6 +437,48 @@ export const CompanyDetailScreen: React.FC<CompanyDetailScreenProps> = ({
         },
       ],
     );
+  };
+
+  const handleAddManualActivity = async (data: {
+    type: string;
+    title: string;
+    description?: string;
+    performedAt?: string;
+  }) => {
+    try {
+      await ApiService.addCompanyActivity(company.id, data);
+      await loadActivities();
+      Alert.alert('Action enregistrée ✅', "L'action a bien été ajoutée à l'historique.");
+    } catch (err) {
+      Alert.alert('Erreur', err instanceof Error ? err.message : "Impossible d'enregistrer l'action");
+    }
+  };
+
+  const handleDeleteActivity = async (activityId: string) => {
+    try {
+      await ApiService.deleteCompanyActivity(company.id, activityId);
+      await loadActivities();
+    } catch (err) {
+      Alert.alert('Erreur', err instanceof Error ? err.message : "Impossible de supprimer cette action");
+    }
+  };
+
+  const handleUpdateActivity = async (
+    activityId: string,
+    data: {
+      performedAt: string;
+      title?: string;
+      description?: string;
+    },
+  ) => {
+    try {
+      await ApiService.updateCompanyActivity(company.id, activityId, data);
+      await loadActivities();
+      Alert.alert('Modification enregistrée ✅', "La date et l'action ont été mises à jour.");
+    } catch (err) {
+      Alert.alert('Erreur', err instanceof Error ? err.message : "Impossible de mettre à jour l'action");
+      throw err;
+    }
   };
 
   const handleDelete = () => {
@@ -790,31 +870,14 @@ export const CompanyDetailScreen: React.FC<CompanyDetailScreenProps> = ({
           />
         </View>
 
-        {/* Dates du cycle */}
-        <View style={styles.datesCard}>
-          <Text style={styles.datesTitle}>Historique du cycle</Text>
-          <Text style={styles.dateRow}>
-            Création de la fiche :{' '}
-            {new Date(company.createdAt).toLocaleDateString('fr-FR')}
-          </Text>
-          {company.firstMailSentAt && (
-            <Text style={styles.dateRow}>
-              Premier mail envoyé :{' '}
-              {new Date(company.firstMailSentAt).toLocaleDateString('fr-FR')}
-            </Text>
-          )}
-          {company.followUpSentAt && (
-            <Text style={styles.dateRow}>
-              Relance effectuée :{' '}
-              {new Date(company.followUpSentAt).toLocaleDateString('fr-FR')}
-            </Text>
-          )}
-          {company.lastMailId && (
-            <Text style={styles.dateRowMuted}>
-              Dernier ID email : {company.lastMailId}
-            </Text>
-          )}
-        </View>
+        {/* Timeline d'Historique et Activités */}
+        <CompanyActivityTimeline
+          activities={activities}
+          onAddPress={() => setIsAddActivityModalOpen(true)}
+          onEditPress={(act) => setEditingActivity(act)}
+          onDeletePress={handleDeleteActivity}
+          loading={loadingActivities}
+        />
 
         {/* Bouton d'enregistrement */}
         <TouchableOpacity
@@ -866,6 +929,22 @@ export const CompanyDetailScreen: React.FC<CompanyDetailScreenProps> = ({
         nature={status === 'TO_FOLLOW_UP' ? 'FOLLOW_UP' : 'FIRST_CONTACT'}
         hasCv={user?.hasCv ?? false}
         cvOriginalName={user?.cvOriginalName}
+      />
+
+      {/* Modal d'ajout d'action manuelle */}
+      <AddActivityModal
+        visible={isAddActivityModalOpen}
+        onClose={() => setIsAddActivityModalOpen(false)}
+        onSave={handleAddManualActivity}
+        companyName={company.name}
+      />
+
+      {/* Modal de modification de date / action de l'historique */}
+      <EditActivityModal
+        visible={Boolean(editingActivity)}
+        activity={editingActivity}
+        onClose={() => setEditingActivity(null)}
+        onSave={handleUpdateActivity}
       />
     </View>
   );

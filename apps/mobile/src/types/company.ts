@@ -8,6 +8,17 @@ export type Status =
   | 'REFUSED'
   | 'ACCEPTED';
 
+export interface CompanyActivity {
+  id: string;
+  companyId: string;
+  type: string;
+  title: string;
+  description?: string | null;
+  metadata?: string | null;
+  performedAt: string;
+  createdAt: string;
+}
+
 export interface Company {
   id: string;
   name: string;
@@ -23,6 +34,7 @@ export interface Company {
   followUpReadyAt?: string | null;
   followUpSentAt?: string | null;
   lastMailId?: string | null;
+  activities?: CompanyActivity[];
   createdAt: string;
   updatedAt: string;
 }

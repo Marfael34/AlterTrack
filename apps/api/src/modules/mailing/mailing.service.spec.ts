@@ -55,6 +55,9 @@ describe('MailingService', () => {
       user: {
         findUnique: jest.fn().mockResolvedValue(null),
       },
+      companyActivity: {
+        create: jest.fn().mockResolvedValue({ id: 'act-1' }),
+      },
     };
 
     geminiService = {

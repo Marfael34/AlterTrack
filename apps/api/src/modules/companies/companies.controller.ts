@@ -19,10 +19,12 @@ import * as path from 'path';
 import { CurrentUser } from '../auth/current-user.decorator';
 import type { AuthenticatedUser } from '../auth/current-user.decorator';
 import { CompaniesService } from './companies.service';
+import { CreateActivityDto } from './dto/create-activity.dto';
 import { CreateCompanyDto } from './dto/create-company.dto';
 import { QueryCompanyDto } from './dto/query-company.dto';
-import { UpdateCompanyStatusDto } from './dto/update-company-status.dto';
+import { UpdateActivityDto } from './dto/update-activity.dto';
 import { UpdateCompanyDto } from './dto/update-company.dto';
+import { UpdateCompanyStatusDto } from './dto/update-company-status.dto';
 
 @Controller('companies')
 export class CompaniesController {
@@ -145,5 +147,49 @@ export class CompaniesController {
     @CurrentUser() user?: AuthenticatedUser,
   ) {
     return this.companiesService.remove(id, user?.id);
+  }
+
+  @Get(':id/activities')
+  getActivities(
+    @Param('id') id: string,
+    @CurrentUser() user?: AuthenticatedUser,
+  ) {
+    return this.companiesService.getActivities(id, user?.id);
+  }
+
+  @Post(':id/activities')
+  @HttpCode(HttpStatus.CREATED)
+  addActivity(
+    @Param('id') id: string,
+    @Body() createActivityDto: CreateActivityDto,
+    @CurrentUser() user?: AuthenticatedUser,
+  ) {
+    return this.companiesService.addActivity(id, createActivityDto, user?.id);
+  }
+
+  @Patch(':id/activities/:activityId')
+  @HttpCode(HttpStatus.OK)
+  updateActivity(
+    @Param('id') id: string,
+    @Param('activityId') activityId: string,
+    @Body() updateActivityDto: UpdateActivityDto,
+    @CurrentUser() user?: AuthenticatedUser,
+  ) {
+    return this.companiesService.updateActivity(
+      id,
+      activityId,
+      updateActivityDto,
+      user?.id,
+    );
+  }
+
+  @Delete(':id/activities/:activityId')
+  @HttpCode(HttpStatus.OK)
+  deleteActivity(
+    @Param('id') id: string,
+    @Param('activityId') activityId: string,
+    @CurrentUser() user?: AuthenticatedUser,
+  ) {
+    return this.companiesService.deleteActivity(id, activityId, user?.id);
   }
 }

@@ -7,8 +7,10 @@ import {
 import { Prisma, Status } from '@prisma/client';
 import * as XLSX from 'xlsx';
 import { PrismaService } from '../../prisma/prisma.service';
+import { CreateActivityDto } from './dto/create-activity.dto';
 import { CreateCompanyDto } from './dto/create-company.dto';
 import { QueryCompanyDto } from './dto/query-company.dto';
+import { UpdateActivityDto } from './dto/update-activity.dto';
 import { UpdateCompanyDto } from './dto/update-company.dto';
 
 @Injectable()
@@ -131,7 +133,7 @@ export class CompaniesService {
       }
     }
 
-    return this.prisma.company.create({
+    const company = await this.prisma.company.create({
       data: {
         name: createDto.name,
         email: createDto.email,
@@ -144,7 +146,21 @@ export class CompaniesService {
         status: createDto.status ?? Status.AUTO_SEND,
         userId: userId ?? undefined,
       },
+      include: {
+        activities: {
+          orderBy: { performedAt: 'desc' },
+        },
+      },
     });
+
+    await this.recordActivity(
+      company.id,
+      'CREATION',
+      'Création de la fiche',
+      `Fiche créée avec le statut : ${company.status}`,
+    );
+
+    return company;
   }
 
   async findAll(query: QueryCompanyDto, userId?: string) {
@@ -211,6 +227,11 @@ export class CompaniesService {
   async findOne(id: string, userId?: string) {
     const company = await this.prisma.company.findUnique({
       where: { id },
+      include: {
+        activities: {
+          orderBy: { performedAt: 'desc' },
+        },
+      },
     });
 
     if (!company || (userId && company.userId && company.userId !== userId)) {
@@ -239,23 +260,53 @@ export class CompaniesService {
       lon = geo ? geo.longitude : null;
     }
 
-    return this.prisma.company.update({
+    const updated = await this.prisma.company.update({
       where: { id },
       data: {
         ...updateDto,
         ...(lat !== undefined ? { latitude: lat } : {}),
         ...(lon !== undefined ? { longitude: lon } : {}),
       },
+      include: {
+        activities: {
+          orderBy: { performedAt: 'desc' },
+        },
+      },
     });
+
+    await this.recordActivity(
+      id,
+      'NOTE',
+      'Mise à jour des informations',
+      'Coordonnées ou notes de l\'entreprise modifiées',
+    );
+
+    return updated;
   }
 
   async updateStatus(id: string, status: Status, userId?: string) {
-    await this.findOne(id, userId);
+    const existing = await this.findOne(id, userId);
 
-    return this.prisma.company.update({
+    const updated = await this.prisma.company.update({
       where: { id },
       data: { status },
+      include: {
+        activities: {
+          orderBy: { performedAt: 'desc' },
+        },
+      },
     });
+
+    if (existing.status !== status) {
+      await this.recordActivity(
+        id,
+        'STATUS_CHANGE',
+        `Changement de statut`,
+        `Passage du statut ${existing.status} à ${status}`,
+      );
+    }
+
+    return updated;
   }
 
   async remove(id: string, userId?: string) {
@@ -1019,6 +1070,13 @@ export class CompaniesService {
           },
         });
 
+        await this.recordActivity(
+          created.id,
+          'CREATION',
+          'Importation de la fiche',
+          `Entreprise importée avec le statut : ${created.status}`,
+        );
+
         imported.push({
           id: created.id,
           name: created.name,
@@ -1046,6 +1104,163 @@ export class CompaniesService {
       errors,
       imported,
     };
+  }
+
+  async recordActivity(
+    companyId: string,
+    type: string,
+    title: string,
+    description?: string,
+    performedAt?: Date,
+    metadata?: string,
+  ) {
+    try {
+      return await this.prisma.companyActivity.create({
+        data: {
+          companyId,
+          type,
+          title,
+          description: description || null,
+          performedAt: performedAt || new Date(),
+          metadata: metadata || null,
+        },
+      });
+    } catch (err) {
+      this.logger.warn(
+        `Impossible d'enregistrer l'activité pour ${companyId}: ${String(err)}`,
+      );
+      return null;
+    }
+  }
+
+  async addActivity(
+    companyId: string,
+    dto: CreateActivityDto,
+    userId?: string,
+  ) {
+    await this.findOne(companyId, userId);
+
+    const performedAt = dto.performedAt
+      ? new Date(dto.performedAt)
+      : new Date();
+
+    return this.prisma.companyActivity.create({
+      data: {
+        companyId,
+        type: dto.type || 'CUSTOM',
+        title: dto.title,
+        description: dto.description || null,
+        performedAt: isNaN(performedAt.getTime()) ? new Date() : performedAt,
+        metadata: dto.metadata || null,
+      },
+    });
+  }
+
+  async getActivities(companyId: string, userId?: string) {
+    const company = await this.findOne(companyId, userId);
+
+    let activities = await this.prisma.companyActivity.findMany({
+      where: { companyId },
+      orderBy: { performedAt: 'desc' },
+    });
+
+    if (activities.length === 0) {
+      const initialActivities: Array<{
+        companyId: string;
+        type: string;
+        title: string;
+        description: string;
+        performedAt: Date;
+      }> = [];
+
+      initialActivities.push({
+        companyId,
+        type: 'CREATION',
+        title: 'Création de la fiche',
+        description: 'Entreprise ajoutée à AlterTrack',
+        performedAt: company.createdAt,
+      });
+
+      if (company.firstMailSentAt) {
+        initialActivities.push({
+          companyId,
+          type: 'EMAIL_SENT',
+          title: 'Candidature envoyée',
+          description: `Premier email de candidature expédié à ${company.email}`,
+          performedAt: company.firstMailSentAt,
+        });
+      }
+
+      if (company.followUpSentAt) {
+        initialActivities.push({
+          companyId,
+          type: 'FOLLOW_UP_SENT',
+          title: 'Relance effectuée',
+          description: `Email de relance expédié à ${company.email}`,
+          performedAt: company.followUpSentAt,
+        });
+      }
+
+      for (const act of initialActivities) {
+        await this.prisma.companyActivity.create({ data: act });
+      }
+
+      activities = await this.prisma.companyActivity.findMany({
+        where: { companyId },
+        orderBy: { performedAt: 'desc' },
+      });
+    }
+
+    return activities;
+  }
+
+  async updateActivity(
+    companyId: string,
+    activityId: string,
+    dto: UpdateActivityDto,
+    userId?: string,
+  ) {
+    await this.findOne(companyId, userId);
+
+    const activity = await this.prisma.companyActivity.findFirst({
+      where: { id: activityId, companyId },
+    });
+
+    if (!activity) {
+      throw new NotFoundException(`Activité ${activityId} non trouvée`);
+    }
+
+    const data: Prisma.CompanyActivityUpdateInput = {};
+    if (dto.title !== undefined) data.title = dto.title;
+    if (dto.type !== undefined) data.type = dto.type;
+    if (dto.description !== undefined) data.description = dto.description;
+    if (dto.metadata !== undefined) data.metadata = dto.metadata;
+    if (dto.performedAt) data.performedAt = new Date(dto.performedAt);
+
+    return this.prisma.companyActivity.update({
+      where: { id: activityId },
+      data,
+    });
+  }
+
+  async deleteActivity(
+    companyId: string,
+    activityId: string,
+    userId?: string,
+  ) {
+    await this.findOne(companyId, userId);
+
+    const activity = await this.prisma.companyActivity.findFirst({
+      where: { id: activityId, companyId },
+    });
+
+    if (!activity) {
+      throw new NotFoundException(`Activité ${activityId} non trouvée`);
+    }
+
+    return this.prisma.companyActivity.delete({
+      where: { id: activityId },
+    });
   }
 }
 

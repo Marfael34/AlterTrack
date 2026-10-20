@@ -49,6 +49,27 @@ export class MailingService {
     private readonly pushService: PushNotificationService,
   ) {}
 
+  private async logActivity(
+    companyId: string,
+    type: string,
+    title: string,
+    description?: string,
+  ) {
+    try {
+      await this.prisma.companyActivity.create({
+        data: {
+          companyId,
+          type,
+          title,
+          description: description || null,
+          performedAt: new Date(),
+        },
+      });
+    } catch (err) {
+      this.logger.warn(`Impossible d'enregistrer l'activité : ${String(err)}`);
+    }
+  }
+
   private async resolveCvAttachment(
     currentUser?: {
       cvFilePath?: string | null;
@@ -162,6 +183,13 @@ export class MailingService {
           },
         });
 
+        await this.logActivity(
+          company.id,
+          'EMAIL_SENT',
+          'Candidature envoyée (Lot)',
+          `Email de premier contact expédié à ${company.email}`,
+        );
+
         successful.push(company.id);
       } catch (err) {
         const errorMsg = err instanceof Error ? err.message : String(err);
@@ -263,6 +291,13 @@ export class MailingService {
       },
     });
 
+    await this.logActivity(
+      company.id,
+      'EMAIL_SENT',
+      'Candidature envoyée',
+      `Candidature envoyée à ${company.email} (Sujet : "${subject}")`,
+    );
+
     return {
       success: true,
       company: updated,
@@ -332,7 +367,7 @@ export class MailingService {
 
     const now = new Date();
 
-    return this.prisma.company.update({
+    const updated = await this.prisma.company.update({
       where: { id: company.id },
       data: {
         status: Status.WAITING_FOR_REPLY,
@@ -340,6 +375,15 @@ export class MailingService {
         lastMailId: sendResult.messageId,
       },
     });
+
+    await this.logActivity(
+      company.id,
+      'FOLLOW_UP_SENT',
+      'Relance envoyée',
+      `Email de relance expédié à ${company.email}`,
+    );
+
+    return updated;
   }
 
   async checkIncomingReplies() {
@@ -396,6 +440,13 @@ export class MailingService {
               status: Status.REPLY_RECEIVED,
             },
           });
+
+          await this.logActivity(
+            comp.id,
+            'REPLY_RECEIVED',
+            'Réponse reçue',
+            `Réponse détectée de ${fromAddr} : "${email.subject}"`,
+          );
 
           await this.pushService.sendPushNotification({
             title: 'Nouvelle réponse reçue !',

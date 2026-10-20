@@ -6,19 +6,7 @@ import { CompaniesService } from './companies.service';
 
 describe('CompaniesService', () => {
   let service: CompaniesService;
-  let prisma: {
-    company: {
-      create: jest.Mock;
-      findFirst: jest.Mock;
-      findMany: jest.Mock;
-      findUnique: jest.Mock;
-      update: jest.Mock;
-      delete: jest.Mock;
-      deleteMany: jest.Mock;
-      count: jest.Mock;
-      groupBy: jest.Mock;
-    };
-  };
+  let prisma: any;
 
   const mockCompany = {
     id: 'comp-uuid-1',
@@ -50,6 +38,12 @@ describe('CompaniesService', () => {
         groupBy: jest
           .fn()
           .mockResolvedValue([{ status: Status.TO_SEND, _count: { id: 1 } }]),
+      },
+      companyActivity: {
+        create: jest.fn().mockResolvedValue({ id: 'act-1' }),
+        findMany: jest.fn().mockResolvedValue([]),
+        findFirst: jest.fn().mockResolvedValue({ id: 'act-1' }),
+        delete: jest.fn().mockResolvedValue({ id: 'act-1' }),
       },
     };
 
@@ -89,6 +83,11 @@ describe('CompaniesService', () => {
           notes: undefined,
           status: Status.AUTO_SEND,
           userId: undefined,
+        },
+        include: {
+          activities: {
+            orderBy: { performedAt: 'desc' },
+          },
         },
       });
       expect(result).toEqual(mockCompany);
@@ -187,6 +186,11 @@ describe('CompaniesService', () => {
       expect(prisma.company.update).toHaveBeenCalledWith({
         where: { id: 'comp-uuid-1' },
         data: { status: Status.ACCEPTED },
+        include: {
+          activities: {
+            orderBy: { performedAt: 'desc' },
+          },
+        },
       });
       expect(result.status).toEqual(Status.ACCEPTED);
     });

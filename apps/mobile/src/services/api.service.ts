@@ -8,7 +8,7 @@ import {
   UpdateProfilePayload,
   UserProfile,
 } from '../types/auth';
-import { Company, CompanyStats, Status } from '../types/company';
+import { Company, CompanyActivity, CompanyStats, Status } from '../types/company';
 import { AppConfig } from '../types/config';
 import { StorageService } from './storage.service';
 
@@ -150,6 +150,50 @@ export const ApiService = {
   async deleteCompany(id: string): Promise<void> {
     await this.request(`/companies/${id}`, {
       method: 'DELETE',
+    });
+  },
+
+  async getCompanyActivities(companyId: string): Promise<CompanyActivity[]> {
+    return this.request(`/companies/${companyId}/activities`);
+  },
+
+  async addCompanyActivity(
+    companyId: string,
+    data: {
+      title: string;
+      type?: string;
+      description?: string;
+      performedAt?: string;
+    },
+  ): Promise<CompanyActivity> {
+    return this.request(`/companies/${companyId}/activities`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  async deleteCompanyActivity(
+    companyId: string,
+    activityId: string,
+  ): Promise<void> {
+    await this.request(`/companies/${companyId}/activities/${activityId}`, {
+      method: 'DELETE',
+    });
+  },
+
+  async updateCompanyActivity(
+    companyId: string,
+    activityId: string,
+    data: {
+      title?: string;
+      type?: string;
+      description?: string;
+      performedAt?: string;
+    },
+  ): Promise<CompanyActivity> {
+    return this.request(`/companies/${companyId}/activities/${activityId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
     });
   },
 
