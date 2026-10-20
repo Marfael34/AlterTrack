@@ -101,7 +101,8 @@ L'utilisateur a demandé :
 - [x] **Compilation NestJS API :** `npm run build` exécuté avec succès $\rightarrow$ **0 erreur**.
 - [x] **Tests NestJS API :** `npm test` $\rightarrow$ **8 test suites passées, 52/52 tests réussis**.
 - [x] **Typecheck React Native :** `tsc --noEmit` exécuté avec succès $\rightarrow$ **0 erreur**.
-- [x] **Conteneur Docker API :** Redémarrage réussi (`altertrack-api`), connexion PostgreSQL et routes opérationnelles.
+- [x] **Rebuild de l'image Docker API :** `docker compose build api && docker compose up -d api` pour intégrer le nouveau client Prisma avec l'enum `Status.AUTO_SEND`.
+- [x] **Test End-to-End :** `PATCH /companies/:id/status` avec `status: 'AUTO_SEND'` validé avec succès en local et à travers le tunnel Cloudflare.
 
 ---
 
