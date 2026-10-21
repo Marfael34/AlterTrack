@@ -33,6 +33,9 @@ out/
 
 # Uploads and user data
 uploads/
+backups/
+*.sql
+*.sql.gz
 *.pdf
 
 # IDE and OS

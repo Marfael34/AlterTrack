@@ -8,7 +8,8 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-altertrack_secret_dev}
       POSTGRES_DB: ${POSTGRES_DB:-altertrack_db}
     ports:
-      - "${POSTGRES_PORT:-5432}:5432"
+      # Lier à 127.0.0.1 pour empêcher l'exposition publique directe du port Postgres sur Internet
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -29,7 +30,7 @@ services:
       postgres:
         condition: service_healthy
     environment:
-      NODE_ENV: production
+      NODE_ENV: ${NODE_ENV:-production}
       PORT: 3000
       DATABASE_URL: postgresql://${POSTGRES_USER:-altertrack}:${POSTGRES_PASSWORD:-altertrack_secret_dev}@postgres:5432/${POSTGRES_DB:-altertrack_db}?schema=public
       API_KEY: ${API_KEY}
@@ -38,11 +39,18 @@ services:
       GMAIL_USER: ${GMAIL_USER}
       GMAIL_APP_PASSWORD: ${GMAIL_APP_PASSWORD}
       JWT_SECRET: ${JWT_SECRET:-altertrack_super_secret_jwt_key_2026_dev}
-      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-30d}
+      CORS_ORIGINS: ${CORS_ORIGINS:-*}
     ports:
       - "${PORT:-3000}:3000"
     volumes:
       - api_uploads:/app/uploads
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1:3000/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
     networks:
       - altertrack-net
 
@@ -51,7 +59,8 @@ services:
     container_name: altertrack-tunnel
     restart: unless-stopped
     depends_on:
-      - api
+      api:
+        condition: service_healthy
     command: tunnel --no-autoupdate --url http://api:3000
     networks:
       - altertrack-net

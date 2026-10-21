@@ -5,11 +5,12 @@ import tunnelConfig from '../constants/tunnelUrl.json';
 const SERVER_URL_KEY = 'altertrack_server_url';
 const API_KEY_KEY = 'altertrack_api_key';
 
-// Sur Web (navigateur sur le PC hôte) : localhost:3000
-// Sur Mobile : Priorité au tunnel HTTPS distant pour accès 4G/5G/partout, ou Wi-Fi local
+// Sur Web (navigateur sur le PC hôte) : localhost:3000 ou URL de production
+// Sur Mobile : Priorité à l'URL de production si définie, sinon tunnel HTTPS distant, sinon Wi-Fi local
+const PROD_API_URL = process.env.EXPO_PUBLIC_API_URL?.trim().replace(/\/+$/, '') || '';
 const DEFAULT_TUNNEL_URL = tunnelConfig?.url || '';
 const DEFAULT_LOCAL_WIFI_URL = 'http://192.168.1.101:3000';
-const DEFAULT_WEB_URL = 'http://localhost:3000';
+const DEFAULT_WEB_URL = PROD_API_URL || 'http://localhost:3000';
 const DEFAULT_API_KEY = 'altertrack_dev_secret_key_2026_super_safe';
 
 export const StorageService = {
@@ -21,9 +22,15 @@ export const StorageService = {
     return DEFAULT_LOCAL_WIFI_URL;
   },
 
+  getProductionUrl(): string {
+    return PROD_API_URL;
+  },
+
   async getServerUrl(): Promise<string> {
     const isWeb = Platform.OS === 'web';
-    const defaultUrl = isWeb
+    const defaultUrl = PROD_API_URL
+      ? PROD_API_URL
+      : isWeb
       ? DEFAULT_WEB_URL
       : DEFAULT_TUNNEL_URL || DEFAULT_LOCAL_WIFI_URL;
 

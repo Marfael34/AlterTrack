@@ -56,6 +56,18 @@ export class EnvironmentVariables {
   @IsString()
   @IsOptional()
   JWT_EXPIRES_IN: string = '30d';
+
+  @IsString()
+  @IsOptional()
+  CORS_ORIGINS?: string;
+
+  @IsString()
+  @IsOptional()
+  APK_DOWNLOAD_URL?: string;
+
+  @IsString()
+  @IsOptional()
+  APK_FILE_PATH?: string;
 }
 
 export function validateEnvironment(config: Record<string, unknown>) {
