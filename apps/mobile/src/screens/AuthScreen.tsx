@@ -15,6 +15,7 @@ import {
 } from '../components/KeyboardAwareCenteredScrollView';
 import { Colors } from '../constants/colors';
 import { useAuth } from '../context/AuthContext';
+import { ServerConfigModal } from '../components/ServerConfigModal';
 
 export const AuthScreen: React.FC = () => {
   const { login, register } = useAuth();
@@ -35,6 +36,7 @@ export const AuthScreen: React.FC = () => {
   const [showEmailConfig, setShowEmailConfig] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [isServerModalOpen, setIsServerModalOpen] = useState(false);
 
   const handleSubmit = async () => {
     setErrorMessage(null);
@@ -78,9 +80,16 @@ export const AuthScreen: React.FC = () => {
         });
       }
     } catch (err: any) {
-      setErrorMessage(
-        err?.message || 'Une erreur est survenue lors de l\'authentification.',
-      );
+      const msg = err?.message || '';
+      if (msg.includes('Network request failed') || msg.includes('Failed to fetch')) {
+        setErrorMessage(
+          'Impossible de joindre le serveur AlterTrack. Vérifiez l’URL du serveur avec l’icône ⚙️ ci-dessus.',
+        );
+      } else {
+        setErrorMessage(
+          msg || 'Une erreur est survenue lors de l\'authentification.',
+        );
+      }
     } finally {
       setLoading(false);
     }
@@ -95,6 +104,18 @@ export const AuthScreen: React.FC = () => {
         contentContainerStyle={styles.scrollContent}
         keyboardShouldPersistTaps="handled"
       >
+        {/* Barre d'action supérieure (Dev Settings) */}
+        <View style={styles.topBar}>
+          <TouchableOpacity
+            style={styles.settingsIconButton}
+            onPress={() => setIsServerModalOpen(true)}
+            activeOpacity={0.7}
+            accessibilityLabel="Configurer le serveur (Dev)"
+          >
+            <Ionicons name="settings-outline" size={20} color={Colors.textSecondary} />
+          </TouchableOpacity>
+        </View>
+
         {/* En-tête / Logo AlterTrack */}
         <View style={styles.header}>
           <View style={styles.logoBadge}>
@@ -164,7 +185,19 @@ export const AuthScreen: React.FC = () => {
           {errorMessage ? (
             <View style={styles.errorBanner}>
               <Ionicons name="alert-circle" size={20} color={Colors.danger} />
-              <Text style={styles.errorText}>{errorMessage}</Text>
+              <View style={{ flex: 1, marginLeft: 8 }}>
+                <Text style={styles.errorText}>{errorMessage}</Text>
+                {errorMessage.includes('serveur') ? (
+                  <TouchableOpacity
+                    style={styles.errorConfigBtn}
+                    onPress={() => setIsServerModalOpen(true)}
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons name="settings-outline" size={13} color={Colors.brandCyan} />
+                    <Text style={styles.errorConfigBtnText}>Configurer le serveur</Text>
+                  </TouchableOpacity>
+                ) : null}
+              </View>
             </View>
           ) : null}
 
@@ -419,6 +452,12 @@ export const AuthScreen: React.FC = () => {
           isolés pour chaque utilisateur.
         </Text>
       </KeyboardAwareCenteredScrollView>
+
+      <ServerConfigModal
+        visible={isServerModalOpen}
+        onClose={() => setIsServerModalOpen(false)}
+        onSaved={() => setErrorMessage(null)}
+      />
     </KeyboardAvoidingView>
   );
 };
@@ -509,7 +548,7 @@ const styles = StyleSheet.create({
   },
   errorBanner: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     backgroundColor: 'rgba(239, 68, 68, 0.12)',
     borderWidth: 1,
     borderColor: Colors.danger,
@@ -520,9 +559,41 @@ const styles = StyleSheet.create({
   errorText: {
     color: Colors.danger,
     fontSize: 13,
-    marginLeft: 8,
-    flex: 1,
     fontWeight: '500',
+    lineHeight: 18,
+  },
+  errorConfigBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 8,
+    alignSelf: 'flex-start',
+    backgroundColor: Colors.surface,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: Colors.brandCyan,
+  },
+  errorConfigBtnText: {
+    color: Colors.brandCyan,
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  topBar: {
+    width: '100%',
+    alignItems: 'flex-end',
+    marginBottom: 6,
+  },
+  settingsIconButton: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   fieldGroup: {
     marginBottom: 16,
