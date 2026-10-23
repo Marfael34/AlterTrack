@@ -48,6 +48,10 @@ export const StorageService = {
     }
 
     try {
+      if (PROD_API_URL) {
+        return PROD_API_URL;
+      }
+
       const value = await AsyncStorage.getItem(SERVER_URL_KEY);
 
       // Si le Wi-Fi local du PC répond (smartphone sur le même réseau Wi-Fi), on le privilégie directement
