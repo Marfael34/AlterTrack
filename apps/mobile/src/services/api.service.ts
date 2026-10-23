@@ -28,12 +28,37 @@ export const ApiService = {
       headers['Content-Type'] = 'application/json';
     }
 
-    const url = `${baseUrl}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`;
+    const performFetch = async (targetBaseUrl: string) => {
+      const url = `${targetBaseUrl}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`;
+      return fetch(url, {
+        ...options,
+        headers,
+      });
+    };
 
-    const response = await fetch(url, {
-      ...options,
-      headers,
-    });
+    let response: Response;
+    try {
+      response = await performFetch(baseUrl);
+    } catch (networkErr: any) {
+      // Si la requête échoue sur le réseau (ex: tunnel Cloudflare expiré ou coupure),
+      // on tente automatiquement l'autre canal (Wi-Fi local si on était sur tunnel, ou tunnel si on était sur Wi-Fi)
+      const isTunnel = baseUrl.includes('.trycloudflare.com');
+      const alternateUrl = isTunnel
+        ? StorageService.getLocalWifiUrl()
+        : StorageService.getTunnelUrl();
+
+      if (alternateUrl && alternateUrl !== baseUrl) {
+        try {
+          response = await performFetch(alternateUrl);
+          // Si l'alternative a réussi, on la mémorise automatiquement
+          await StorageService.setServerUrl(alternateUrl);
+        } catch {
+          throw networkErr;
+        }
+      } else {
+        throw networkErr;
+      }
+    }
 
     if (!response.ok) {
       let errorMessage = `Erreur HTTP ${response.status}`;
@@ -360,6 +385,24 @@ export const ApiService = {
 
     const queryString = params.toString() ? `?${params.toString()}` : '';
     return `${baseUrl}/config/cv/download${queryString}`;
+  },
+
+  async getSpreadsheetExportUrl(
+    format: 'xlsx' | 'csv' = 'xlsx',
+  ): Promise<string> {
+    const baseUrl = await StorageService.getServerUrl();
+    const token = await StorageService.getAuthToken();
+    const apiKey = await StorageService.getApiKey();
+
+    const params = new URLSearchParams();
+    params.append('format', format);
+    if (token) {
+      params.append('token', token);
+    } else if (apiKey) {
+      params.append('apiKey', apiKey);
+    }
+
+    return `${baseUrl}/companies/export?${params.toString()}`;
   },
 
   async importSpreadsheet(

@@ -17,8 +17,8 @@ const fs = require('fs');
 const path = require('path');
 
 const TUNNEL_JSON_PATH = path.resolve(__dirname, '../apps/mobile/src/constants/tunnelUrl.json');
-const PING_INTERVAL_MS = 30 * 1000; // 30 secondes
-const MAX_FAILURES_BEFORE_RESTART = 2;
+const PING_INTERVAL_MS = 10 * 1000; // 10 secondes pour réactivité maximale
+const MAX_FAILURES_BEFORE_RESTART = 1;
 
 let consecutiveFailures = 0;
 let currentUrl = null;
@@ -65,7 +65,7 @@ function checkDockerLogsForTunnelError() {
 }
 
 async function restartTunnel() {
-  log('🔄 Redémarrage du conteneur Cloudflare Tunnel...');
+  log('🔄 Régénération / Redémarrage du conteneur Cloudflare Tunnel...');
   try {
     execSync('docker compose restart tunnel', { stdio: 'ignore' });
   } catch (err) {
@@ -80,7 +80,7 @@ async function restartTunnel() {
       currentUrl = newUrl;
       saveUrl(newUrl);
       consecutiveFailures = 0;
-      log(`✅ Nouveau tunnel actif : \x1b[36m\x1b[1m${newUrl}\x1b[0m`);
+      log(`✅ Nouveau tunnel régénéré et actif : \x1b[36m\x1b[1m${newUrl}\x1b[0m`);
       return true;
     }
   }
@@ -91,7 +91,7 @@ async function restartTunnel() {
 
 async function pingTunnel(url) {
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 8000);
+  const timeout = setTimeout(() => controller.abort(), 5000);
 
   try {
     const res = await fetch(`${url}/health`, {
@@ -107,10 +107,19 @@ async function pingTunnel(url) {
 }
 
 async function cycle() {
-  // 1. S'assurer d'avoir une URL
+  // 1. Détecter si une nouvelle URL a été attribuée par Docker (ex: suite à un docker compose up)
+  const dockerUrl = getUrlFromDockerLogs();
+  if (dockerUrl && dockerUrl !== currentUrl) {
+    currentUrl = dockerUrl;
+    saveUrl(currentUrl);
+    consecutiveFailures = 0;
+    log(`🔄 URL Cloudflare mise à jour depuis Docker : \x1b[36m\x1b[1m${currentUrl}\x1b[0m`);
+  }
+
+  // S'assurer d'avoir au moins une URL
   if (!currentUrl) {
-    currentUrl = getUrlFromDockerLogs();
-    if (currentUrl) {
+    if (dockerUrl) {
+      currentUrl = dockerUrl;
       saveUrl(currentUrl);
       log(`🔗 Tunnel Cloudflare détecté : \x1b[36m\x1b[1m${currentUrl}\x1b[0m`);
     } else {
@@ -142,8 +151,18 @@ async function cycle() {
     consecutiveFailures++;
     log(`⚠️ Échec du ping (${consecutiveFailures}/${MAX_FAILURES_BEFORE_RESTART}) sur ${currentUrl}`);
 
+    // Re-vérifier d'abord si Docker a déjà une nouvelle URL sous le coude
+    const freshUrl = getUrlFromDockerLogs();
+    if (freshUrl && freshUrl !== currentUrl) {
+      currentUrl = freshUrl;
+      saveUrl(currentUrl);
+      consecutiveFailures = 0;
+      log(`✅ URL rafraîchie depuis Docker : ${currentUrl}`);
+      return;
+    }
+
     if (consecutiveFailures >= MAX_FAILURES_BEFORE_RESTART) {
-      log('🚨 Le tunnel ne répond plus. Déclenchement de la récupération automatique...');
+      log('🚨 Le tunnel a expiré ou ne répond plus. Régénération automatique en cours...');
       await restartTunnel();
     }
   }

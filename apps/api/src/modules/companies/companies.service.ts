@@ -1262,5 +1262,129 @@ export class CompaniesService {
       where: { id: activityId },
     });
   }
+
+  /**
+   * Exporte l'intégralité des entreprises de l'utilisateur dans un fichier tableur (.xlsx ou .csv)
+   * avec l'ensemble des données associées (coordonnées, statuts, dates, notes, activités).
+   * Protégé contre l'injection de formules (CWE-1236).
+   */
+  async exportToSpreadsheet(userId?: string, format: string = 'xlsx') {
+    const whereClause: Prisma.CompanyWhereInput = userId ? { userId } : {};
+
+    const companies = await this.prisma.company.findMany({
+      where: whereClause,
+      include: {
+        activities: {
+          orderBy: { performedAt: 'desc' },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    const STATUS_MAP: Record<string, string> = {
+      AUTO_SEND: 'Envoi automatique',
+      TO_SEND: 'À envoyer (manuel)',
+      WAITING_FOR_REPLY: 'En attente',
+      TO_FOLLOW_UP: 'À relancer',
+      TO_CALL: 'À appeler',
+      REPLY_RECEIVED: 'Réponse reçue',
+      REFUSED: 'Refusé',
+      ACCEPTED: 'Accepté',
+    };
+
+    const formatDate = (d: Date | null | undefined): string => {
+      if (!d) return '';
+      const date = new Date(d);
+      if (isNaN(date.getTime())) return '';
+      const pad = (n: number) => (n < 10 ? '0' + n : n.toString());
+      return `${pad(date.getDate())}/${pad(date.getMonth() + 1)}/${date.getFullYear()} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
+    };
+
+    // Assainissement anti-injection de formules CSV/Excel (CWE-1236)
+    const sanitize = (val: unknown): string => {
+      if (val === null || val === undefined) return '';
+      const str = String(val).trim();
+      if (/^[=+\-@\t\r]/.test(str)) {
+        return `'${str}`;
+      }
+      return str;
+    };
+
+    const rows = companies.map((c) => {
+      // Concaténation chronologique de l'historique complet des activités
+      const activitiesText = (c.activities || [])
+        .map((act) => {
+          const actDate = formatDate(act.performedAt);
+          const actTitle = act.title || act.type;
+          const actDesc = act.description ? ` : ${act.description}` : '';
+          return `[${actDate}] ${actTitle}${actDesc}`;
+        })
+        .join('\n');
+
+      return {
+        'Nom de l’entreprise': sanitize(c.name),
+        'Statut': sanitize(STATUS_MAP[c.status] || c.status),
+        'Code Statut': sanitize(c.status),
+        'Email': sanitize(c.email),
+        'Téléphone': sanitize(c.phone || ''),
+        'Adresse': sanitize(c.address || ''),
+        'Ville': sanitize(c.city || ''),
+        'Latitude': typeof c.latitude === 'number' ? c.latitude : '',
+        'Longitude': typeof c.longitude === 'number' ? c.longitude : '',
+        'Premier e-mail envoyé le': formatDate(c.firstMailSentAt),
+        'Relance prévue le': formatDate(c.followUpReadyAt),
+        'Relance envoyée le': formatDate(c.followUpSentAt),
+        'Date d’ajout': formatDate(c.createdAt),
+        'Dernière mise à jour': formatDate(c.updatedAt),
+        'Notes & Commentaires': sanitize(c.notes || ''),
+        'Nombre d’activités': c.activities ? c.activities.length : 0,
+        'Historique des activités': sanitize(activitiesText),
+      };
+    });
+
+    const worksheet = XLSX.utils.json_to_sheet(rows);
+
+    // Ajustement dynamique de la largeur des colonnes
+    if (rows.length > 0) {
+      const headers = Object.keys(rows[0]);
+      const colWidths = headers.map((key) => {
+        let maxLen = key.length;
+        for (const row of rows) {
+          const val = String((row as any)[key] ?? '');
+          const firstLine = val.split('\n')[0];
+          if (firstLine.length > maxLen) maxLen = firstLine.length;
+        }
+        return { wch: Math.min(Math.max(maxLen + 3, 14), 50) };
+      });
+      worksheet['!cols'] = colWidths;
+    }
+
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Entreprises');
+
+    const cleanFormat = (format || 'xlsx').toLowerCase().trim();
+    const dateStamp = new Date().toISOString().slice(0, 10);
+
+    if (cleanFormat === 'csv') {
+      const csvContent = XLSX.utils.sheet_to_csv(worksheet, { FS: ';' });
+      // Ajout du BOM UTF-8 (\uFEFF) pour compatibilité Excel FR native
+      const buffer = Buffer.from('\uFEFF' + csvContent, 'utf-8');
+      return {
+        buffer,
+        contentType: 'text/csv; charset=utf-8',
+        filename: `altertrack_entreprises_${dateStamp}.csv`,
+        count: companies.length,
+      };
+    }
+
+    const xlsxBuffer = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });
+    return {
+      buffer: Buffer.isBuffer(xlsxBuffer) ? xlsxBuffer : Buffer.from(xlsxBuffer),
+      contentType:
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      filename: `altertrack_entreprises_${dateStamp}.xlsx`,
+      count: companies.length,
+    };
+  }
 }
 

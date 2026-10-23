@@ -42,6 +42,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
   const [stats, setStats] = useState<CompanyStats | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [loadingCvUrl, setLoadingCvUrl] = useState(false);
+  const [exportingFormat, setExportingFormat] = useState<'xlsx' | 'csv' | null>(null);
 
   // Adresse fixe de référence
   const [refPoint, setRefPoint] = useState<ReferencePoint | null>(propRefPoint || null);
@@ -142,6 +143,21 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
       );
     } finally {
       setLoadingCvUrl(false);
+    }
+  };
+
+  const handleExportSpreadsheet = async (format: 'xlsx' | 'csv') => {
+    setExportingFormat(format);
+    try {
+      const url = await ApiService.getSpreadsheetExportUrl(format);
+      await Linking.openURL(url);
+    } catch (err: any) {
+      Alert.alert(
+        'Export de données',
+        err?.message || 'Impossible de générer le fichier tableur.',
+      );
+    } finally {
+      setExportingFormat(null);
     }
   };
 
@@ -445,6 +461,65 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
             >
               <Ionicons name="paper-plane-outline" size={16} color={Colors.text} />
               <Text style={styles.actionBtnSecondaryText}>Tester l'envoi</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* DONNÉES & TABLEUR */}
+        <View style={styles.sectionHeader}>
+          <Ionicons name="download-outline" size={18} color={Colors.brandCyan} />
+          <Text style={styles.sectionTitle}>Données & Tableur</Text>
+        </View>
+
+        <View style={styles.card}>
+          <View style={styles.cardHeaderRow}>
+            <View style={styles.cardTitleGroup}>
+              <View style={[styles.iconCircle, { backgroundColor: '#10B98120' }]}>
+                <Ionicons name="grid" size={20} color="#10B981" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.cardTitle}>Exporter toutes les entreprises</Text>
+                <Text style={styles.cardSubtitle}>
+                  Téléchargez la base complète avec coordonnées, statuts, dates, notes et historique des activités.
+                </Text>
+              </View>
+            </View>
+            <View style={[styles.badge, { backgroundColor: '#00D2C415', borderColor: Colors.brandCyan }]}>
+              <Text style={[styles.badgeText, { color: Colors.brandCyan }]}>
+                {totalTracked} fiche{totalTracked > 1 ? 's' : ''}
+              </Text>
+            </View>
+          </View>
+
+          <View style={styles.cardActionsRow}>
+            <TouchableOpacity
+              style={[styles.actionBtnPrimary, exportingFormat === 'xlsx' && { opacity: 0.7 }]}
+              onPress={() => handleExportSpreadsheet('xlsx')}
+              disabled={exportingFormat !== null}
+            >
+              {exportingFormat === 'xlsx' ? (
+                <ActivityIndicator size="small" color="#0B0F19" />
+              ) : (
+                <>
+                  <Ionicons name="document-text" size={16} color="#0B0F19" />
+                  <Text style={styles.actionBtnPrimaryText}>Tableur Excel (.xlsx)</Text>
+                </>
+              )}
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.actionBtnOutline, exportingFormat === 'csv' && { opacity: 0.7 }]}
+              onPress={() => handleExportSpreadsheet('csv')}
+              disabled={exportingFormat !== null}
+            >
+              {exportingFormat === 'csv' ? (
+                <ActivityIndicator size="small" color={Colors.brandCyan} />
+              ) : (
+                <>
+                  <Ionicons name="code-download-outline" size={16} color={Colors.brandCyan} />
+                  <Text style={styles.actionBtnOutlineText}>Format CSV (.csv)</Text>
+                </>
+              )}
             </TouchableOpacity>
           </View>
         </View>
