@@ -256,8 +256,8 @@ export const AuthScreen: React.FC = () => {
                 style={[
                   styles.inputWrapper,
                   confirmPassword.length > 0 &&
-                    password !== confirmPassword &&
-                    styles.inputWrapperError,
+                  password !== confirmPassword &&
+                  styles.inputWrapperError,
                 ]}
               >
                 <Ionicons
