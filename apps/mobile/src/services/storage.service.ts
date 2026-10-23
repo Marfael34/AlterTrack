@@ -9,9 +9,24 @@ const API_KEY_KEY = 'altertrack_api_key';
 // Sur Mobile : Priorité à l'URL de production si définie, sinon tunnel HTTPS distant, sinon Wi-Fi local
 const PROD_API_URL = process.env.EXPO_PUBLIC_API_URL?.trim().replace(/\/+$/, '') || '';
 const DEFAULT_TUNNEL_URL = tunnelConfig?.url || '';
-const DEFAULT_LOCAL_WIFI_URL = 'http://192.168.1.101:3000';
+const DEFAULT_LOCAL_WIFI_URL = 'http://192.168.1.27:3000';
 const DEFAULT_WEB_URL = PROD_API_URL || 'http://localhost:3000';
 const DEFAULT_API_KEY = 'altertrack_dev_secret_key_2026_super_safe';
+
+async function checkUrlReachable(url: string, timeoutMs: number = 600): Promise<boolean> {
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
+    const res = await fetch(`${url}/health`, {
+      signal: controller.signal,
+      headers: { 'x-api-key': DEFAULT_API_KEY },
+    });
+    clearTimeout(timeout);
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
 
 export const StorageService = {
   getTunnelUrl(): string {
@@ -28,26 +43,35 @@ export const StorageService = {
 
   async getServerUrl(): Promise<string> {
     const isWeb = Platform.OS === 'web';
-    const defaultUrl = PROD_API_URL
-      ? PROD_API_URL
-      : isWeb
-      ? DEFAULT_WEB_URL
-      : DEFAULT_TUNNEL_URL || DEFAULT_LOCAL_WIFI_URL;
+    if (isWeb) {
+      return PROD_API_URL || DEFAULT_WEB_URL;
+    }
 
     try {
       const value = await AsyncStorage.getItem(SERVER_URL_KEY);
-      if (
-        !value ||
-        (isWeb && value.includes('192.168.1.')) ||
-        (!isWeb && (value.includes('192.168.1.27') || value.includes('localhost') || value.includes('127.0.0.1'))) ||
-        (!isWeb && value.includes('.trycloudflare.com') && DEFAULT_TUNNEL_URL && value !== DEFAULT_TUNNEL_URL)
-      ) {
-        await AsyncStorage.setItem(SERVER_URL_KEY, defaultUrl);
-        return defaultUrl;
+
+      // Si le Wi-Fi local du PC répond (smartphone sur le même réseau Wi-Fi), on le privilégie directement
+      const wifiAvailable = await checkUrlReachable(DEFAULT_LOCAL_WIFI_URL, 500);
+      if (wifiAvailable) {
+        if (value !== DEFAULT_LOCAL_WIFI_URL) {
+          await AsyncStorage.setItem(SERVER_URL_KEY, DEFAULT_LOCAL_WIFI_URL);
+        }
+        return DEFAULT_LOCAL_WIFI_URL;
       }
-      return value;
-    } catch {
+
+      // Si le Wi-Fi ne répond pas (ex: en déplacement 4G/5G) :
+      const isInvalid = !value || value.includes('localhost') || value.includes('127.0.0.1') || value.includes('192.168.1.101');
+      const isOutdatedTunnel = value?.includes('.trycloudflare.com') && DEFAULT_TUNNEL_URL && value !== DEFAULT_TUNNEL_URL;
+
+      if (!isInvalid && !isOutdatedTunnel && value && !value.includes('192.168.1.')) {
+        return value;
+      }
+
+      const defaultUrl = DEFAULT_TUNNEL_URL || DEFAULT_LOCAL_WIFI_URL;
+      await AsyncStorage.setItem(SERVER_URL_KEY, defaultUrl);
       return defaultUrl;
+    } catch {
+      return DEFAULT_TUNNEL_URL || DEFAULT_LOCAL_WIFI_URL;
     }
   },
 

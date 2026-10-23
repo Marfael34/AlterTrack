@@ -15,7 +15,7 @@
     "mobile:start": "npm --prefix apps/mobile run start",
     "mobile:tunnel": "npm --prefix apps/mobile run start -- --tunnel",
     "mobile:web": "npm --prefix apps/mobile run web",
-    "docker:up": "docker compose up -d",
+    "docker:up": "docker compose up -d && node scripts/tunnel.js",
     "docker:down": "docker compose down",
     "tunnel": "node scripts/tunnel.js",
     "tunnel:watch": "node scripts/tunnel-watchdog.js"

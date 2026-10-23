@@ -5,6 +5,7 @@ import {
   ActivityIndicator,
   FlatList,
   Image,
+  Linking,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -532,6 +533,38 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
     }
   };
 
+  const handleExportSpreadsheet = () => {
+    Alert.alert(
+      'Exporter les entreprises',
+      'Téléchargez la totalité de vos entreprises avec coordonnées, statuts, dates, notes et historique des activités :',
+      [
+        { text: 'Annuler', style: 'cancel' },
+        {
+          text: 'Tableur CSV (.csv)',
+          onPress: async () => {
+            try {
+              const url = await ApiService.getSpreadsheetExportUrl('csv');
+              await Linking.openURL(url);
+            } catch (err: any) {
+              Alert.alert('Erreur', err?.message || 'Échec de l\'export');
+            }
+          },
+        },
+        {
+          text: 'Tableur Excel (.xlsx)',
+          onPress: async () => {
+            try {
+              const url = await ApiService.getSpreadsheetExportUrl('xlsx');
+              await Linking.openURL(url);
+            } catch (err: any) {
+              Alert.alert('Erreur', err?.message || 'Échec de l\'export');
+            }
+          },
+        },
+      ],
+    );
+  };
+
   if (viewMode === 'MAP') {
     return (
       <View style={styles.container}>
@@ -644,6 +677,15 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             accessibilityLabel="Vérifier les réponses recruteurs par email"
           >
             <Ionicons name="refresh-outline" size={20} color={Colors.text} />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.headerButton}
+            onPress={handleExportSpreadsheet}
+            activeOpacity={0.7}
+            accessibilityLabel="Exporter les entreprises dans un tableur"
+          >
+            <Ionicons name="download-outline" size={20} color={Colors.text} />
           </TouchableOpacity>
 
           <TouchableOpacity

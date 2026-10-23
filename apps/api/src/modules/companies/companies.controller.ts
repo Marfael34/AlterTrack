@@ -11,10 +11,12 @@ import {
   Patch,
   Post,
   Query,
+  Res,
   UploadedFile,
   UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
+import type { Response } from 'express';
 import * as path from 'path';
 import { CurrentUser } from '../auth/current-user.decorator';
 import type { AuthenticatedUser } from '../auth/current-user.decorator';
@@ -95,6 +97,34 @@ export class CompaniesController {
   @Get('cities')
   getCities(@CurrentUser() user?: AuthenticatedUser) {
     return this.companiesService.getCities(user?.id);
+  }
+
+  @Get('export')
+  async exportSpreadsheet(
+    @Res() res: Response,
+    @Query('format') format?: string,
+    @CurrentUser() user?: AuthenticatedUser,
+  ) {
+    const { buffer, contentType, filename, count } =
+      await this.companiesService.exportToSpreadsheet(
+        user?.id,
+        format || 'xlsx',
+      );
+
+    this.logger.log(
+      `Export tableur généré (${count} entreprise(s)) -> ${filename}`,
+    );
+
+    res.setHeader('Content-Type', contentType);
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('Content-Length', buffer.length.toString());
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader(
+      'Cache-Control',
+      'no-store, no-cache, must-revalidate, proxy-revalidate',
+    );
+
+    return res.send(buffer);
   }
 
   @Get()
