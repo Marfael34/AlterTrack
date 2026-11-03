@@ -12,7 +12,10 @@ const DEFAULT_TUNNEL_URL = tunnelConfig?.url || '';
 const DEFAULT_LOCAL_WIFI_URL = 'http://192.168.1.27:3000';
 const DEFAULT_WEB_URL = PROD_API_URL || 'http://localhost:3000';
 const DEFAULT_API_KEY =
-  process.env.EXPO_PUBLIC_API_KEY?.trim() || 'altertrack_dev_secret_key_2026_super_safe';
+  process.env.EXPO_PUBLIC_API_KEY?.trim() &&
+  process.env.EXPO_PUBLIC_API_KEY.trim() !== 'votre_cle_api_securisee_min_32_chars'
+    ? process.env.EXPO_PUBLIC_API_KEY.trim()
+    : 'altertrack_dev_secret_key_2026_super_safe';
 
 async function checkUrlReachable(url: string, timeoutMs: number = 600): Promise<boolean> {
   try {
@@ -116,7 +119,14 @@ export const StorageService = {
   async getApiKey(): Promise<string> {
     try {
       const value = await AsyncStorage.getItem(API_KEY_KEY);
-      return value || DEFAULT_API_KEY;
+      if (
+        value &&
+        value.trim() &&
+        value.trim() !== 'votre_cle_api_securisee_min_32_chars'
+      ) {
+        return value.trim();
+      }
+      return DEFAULT_API_KEY;
     } catch {
       return DEFAULT_API_KEY;
     }
