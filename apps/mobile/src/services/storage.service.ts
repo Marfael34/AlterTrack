@@ -42,37 +42,41 @@ export const StorageService = {
     return PROD_API_URL;
   },
 
+  isProduction(): boolean {
+    if (Boolean(PROD_API_URL)) return true;
+    if (process.env.NODE_ENV === 'production') return true;
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      const host = window.location.hostname;
+      return (
+        host !== 'localhost' &&
+        host !== '127.0.0.1' &&
+        !host.startsWith('192.168.')
+      );
+    }
+    return false;
+  },
+
   async getServerUrl(): Promise<string> {
+    // En production : l'URL est obligatoirement celle de production (ex: DuckDNS ou domaine dédié)
+    // Aucun basculement vers localhost, Wi-Fi local ou Tunnel Cloudflare n'est autorisé.
+    if (this.isProduction()) {
+      return PROD_API_URL || 'https://altertrack.duckdns.org';
+    }
+
     const isWeb = Platform.OS === 'web';
     if (isWeb) {
       try {
         const stored = await AsyncStorage.getItem(SERVER_URL_KEY);
-        const isProdWeb =
-          typeof window !== 'undefined' &&
-          window.location.hostname !== 'localhost' &&
-          window.location.hostname !== '127.0.0.1';
-
         if (stored && stored.trim()) {
-          const isLocal =
-            stored.includes('localhost') ||
-            stored.includes('127.0.0.1') ||
-            stored.includes('192.168.1.');
-          // En production web (Netlify), on n'utilise pas d'adresse locale périmée si une URL de prod est configurée
-          if (!isProdWeb || !isLocal) {
-            return stored.trim();
-          }
+          return stored.trim();
         }
       } catch {
         // Ignorer l'erreur de lecture
       }
-      return PROD_API_URL || DEFAULT_WEB_URL;
+      return DEFAULT_WEB_URL;
     }
 
     try {
-      if (PROD_API_URL) {
-        return PROD_API_URL;
-      }
-
       const value = await AsyncStorage.getItem(SERVER_URL_KEY);
 
       // Si le Wi-Fi local du PC répond (smartphone sur le même réseau Wi-Fi), on le privilégie directement
@@ -101,6 +105,10 @@ export const StorageService = {
   },
 
   async setServerUrl(url: string): Promise<void> {
+    // En production, l'URL est immuable et verrouillée sur l'infrastructure de production
+    if (this.isProduction()) {
+      return;
+    }
     const cleanUrl = url.trim().replace(/\/+$/, ''); // retire les slashs finaux
     await AsyncStorage.setItem(SERVER_URL_KEY, cleanUrl);
   },

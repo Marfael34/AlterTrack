@@ -40,6 +40,12 @@ export const ApiService = {
     try {
       response = await performFetch(baseUrl);
     } catch (networkErr: any) {
+      // En production : aucun basculement automatique vers Wi-Fi local ou tunnel dev
+      if (StorageService.isProduction()) {
+        throw networkErr;
+      }
+
+      // Mode développement uniquement :
       // Si la requête échoue sur le réseau (ex: tunnel Cloudflare expiré ou coupure),
       // on tente automatiquement l'autre canal (Wi-Fi local si on était sur tunnel, ou tunnel si on était sur Wi-Fi)
       const isTunnel = baseUrl.includes('.trycloudflare.com');

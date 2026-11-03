@@ -5,6 +5,7 @@ import {
   ActivityIndicator,
   Image,
   Linking,
+  Platform,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -59,6 +60,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
   } | null>(null);
   const [pushToken, setPushToken] = useState<string | null>(null);
   const [tunnelUrl, setTunnelUrl] = useState<string>('');
+  const isProduction = StorageService.isProduction();
 
   const [loadingConfig, setLoadingConfig] = useState(true);
   const [savingTemplate, setSavingTemplate] = useState(false);
@@ -642,74 +644,100 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
             <Text style={styles.sectionTitle}>Connexion Serveur</Text>
           </View>
 
-          <Text style={styles.fieldLabel}>URL du serveur NestJS</Text>
-          <CenteredTextInput
-            style={styles.input}
-            value={serverUrl}
-            onChangeText={setServerUrl}
-            placeholder="https://...trycloudflare.com ou http://192.168.x.y:3000"
-            placeholderTextColor={Colors.textMuted}
-            autoCapitalize="none"
-            autoCorrect={false}
-          />
-
-          {/* Raccourcis d'URL (Tunnel Cloudflare 4G/5G, Wi-Fi local) */}
-          <View style={styles.presetsRow}>
-            {tunnelUrl ? (
-              <TouchableOpacity
-                style={[
-                  styles.presetChip,
-                  serverUrl === tunnelUrl && styles.presetChipActive,
-                ]}
-                onPress={() => setServerUrl(tunnelUrl)}
-                activeOpacity={0.7}
-              >
-                <Ionicons
-                  name="globe-outline"
-                  size={13}
-                  color={serverUrl === tunnelUrl ? '#FFFFFF' : Colors.accent}
-                />
-                <Text
-                  style={[
-                    styles.presetChipText,
-                    serverUrl === tunnelUrl && styles.presetChipTextActive,
-                  ]}
-                >
-                  Tunnel 4G/5G
+          {isProduction ? (
+            <View style={styles.productionServerBadge}>
+              <View style={styles.productionServerHeader}>
+                <Ionicons name="shield-checkmark" size={20} color={Colors.brandCyan} />
+                <View style={{ flex: 1, marginLeft: 10 }}>
+                  <Text style={styles.productionServerTitle}>Serveur de Production</Text>
+                  <Text style={styles.productionServerDesc}>
+                    Application verrouillée sur l'infrastructure sécurisée
+                  </Text>
+                </View>
+                <View style={styles.productionStatusPill}>
+                  <View style={styles.productionStatusDot} />
+                  <Text style={styles.productionStatusText}>PROD</Text>
+                </View>
+              </View>
+              <View style={styles.productionUrlBox}>
+                <Ionicons name="globe-outline" size={14} color={Colors.brandCyan} />
+                <Text style={styles.productionServerUrl} numberOfLines={1}>
+                  {serverUrl}
                 </Text>
-              </TouchableOpacity>
-            ) : null}
-
-            <TouchableOpacity
-              style={[
-                styles.presetChip,
-                serverUrl === StorageService.getLocalWifiUrl() && styles.presetChipActive,
-              ]}
-              onPress={() => setServerUrl(StorageService.getLocalWifiUrl())}
-              activeOpacity={0.7}
-            >
-              <Ionicons
-                name="wifi-outline"
-                size={13}
-                color={serverUrl === StorageService.getLocalWifiUrl() ? '#FFFFFF' : Colors.primary}
+              </View>
+            </View>
+          ) : (
+            <>
+              <Text style={styles.fieldLabel}>URL du serveur NestJS</Text>
+              <CenteredTextInput
+                style={styles.input}
+                value={serverUrl}
+                onChangeText={setServerUrl}
+                placeholder="https://...trycloudflare.com ou http://192.168.x.y:3000"
+                placeholderTextColor={Colors.textMuted}
+                autoCapitalize="none"
+                autoCorrect={false}
               />
-              <Text
-                style={[
-                  styles.presetChipText,
-                  serverUrl === StorageService.getLocalWifiUrl() && styles.presetChipTextActive,
-                ]}
-              >
-                Wi-Fi local (PC)
-              </Text>
-            </TouchableOpacity>
-          </View>
 
-          <View style={styles.tunnelInfoCard}>
-            <Ionicons name="information-circle-outline" size={16} color={Colors.accent} />
-            <Text style={styles.tunnelInfoText}>
-              <Text style={{ fontWeight: '700', color: Colors.text }}>Accès partout (4G/5G) :</Text> Utilisez le Tunnel Cloudflare pour joindre votre serveur en déplacement.
-            </Text>
-          </View>
+              {/* Raccourcis d'URL (Tunnel Cloudflare 4G/5G, Wi-Fi local) - UNIQUEMENT EN DEV */}
+              <View style={styles.presetsRow}>
+                {tunnelUrl ? (
+                  <TouchableOpacity
+                    style={[
+                      styles.presetChip,
+                      serverUrl === tunnelUrl && styles.presetChipActive,
+                    ]}
+                    onPress={() => setServerUrl(tunnelUrl)}
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons
+                      name="globe-outline"
+                      size={13}
+                      color={serverUrl === tunnelUrl ? '#FFFFFF' : Colors.accent}
+                    />
+                    <Text
+                      style={[
+                        styles.presetChipText,
+                        serverUrl === tunnelUrl && styles.presetChipTextActive,
+                      ]}
+                    >
+                      Tunnel 4G/5G
+                    </Text>
+                  </TouchableOpacity>
+                ) : null}
+
+                <TouchableOpacity
+                  style={[
+                    styles.presetChip,
+                    serverUrl === StorageService.getLocalWifiUrl() && styles.presetChipActive,
+                  ]}
+                  onPress={() => setServerUrl(StorageService.getLocalWifiUrl())}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons
+                    name="wifi-outline"
+                    size={13}
+                    color={serverUrl === StorageService.getLocalWifiUrl() ? '#FFFFFF' : Colors.primary}
+                  />
+                  <Text
+                    style={[
+                      styles.presetChipText,
+                      serverUrl === StorageService.getLocalWifiUrl() && styles.presetChipTextActive,
+                    ]}
+                  >
+                    Wi-Fi local (PC)
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
+              <View style={styles.tunnelInfoCard}>
+                <Ionicons name="information-circle-outline" size={16} color={Colors.accent} />
+                <Text style={styles.tunnelInfoText}>
+                  <Text style={{ fontWeight: '700', color: Colors.text }}>Accès partout (4G/5G) :</Text> Utilisez le Tunnel Cloudflare pour joindre votre serveur en déplacement.
+                </Text>
+              </View>
+            </>
+          )}
 
           <Text style={styles.fieldLabel}>Clé d'API statique (x-api-key)</Text>
           <CenteredTextInput
@@ -1670,5 +1698,68 @@ const styles = StyleSheet.create({
     color: Colors.accent,
     fontWeight: '700',
     fontSize: 13,
+  },
+  productionServerBadge: {
+    backgroundColor: 'rgba(6, 182, 212, 0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(6, 182, 212, 0.25)',
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 16,
+  },
+  productionServerHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  productionServerTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: Colors.text,
+  },
+  productionServerDesc: {
+    fontSize: 11.5,
+    color: Colors.textSecondary,
+    marginTop: 2,
+  },
+  productionStatusPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(16, 185, 129, 0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(16, 185, 129, 0.35)',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 12,
+    gap: 5,
+  },
+  productionStatusDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#10B981',
+  },
+  productionStatusText: {
+    fontSize: 10.5,
+    fontWeight: '800',
+    color: '#10B981',
+    letterSpacing: 0.5,
+  },
+  productionUrlBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#0F172A',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    gap: 8,
+  },
+  productionServerUrl: {
+    fontSize: 12.5,
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+    color: Colors.brandCyan,
+    flex: 1,
   },
 });

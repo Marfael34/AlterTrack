@@ -16,6 +16,7 @@ import {
 import { Colors } from '../constants/colors';
 import { useAuth } from '../context/AuthContext';
 import { ServerConfigModal } from '../components/ServerConfigModal';
+import { StorageService } from '../services/storage.service';
 
 export const AuthScreen: React.FC = () => {
   const { login, register } = useAuth();
@@ -37,6 +38,7 @@ export const AuthScreen: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isServerModalOpen, setIsServerModalOpen] = useState(false);
+  const isProduction = StorageService.isProduction();
 
   const handleSubmit = async () => {
     setErrorMessage(null);
@@ -104,17 +106,19 @@ export const AuthScreen: React.FC = () => {
         contentContainerStyle={styles.scrollContent}
         keyboardShouldPersistTaps="handled"
       >
-        {/* Barre d'action supérieure (Dev Settings) */}
-        <View style={styles.topBar}>
-          <TouchableOpacity
-            style={styles.settingsIconButton}
-            onPress={() => setIsServerModalOpen(true)}
-            activeOpacity={0.7}
-            accessibilityLabel="Configurer le serveur (Dev)"
-          >
-            <Ionicons name="settings-outline" size={20} color={Colors.textSecondary} />
-          </TouchableOpacity>
-        </View>
+        {/* Barre d'action supérieure (Dev Settings - masqué en mode production) */}
+        {!isProduction && (
+          <View style={styles.topBar}>
+            <TouchableOpacity
+              style={styles.settingsIconButton}
+              onPress={() => setIsServerModalOpen(true)}
+              activeOpacity={0.7}
+              accessibilityLabel="Configurer le serveur (Dev)"
+            >
+              <Ionicons name="settings-outline" size={20} color={Colors.textSecondary} />
+            </TouchableOpacity>
+          </View>
+        )}
 
         {/* En-tête / Logo AlterTrack */}
         <View style={styles.header}>
@@ -187,7 +191,7 @@ export const AuthScreen: React.FC = () => {
               <Ionicons name="alert-circle" size={20} color={Colors.danger} />
               <View style={{ flex: 1, marginLeft: 8 }}>
                 <Text style={styles.errorText}>{errorMessage}</Text>
-                {errorMessage.includes('serveur') ? (
+                {errorMessage.includes('serveur') && !isProduction ? (
                   <TouchableOpacity
                     style={styles.errorConfigBtn}
                     onPress={() => setIsServerModalOpen(true)}

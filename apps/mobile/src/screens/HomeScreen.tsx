@@ -264,22 +264,26 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           ApiService.getCities(),
         ]);
       } catch (firstErr) {
-        // Fallback automatique : si la première tentative échoue, tenter avec le dernier Tunnel URL Cloudflare
-        const currentStored = await StorageService.getServerUrl();
-        const fallbackTunnel = StorageService.getTunnelUrl();
-        if (fallbackTunnel && currentStored !== fallbackTunnel) {
-          await StorageService.setServerUrl(fallbackTunnel);
-          [companiesRes, statsRes, citiesRes] = await Promise.all([
-            ApiService.getCompanies({
-              statuses: selectedStatuses.length > 0 ? selectedStatuses : undefined,
-              cities: selectedCities.length > 0 ? selectedCities : undefined,
-              search: searchQuery.trim() || undefined,
-              sortBy: backendSortBy,
-              sortOrder,
-            }),
-            ApiService.getCompanyStats(),
-            ApiService.getCities(),
-          ]);
+        // En mode développement uniquement : tentative de basculement vers le tunnel Cloudflare
+        if (!StorageService.isProduction()) {
+          const currentStored = await StorageService.getServerUrl();
+          const fallbackTunnel = StorageService.getTunnelUrl();
+          if (fallbackTunnel && currentStored !== fallbackTunnel) {
+            await StorageService.setServerUrl(fallbackTunnel);
+            [companiesRes, statsRes, citiesRes] = await Promise.all([
+              ApiService.getCompanies({
+                statuses: selectedStatuses.length > 0 ? selectedStatuses : undefined,
+                cities: selectedCities.length > 0 ? selectedCities : undefined,
+                search: searchQuery.trim() || undefined,
+                sortBy: backendSortBy,
+                sortOrder,
+              }),
+              ApiService.getCompanyStats(),
+              ApiService.getCities(),
+            ]);
+          } else {
+            throw firstErr;
+          }
         } else {
           throw firstErr;
         }
@@ -934,9 +938,11 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             style={styles.reconnectBtn}
             onPress={async () => {
               setRefreshing(true);
-              const tunnel = StorageService.getTunnelUrl();
-              if (tunnel) {
-                await StorageService.setServerUrl(tunnel);
+              if (!StorageService.isProduction()) {
+                const tunnel = StorageService.getTunnelUrl();
+                if (tunnel) {
+                  await StorageService.setServerUrl(tunnel);
+                }
               }
               await loadData();
             }}

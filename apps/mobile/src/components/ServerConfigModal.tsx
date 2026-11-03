@@ -29,6 +29,7 @@ export const ServerConfigModal: React.FC<ServerConfigModalProps> = ({
   const [tunnelUrl, setTunnelUrl] = useState('');
   const [localWifiUrl, setLocalWifiUrl] = useState('');
   const [testing, setTesting] = useState(false);
+  const isProduction = StorageService.isProduction();
   const [testResult, setTestResult] = useState<{
     success: boolean;
     message: string;
@@ -125,65 +126,69 @@ export const ServerConfigModal: React.FC<ServerConfigModalProps> = ({
               autoCorrect={false}
             />
 
-            {/* Quick Presets */}
-            <Text style={styles.subLabel}>Raccourcis rapides :</Text>
-            <View style={styles.presetsRow}>
-              {tunnelUrl ? (
-                <TouchableOpacity
-                  style={[
-                    styles.presetChip,
-                    serverUrl === tunnelUrl && styles.presetChipActive,
-                  ]}
-                  onPress={() => {
-                    setServerUrl(tunnelUrl);
-                    setTestResult(null);
-                  }}
-                  activeOpacity={0.7}
-                >
-                  <Ionicons
-                    name="globe-outline"
-                    size={14}
-                    color={serverUrl === tunnelUrl ? '#FFFFFF' : Colors.brandCyan}
-                  />
-                  <Text
-                    style={[
-                      styles.presetChipText,
-                      serverUrl === tunnelUrl && styles.presetChipTextActive,
-                    ]}
-                  >
-                    Tunnel 4G/5G
-                  </Text>
-                </TouchableOpacity>
-              ) : null}
+            {/* Quick Presets (Uniquement en mode développement) */}
+            {!isProduction && (
+              <>
+                <Text style={styles.subLabel}>Raccourcis rapides :</Text>
+                <View style={styles.presetsRow}>
+                  {tunnelUrl ? (
+                    <TouchableOpacity
+                      style={[
+                        styles.presetChip,
+                        serverUrl === tunnelUrl && styles.presetChipActive,
+                      ]}
+                      onPress={() => {
+                        setServerUrl(tunnelUrl);
+                        setTestResult(null);
+                      }}
+                      activeOpacity={0.7}
+                    >
+                      <Ionicons
+                        name="globe-outline"
+                        size={14}
+                        color={serverUrl === tunnelUrl ? '#FFFFFF' : Colors.brandCyan}
+                      />
+                      <Text
+                        style={[
+                          styles.presetChipText,
+                          serverUrl === tunnelUrl && styles.presetChipTextActive,
+                        ]}
+                      >
+                        Tunnel 4G/5G
+                      </Text>
+                    </TouchableOpacity>
+                  ) : null}
 
-              {localWifiUrl ? (
-                <TouchableOpacity
-                  style={[
-                    styles.presetChip,
-                    serverUrl === localWifiUrl && styles.presetChipActive,
-                  ]}
-                  onPress={() => {
-                    setServerUrl(localWifiUrl);
-                    setTestResult(null);
-                  }}
-                  activeOpacity={0.7}
-                >
-                  <Ionicons
-                    name="wifi-outline"
-                    size={14}
-                    color={serverUrl === localWifiUrl ? '#FFFFFF' : Colors.primary}
-                  />
-                  <Text
-                    style={[
-                      styles.presetChipText,
-                      serverUrl === localWifiUrl && styles.presetChipTextActive,
-                    ]}
-                  >
-                    Wi-Fi local (PC)
-                  </Text>
-                </TouchableOpacity>
-              ) : null}
-            </View>
+                  {localWifiUrl ? (
+                    <TouchableOpacity
+                      style={[
+                        styles.presetChip,
+                        serverUrl === localWifiUrl && styles.presetChipActive,
+                      ]}
+                      onPress={() => {
+                        setServerUrl(localWifiUrl);
+                        setTestResult(null);
+                      }}
+                      activeOpacity={0.7}
+                    >
+                      <Ionicons
+                        name="wifi-outline"
+                        size={14}
+                        color={serverUrl === localWifiUrl ? '#FFFFFF' : Colors.primary}
+                      />
+                      <Text
+                        style={[
+                          styles.presetChipText,
+                          serverUrl === localWifiUrl && styles.presetChipTextActive,
+                        ]}
+                      >
+                        Wi-Fi local (PC)
+                      </Text>
+                    </TouchableOpacity>
+                  ) : null}
+                </View>
+              </>
+            )}
 
             {/* Test Feedback Result */}
             {testResult && (
