@@ -11,7 +11,8 @@ const PROD_API_URL = process.env.EXPO_PUBLIC_API_URL?.trim().replace(/\/+$/, '')
 const DEFAULT_TUNNEL_URL = tunnelConfig?.url || '';
 const DEFAULT_LOCAL_WIFI_URL = 'http://192.168.1.27:3000';
 const DEFAULT_WEB_URL = PROD_API_URL || 'http://localhost:3000';
-const DEFAULT_API_KEY = 'altertrack_dev_secret_key_2026_super_safe';
+const DEFAULT_API_KEY =
+  process.env.EXPO_PUBLIC_API_KEY?.trim() || 'altertrack_dev_secret_key_2026_super_safe';
 
 async function checkUrlReachable(url: string, timeoutMs: number = 600): Promise<boolean> {
   try {
@@ -44,6 +45,26 @@ export const StorageService = {
   async getServerUrl(): Promise<string> {
     const isWeb = Platform.OS === 'web';
     if (isWeb) {
+      try {
+        const stored = await AsyncStorage.getItem(SERVER_URL_KEY);
+        const isProdWeb =
+          typeof window !== 'undefined' &&
+          window.location.hostname !== 'localhost' &&
+          window.location.hostname !== '127.0.0.1';
+
+        if (stored && stored.trim()) {
+          const isLocal =
+            stored.includes('localhost') ||
+            stored.includes('127.0.0.1') ||
+            stored.includes('192.168.1.');
+          // En production web (Netlify), on n'utilise pas d'adresse locale périmée si une URL de prod est configurée
+          if (!isProdWeb || !isLocal) {
+            return stored.trim();
+          }
+        }
+      } catch {
+        // Ignorer l'erreur de lecture
+      }
       return PROD_API_URL || DEFAULT_WEB_URL;
     }
 
