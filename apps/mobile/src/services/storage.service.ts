@@ -1,46 +1,16 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
-import tunnelConfig from '../constants/tunnelUrl.json';
 
 const SERVER_URL_KEY = 'altertrack_server_url';
 const API_KEY_KEY = 'altertrack_api_key';
 
-// Sur Web (navigateur sur le PC hôte) : localhost:3000 ou URL de production
-// Sur Mobile : Priorité à l'URL de production si définie, sinon tunnel HTTPS distant, sinon Wi-Fi local
+// URL de l'API définie dans le .env (ex: https://altertrack.duckdns.org)
 const PROD_API_URL = process.env.EXPO_PUBLIC_API_URL?.trim().replace(/\/+$/, '') || '';
-const DEFAULT_TUNNEL_URL = tunnelConfig?.url || '';
-const DEFAULT_LOCAL_WIFI_URL = 'http://192.168.1.27:3000';
 const DEFAULT_WEB_URL = PROD_API_URL || 'http://localhost:3000';
 const DEFAULT_API_KEY =
-  process.env.EXPO_PUBLIC_API_KEY?.trim() &&
-  process.env.EXPO_PUBLIC_API_KEY.trim() !== 'votre_cle_api_securisee_min_32_chars'
-    ? process.env.EXPO_PUBLIC_API_KEY.trim()
-    : 'altertrack_dev_secret_key_2026_super_safe';
-
-async function checkUrlReachable(url: string, timeoutMs: number = 600): Promise<boolean> {
-  try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), timeoutMs);
-    const res = await fetch(`${url}/health`, {
-      signal: controller.signal,
-      headers: { 'x-api-key': DEFAULT_API_KEY },
-    });
-    clearTimeout(timeout);
-    return res.ok;
-  } catch {
-    return false;
-  }
-}
+  process.env.EXPO_PUBLIC_API_KEY?.trim() || 'altertrack_dev_secret_key_2026_super_safe';
 
 export const StorageService = {
-  getTunnelUrl(): string {
-    return DEFAULT_TUNNEL_URL;
-  },
-
-  getLocalWifiUrl(): string {
-    return DEFAULT_LOCAL_WIFI_URL;
-  },
-
   getProductionUrl(): string {
     return PROD_API_URL;
   },
@@ -60,8 +30,7 @@ export const StorageService = {
   },
 
   async getServerUrl(): Promise<string> {
-    // En production : l'URL est obligatoirement celle de production (ex: DuckDNS ou domaine dédié)
-    // Aucun basculement vers localhost, Wi-Fi local ou Tunnel Cloudflare n'est autorisé.
+    // En production : l'URL est celle définie dans EXPO_PUBLIC_API_URL
     if (this.isProduction()) {
       return PROD_API_URL || 'https://altertrack.duckdns.org';
     }
@@ -81,29 +50,15 @@ export const StorageService = {
 
     try {
       const value = await AsyncStorage.getItem(SERVER_URL_KEY);
-
-      // Si le Wi-Fi local du PC répond (smartphone sur le même réseau Wi-Fi), on le privilégie directement
-      const wifiAvailable = await checkUrlReachable(DEFAULT_LOCAL_WIFI_URL, 500);
-      if (wifiAvailable) {
-        if (value !== DEFAULT_LOCAL_WIFI_URL) {
-          await AsyncStorage.setItem(SERVER_URL_KEY, DEFAULT_LOCAL_WIFI_URL);
-        }
-        return DEFAULT_LOCAL_WIFI_URL;
+      if (value && value.trim()) {
+        return value.trim();
       }
-
-      // Si le Wi-Fi ne répond pas (ex: en déplacement 4G/5G) :
-      const isInvalid = !value || value.includes('localhost') || value.includes('127.0.0.1') || value.includes('192.168.1.101');
-      const isOutdatedTunnel = value?.includes('.trycloudflare.com') && DEFAULT_TUNNEL_URL && value !== DEFAULT_TUNNEL_URL;
-
-      if (!isInvalid && !isOutdatedTunnel && value && !value.includes('192.168.1.')) {
-        return value;
-      }
-
-      const defaultUrl = DEFAULT_TUNNEL_URL || DEFAULT_LOCAL_WIFI_URL;
+      // Pas d'URL sauvegardée : utiliser l'URL de production ou localhost par défaut
+      const defaultUrl = PROD_API_URL || DEFAULT_WEB_URL;
       await AsyncStorage.setItem(SERVER_URL_KEY, defaultUrl);
       return defaultUrl;
     } catch {
-      return DEFAULT_TUNNEL_URL || DEFAULT_LOCAL_WIFI_URL;
+      return PROD_API_URL || DEFAULT_WEB_URL;
     }
   },
 
@@ -119,14 +74,7 @@ export const StorageService = {
   async getApiKey(): Promise<string> {
     try {
       const value = await AsyncStorage.getItem(API_KEY_KEY);
-      if (
-        value &&
-        value.trim() &&
-        value.trim() !== 'votre_cle_api_securisee_min_32_chars'
-      ) {
-        return value.trim();
-      }
-      return DEFAULT_API_KEY;
+      return value || DEFAULT_API_KEY;
     } catch {
       return DEFAULT_API_KEY;
     }

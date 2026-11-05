@@ -26,10 +26,7 @@ export const ServerConfigModal: React.FC<ServerConfigModalProps> = ({
   onSaved,
 }) => {
   const [serverUrl, setServerUrl] = useState('');
-  const [tunnelUrl, setTunnelUrl] = useState('');
-  const [localWifiUrl, setLocalWifiUrl] = useState('');
   const [testing, setTesting] = useState(false);
-  const isProduction = StorageService.isProduction();
   const [testResult, setTestResult] = useState<{
     success: boolean;
     message: string;
@@ -40,8 +37,6 @@ export const ServerConfigModal: React.FC<ServerConfigModalProps> = ({
       void (async () => {
         const current = await StorageService.getServerUrl();
         setServerUrl(current);
-        setTunnelUrl(StorageService.getTunnelUrl());
-        setLocalWifiUrl(StorageService.getLocalWifiUrl());
         setTestResult(null);
       })();
     }
@@ -125,70 +120,6 @@ export const ServerConfigModal: React.FC<ServerConfigModalProps> = ({
               autoCapitalize="none"
               autoCorrect={false}
             />
-
-            {/* Quick Presets (Uniquement en mode développement) */}
-            {!isProduction && (
-              <>
-                <Text style={styles.subLabel}>Raccourcis rapides :</Text>
-                <View style={styles.presetsRow}>
-                  {tunnelUrl ? (
-                    <TouchableOpacity
-                      style={[
-                        styles.presetChip,
-                        serverUrl === tunnelUrl && styles.presetChipActive,
-                      ]}
-                      onPress={() => {
-                        setServerUrl(tunnelUrl);
-                        setTestResult(null);
-                      }}
-                      activeOpacity={0.7}
-                    >
-                      <Ionicons
-                        name="globe-outline"
-                        size={14}
-                        color={serverUrl === tunnelUrl ? '#FFFFFF' : Colors.brandCyan}
-                      />
-                      <Text
-                        style={[
-                          styles.presetChipText,
-                          serverUrl === tunnelUrl && styles.presetChipTextActive,
-                        ]}
-                      >
-                        Tunnel 4G/5G
-                      </Text>
-                    </TouchableOpacity>
-                  ) : null}
-
-                  {localWifiUrl ? (
-                    <TouchableOpacity
-                      style={[
-                        styles.presetChip,
-                        serverUrl === localWifiUrl && styles.presetChipActive,
-                      ]}
-                      onPress={() => {
-                        setServerUrl(localWifiUrl);
-                        setTestResult(null);
-                      }}
-                      activeOpacity={0.7}
-                    >
-                      <Ionicons
-                        name="wifi-outline"
-                        size={14}
-                        color={serverUrl === localWifiUrl ? '#FFFFFF' : Colors.primary}
-                      />
-                      <Text
-                        style={[
-                          styles.presetChipText,
-                          serverUrl === localWifiUrl && styles.presetChipTextActive,
-                        ]}
-                      >
-                        Wi-Fi local (PC)
-                      </Text>
-                    </TouchableOpacity>
-                  ) : null}
-                </View>
-              </>
-            )}
 
             {/* Test Feedback Result */}
             {testResult && (
@@ -313,12 +244,6 @@ const styles = StyleSheet.create({
     color: Colors.textSecondary,
     marginBottom: 6,
   },
-  subLabel: {
-    fontSize: 12,
-    color: Colors.textMuted,
-    marginBottom: 8,
-    marginTop: 4,
-  },
   input: {
     backgroundColor: Colors.surface,
     borderColor: Colors.border,
@@ -329,36 +254,6 @@ const styles = StyleSheet.create({
     color: Colors.text,
     fontSize: 14,
     marginBottom: 10,
-  },
-  presetsRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    marginBottom: 16,
-  },
-  presetChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: Colors.surface,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  presetChipActive: {
-    backgroundColor: Colors.surfaceHighlight,
-    borderColor: Colors.brandCyan,
-  },
-  presetChipText: {
-    fontSize: 12,
-    color: Colors.textSecondary,
-    fontWeight: '500',
-  },
-  presetChipTextActive: {
-    color: Colors.brandCyan,
-    fontWeight: '700',
   },
   resultBox: {
     flexDirection: 'row',

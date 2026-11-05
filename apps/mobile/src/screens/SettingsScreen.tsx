@@ -59,7 +59,6 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
     uploadedAt?: string;
   } | null>(null);
   const [pushToken, setPushToken] = useState<string | null>(null);
-  const [tunnelUrl, setTunnelUrl] = useState<string>('');
   const isProduction = StorageService.isProduction();
 
   const [loadingConfig, setLoadingConfig] = useState(true);
@@ -194,7 +193,6 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
       if (savedTestEmail) {
         setTestEmail(savedTestEmail);
       }
-      setTunnelUrl(StorageService.getTunnelUrl());
 
       if (localCv) {
         setCvDetails(localCv);
@@ -673,69 +671,11 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
                 style={styles.input}
                 value={serverUrl}
                 onChangeText={setServerUrl}
-                placeholder="https://...trycloudflare.com ou http://192.168.x.y:3000"
+                placeholder="https://api.altertrack.fr ou http://192.168.x.y:3000"
                 placeholderTextColor={Colors.textMuted}
                 autoCapitalize="none"
                 autoCorrect={false}
               />
-
-              {/* Raccourcis d'URL (Tunnel Cloudflare 4G/5G, Wi-Fi local) - UNIQUEMENT EN DEV */}
-              <View style={styles.presetsRow}>
-                {tunnelUrl ? (
-                  <TouchableOpacity
-                    style={[
-                      styles.presetChip,
-                      serverUrl === tunnelUrl && styles.presetChipActive,
-                    ]}
-                    onPress={() => setServerUrl(tunnelUrl)}
-                    activeOpacity={0.7}
-                  >
-                    <Ionicons
-                      name="globe-outline"
-                      size={13}
-                      color={serverUrl === tunnelUrl ? '#FFFFFF' : Colors.accent}
-                    />
-                    <Text
-                      style={[
-                        styles.presetChipText,
-                        serverUrl === tunnelUrl && styles.presetChipTextActive,
-                      ]}
-                    >
-                      Tunnel 4G/5G
-                    </Text>
-                  </TouchableOpacity>
-                ) : null}
-
-                <TouchableOpacity
-                  style={[
-                    styles.presetChip,
-                    serverUrl === StorageService.getLocalWifiUrl() && styles.presetChipActive,
-                  ]}
-                  onPress={() => setServerUrl(StorageService.getLocalWifiUrl())}
-                  activeOpacity={0.7}
-                >
-                  <Ionicons
-                    name="wifi-outline"
-                    size={13}
-                    color={serverUrl === StorageService.getLocalWifiUrl() ? '#FFFFFF' : Colors.primary}
-                  />
-                  <Text
-                    style={[
-                      styles.presetChipText,
-                      serverUrl === StorageService.getLocalWifiUrl() && styles.presetChipTextActive,
-                    ]}
-                  >
-                    Wi-Fi local (PC)
-                  </Text>
-                </TouchableOpacity>
-              </View>
-
-              <View style={styles.tunnelInfoCard}>
-                <Ionicons name="information-circle-outline" size={16} color={Colors.accent} />
-                <Text style={styles.tunnelInfoText}>
-                  <Text style={{ fontWeight: '700', color: Colors.text }}>Accès partout (4G/5G) :</Text> Utilisez le Tunnel Cloudflare pour joindre votre serveur en déplacement.
-                </Text>
-              </View>
             </>
           )}
 
@@ -1408,55 +1348,6 @@ const styles = StyleSheet.create({
   },
   buttonDisabled: {
     opacity: 0.6,
-  },
-  presetsRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    marginTop: 8,
-    marginBottom: 6,
-  },
-  presetChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 8,
-    backgroundColor: Colors.surface,
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  presetChipActive: {
-    backgroundColor: `${Colors.accent}25`,
-    borderColor: Colors.accent,
-  },
-  presetChipText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: Colors.textSecondary,
-  },
-  presetChipTextActive: {
-    color: Colors.accent,
-    fontWeight: '700',
-  },
-  tunnelInfoCard: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    backgroundColor: `${Colors.accent}15`,
-    borderColor: `${Colors.accent}40`,
-    borderWidth: 1,
-    borderRadius: 10,
-    padding: 10,
-    gap: 8,
-    marginTop: 10,
-    marginBottom: 6,
-  },
-  tunnelInfoText: {
-    flex: 1,
-    fontSize: 11,
-    color: Colors.textSecondary,
-    lineHeight: 16,
   },
   testActionsRow: {
     flexDirection: 'row',

@@ -251,7 +251,6 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
       const backendSortBy = sortBy === 'distance' ? 'updatedAt' : sortBy;
       let companiesRes, statsRes, citiesRes;
 
-      try {
         [companiesRes, statsRes, citiesRes] = await Promise.all([
           ApiService.getCompanies({
             statuses: selectedStatuses.length > 0 ? selectedStatuses : undefined,
@@ -263,31 +262,6 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           ApiService.getCompanyStats(),
           ApiService.getCities(),
         ]);
-      } catch (firstErr) {
-        // En mode développement uniquement : tentative de basculement vers le tunnel Cloudflare
-        if (!StorageService.isProduction()) {
-          const currentStored = await StorageService.getServerUrl();
-          const fallbackTunnel = StorageService.getTunnelUrl();
-          if (fallbackTunnel && currentStored !== fallbackTunnel) {
-            await StorageService.setServerUrl(fallbackTunnel);
-            [companiesRes, statsRes, citiesRes] = await Promise.all([
-              ApiService.getCompanies({
-                statuses: selectedStatuses.length > 0 ? selectedStatuses : undefined,
-                cities: selectedCities.length > 0 ? selectedCities : undefined,
-                search: searchQuery.trim() || undefined,
-                sortBy: backendSortBy,
-                sortOrder,
-              }),
-              ApiService.getCompanyStats(),
-              ApiService.getCities(),
-            ]);
-          } else {
-            throw firstErr;
-          }
-        } else {
-          throw firstErr;
-        }
-      }
 
       setCompanies(companiesRes.items);
       setTotalCount(companiesRes.total);
@@ -938,12 +912,6 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             style={styles.reconnectBtn}
             onPress={async () => {
               setRefreshing(true);
-              if (!StorageService.isProduction()) {
-                const tunnel = StorageService.getTunnelUrl();
-                if (tunnel) {
-                  await StorageService.setServerUrl(tunnel);
-                }
-              }
               await loadData();
             }}
             activeOpacity={0.8}
