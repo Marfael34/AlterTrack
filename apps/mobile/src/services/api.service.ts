@@ -11,38 +11,46 @@ import {
 import { Company, CompanyActivity, CompanyStats, Status } from '../types/company';
 import { AppConfig } from '../types/config';
 import { StorageService } from './storage.service';
-
+ 
 export const ApiService = {
+  /**
+   * Récupère l'URL de base configurée en local ou bascule sur la variable d'environnement
+   */
+  async getBaseUrl(): Promise<string> {
+    const storedUrl = await StorageService.getServerUrl();
+    const envUrl = process.env.EXPO_PUBLIC_API_URL;
+    const rawUrl = storedUrl && storedUrl.trim() !== '' ? storedUrl : envUrl || '';
+    return rawUrl.replace(/\/+$/, '');
+  },
+ 
   async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
-    const baseUrl = await StorageService.getServerUrl();
+    const baseUrl = await this.getBaseUrl();
     const apiKey = await StorageService.getApiKey();
     const token = await StorageService.getAuthToken();
-
+ 
     const headers: Record<string, string> = {
-      'x-api-key': apiKey,
+      ...(apiKey ? { 'x-api-key': apiKey } : {}),
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...(options.headers as Record<string, string>),
     };
-
+ 
     if (!(options.body instanceof FormData)) {
       headers['Content-Type'] = 'application/json';
     }
-
-    const performFetch = async (targetBaseUrl: string) => {
-      const url = `${targetBaseUrl}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`;
-      return fetch(url, {
+ 
+    const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+    const url = `${baseUrl}${cleanEndpoint}`;
+ 
+    let response: Response;
+    try {
+      response = await fetch(url, {
         ...options,
         headers,
       });
-    };
-
-    let response: Response;
-    try {
-      response = await performFetch(baseUrl);
     } catch (networkErr: any) {
       throw networkErr;
     }
-
+ 
     if (!response.ok) {
       let errorMessage = `Erreur HTTP ${response.status}`;
       try {
@@ -57,18 +65,18 @@ export const ApiService = {
       }
       throw new Error(errorMessage);
     }
-
+ 
     if (response.status === 204) {
       return {} as T;
     }
-
+ 
     return response.json() as Promise<T>;
   },
-
+ 
   async checkHealth(): Promise<{ status: string; database: string }> {
     return this.request('/health');
   },
-
+ 
   async getCompanies(query?: {
     search?: string;
     status?: Status;
@@ -95,23 +103,23 @@ export const ApiService = {
     }
     if (query?.sortBy) params.append('sortBy', query.sortBy);
     if (query?.sortOrder) params.append('sortOrder', query.sortOrder);
-
+ 
     const queryString = params.toString() ? `?${params.toString()}` : '';
     return this.request(`/companies${queryString}`);
   },
-
+ 
   async getCities(): Promise<Array<{ city: string; count: number }>> {
     return this.request('/companies/cities');
   },
-
+ 
   async getCompanyStats(): Promise<CompanyStats> {
     return this.request('/companies/stats');
   },
-
+ 
   async getCompany(id: string): Promise<Company> {
     return this.request(`/companies/${id}`);
   },
-
+ 
   async createCompany(data: {
     name: string;
     email: string;
@@ -128,7 +136,7 @@ export const ApiService = {
       body: JSON.stringify(data),
     });
   },
-
+ 
   async updateCompany(
     id: string,
     data: {
@@ -147,24 +155,24 @@ export const ApiService = {
       body: JSON.stringify(data),
     });
   },
-
+ 
   async updateCompanyStatus(id: string, status: Status): Promise<Company> {
     return this.request(`/companies/${id}/status`, {
       method: 'PATCH',
       body: JSON.stringify({ status }),
     });
   },
-
+ 
   async deleteCompany(id: string): Promise<void> {
     await this.request(`/companies/${id}`, {
       method: 'DELETE',
     });
   },
-
+ 
   async getCompanyActivities(companyId: string): Promise<CompanyActivity[]> {
     return this.request(`/companies/${companyId}/activities`);
   },
-
+ 
   async addCompanyActivity(
     companyId: string,
     data: {
@@ -179,7 +187,7 @@ export const ApiService = {
       body: JSON.stringify(data),
     });
   },
-
+ 
   async deleteCompanyActivity(
     companyId: string,
     activityId: string,
@@ -188,7 +196,7 @@ export const ApiService = {
       method: 'DELETE',
     });
   },
-
+ 
   async updateCompanyActivity(
     companyId: string,
     activityId: string,
@@ -204,7 +212,7 @@ export const ApiService = {
       body: JSON.stringify(data),
     });
   },
-
+ 
   async deleteCompanies(options: {
     ids?: string[];
     all?: boolean;
@@ -214,18 +222,18 @@ export const ApiService = {
       body: JSON.stringify(options),
     });
   },
-
+ 
   async getConfig(): Promise<AppConfig> {
     return this.request('/config');
   },
-
+ 
   async updateTemplate(template: string): Promise<AppConfig> {
     return this.request('/config/template', {
       method: 'PATCH',
       body: JSON.stringify({ template }),
     });
   },
-
+ 
   async uploadFile<T>(
     endpoint: string,
     fileUri: string,
@@ -233,28 +241,29 @@ export const ApiService = {
     mimeType: string,
     webFile?: unknown,
   ): Promise<T> {
-    const baseUrl = await StorageService.getServerUrl();
+    const baseUrl = await this.getBaseUrl();
     const apiKey = await StorageService.getApiKey();
     const token = await StorageService.getAuthToken();
     const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
     const url = `${baseUrl}${cleanEndpoint}`;
-
-    // 1. Sur Mobile (Android / iOS) : Privilégier le streaming natif OkHttp / NSURLSession
-    // Cela contourne complètement JS FormData/fetch et élimine l'erreur "Unsupported FormDataPart implementation"
+ 
+    // 1. Sur Mobile (Android / iOS) : Streaming natif via FileSystem.uploadAsync
     if (Platform.OS !== 'web' && typeof FileSystem.uploadAsync === 'function') {
       try {
+        const uploadHeaders: Record<string, string> = {
+          Accept: 'application/json',
+        };
+        if (apiKey) uploadHeaders['x-api-key'] = apiKey;
+        if (token) uploadHeaders['Authorization'] = `Bearer ${token}`;
+ 
         const res = await FileSystem.uploadAsync(url, fileUri, {
           httpMethod: 'POST',
           uploadType: FileSystem.FileSystemUploadType.MULTIPART,
           fieldName: 'file',
           mimeType: mimeType || 'application/pdf',
-          headers: {
-            'x-api-key': apiKey,
-            ...(token ? { Authorization: `Bearer ${token}` } : {}),
-            Accept: 'application/json',
-          },
+          headers: uploadHeaders,
         });
-
+ 
         if (res.status >= 400) {
           let msg = `Erreur HTTP ${res.status}`;
           try {
@@ -266,7 +275,7 @@ export const ApiService = {
           }
           throw new Error(msg);
         }
-
+ 
         return JSON.parse(res.body) as T;
       } catch (nativeErr) {
         if (nativeErr instanceof Error && nativeErr.message.startsWith('Erreur HTTP')) {
@@ -275,11 +284,11 @@ export const ApiService = {
         console.warn('Native uploadAsync failed, falling back to multi-strategy FormData:', nativeErr);
       }
     }
-
-    // 2. Fallback FormData (Web ou environnement où uploadAsync n'est pas disponible)
+ 
+    // 2. Fallback FormData (Web ou fallback)
     const formData = new FormData();
     let fileAppended = false;
-
+ 
     // A. Sur Web ou si webFile est fourni
     if (
       (typeof Blob !== 'undefined' && webFile instanceof Blob) ||
@@ -288,8 +297,8 @@ export const ApiService = {
       formData.append('file', webFile as Blob, fileName);
       fileAppended = true;
     }
-
-    // B. Tentative via fetch(fileUri).blob() (compatible WinterCG Expo fetch)
+ 
+    // B. Tentative via fetch(fileUri).blob()
     if (!fileAppended) {
       try {
         const fileResponse = await fetch(fileUri);
@@ -300,8 +309,8 @@ export const ApiService = {
         console.warn('Fetch local file to blob fallback failed:', blobErr);
       }
     }
-
-    // C. Tentative via la classe File d'expo-file-system (implémente .bytes() pour Expo modern fetch)
+ 
+    // C. Tentative via la classe File d'expo-file-system
     if (!fileAppended) {
       try {
         if (typeof ExpoFile === 'function') {
@@ -313,7 +322,7 @@ export const ApiService = {
         console.warn('ExpoFile fallback failed:', expoFileErr);
       }
     }
-
+ 
     // D. Dernier recours (objet React Native classique)
     if (!fileAppended) {
       const cleanUri =
@@ -324,13 +333,13 @@ export const ApiService = {
         type: mimeType || 'application/pdf',
       } as unknown as Blob);
     }
-
+ 
     return this.request(endpoint, {
       method: 'POST',
       body: formData,
     });
   },
-
+ 
   async uploadCv(
     fileUri: string,
     fileName: string,
@@ -347,36 +356,36 @@ export const ApiService = {
       webFile,
     );
   },
-
+ 
   async deleteCv(): Promise<{ success: boolean; message: string }> {
     return this.request('/config/cv', {
       method: 'DELETE',
     });
   },
-
+ 
   async getCvDownloadUrl(): Promise<string> {
-    const baseUrl = await StorageService.getServerUrl();
+    const baseUrl = await this.getBaseUrl();
     const token = await StorageService.getAuthToken();
     const apiKey = await StorageService.getApiKey();
-
+ 
     const params = new URLSearchParams();
     if (token) {
       params.append('token', token);
     } else if (apiKey) {
       params.append('apiKey', apiKey);
     }
-
+ 
     const queryString = params.toString() ? `?${params.toString()}` : '';
     return `${baseUrl}/config/cv/download${queryString}`;
   },
-
+ 
   async getSpreadsheetExportUrl(
     format: 'xlsx' | 'csv' = 'xlsx',
   ): Promise<string> {
-    const baseUrl = await StorageService.getServerUrl();
+    const baseUrl = await this.getBaseUrl();
     const token = await StorageService.getAuthToken();
     const apiKey = await StorageService.getApiKey();
-
+ 
     const params = new URLSearchParams();
     params.append('format', format);
     if (token) {
@@ -384,10 +393,10 @@ export const ApiService = {
     } else if (apiKey) {
       params.append('apiKey', apiKey);
     }
-
+ 
     return `${baseUrl}/companies/export?${params.toString()}`;
   },
-
+ 
   async importSpreadsheet(
     fileUri: string,
     fileName: string,
@@ -403,7 +412,7 @@ export const ApiService = {
     const mimeType = isCsv
       ? 'text/csv'
       : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
-
+ 
     return this.uploadFile(
       '/companies/import',
       fileUri,
@@ -412,7 +421,7 @@ export const ApiService = {
       webFile,
     );
   },
-
+ 
   async sendInitialBatch(companyIds?: string[]): Promise<{
     totalFound: number;
     successCount: number;
@@ -425,7 +434,7 @@ export const ApiService = {
       body: JSON.stringify({ companyIds }),
     });
   },
-
+ 
   async sendInitialSingle(
     companyId: string,
     subject?: string,
@@ -443,13 +452,13 @@ export const ApiService = {
       body: JSON.stringify({ subject, body }),
     });
   },
-
+ 
   async sendFollowUp(companyId: string): Promise<Company> {
     return this.request(`/mailing/send-follow-up/${companyId}`, {
       method: 'POST',
     });
   },
-
+ 
   async checkReplies(): Promise<{
     messagesScanned: number;
     repliesDetected: number;
@@ -458,14 +467,14 @@ export const ApiService = {
       method: 'POST',
     });
   },
-
+ 
   async updatePushToken(expoPushToken: string): Promise<AppConfig> {
     return this.request('/config/push-token', {
       method: 'PATCH',
       body: JSON.stringify({ expoPushToken }),
     });
   },
-
+ 
   async previewEmail(
     companyName: string,
     nature?: 'FIRST_CONTACT' | 'FOLLOW_UP',
@@ -475,7 +484,7 @@ export const ApiService = {
       body: JSON.stringify({ companyName, nature }),
     });
   },
-
+ 
   async sendTestEmail(
     toEmail: string,
     companyName?: string,
@@ -499,25 +508,25 @@ export const ApiService = {
       body: JSON.stringify({ toEmail, companyName, subject, body }),
     });
   },
-
+ 
   async register(payload: RegisterPayload): Promise<AuthResponse> {
     return this.request('/auth/register', {
       method: 'POST',
       body: JSON.stringify(payload),
     });
   },
-
+ 
   async login(payload: LoginPayload): Promise<AuthResponse> {
     return this.request('/auth/login', {
       method: 'POST',
       body: JSON.stringify(payload),
     });
   },
-
+ 
   async getProfile(): Promise<UserProfile> {
     return this.request('/auth/me');
   },
-
+ 
   async updateProfile(payload: UpdateProfilePayload): Promise<UserProfile> {
     return this.request('/auth/profile', {
       method: 'PATCH',

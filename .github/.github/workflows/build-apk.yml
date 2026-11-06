@@ -1,40 +1,43 @@
 name: Build AlterTrack APK
-
+ 
 on:
   push:
     tags:
       - 'v*'
-
+ 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-
+ 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: 'npm'
-
+ 
       - name: Setup Java JDK
         uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
-
+ 
       - name: Install dependencies
         run: npm ci
-
+ 
       - name: Build Android APK (Expo / Gradle)
+        env:
+          # Remplace cette URL par l'URL exacte de ton API NestJS sur Render
+          EXPO_PUBLIC_API_URL: https://votre-api-altertrack.onrender.com
         run: |
           cd apps/mobile
           npx expo prebuild --platform android
           cd android
           chmod +x gradlew
           ./gradlew assembleRelease
-
+ 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v1
         with:
