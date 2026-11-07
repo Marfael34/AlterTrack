@@ -26,13 +26,13 @@ jobs:
         with:
           java-version: '17'
           distribution: 'temurin'
-          cache: 'gradle'
 
       - name: Install dependencies
         run: npm ci
 
       - name: Build Android APK (Expo / Gradle)
         env:
+          # Remplacez par votre URL Render si ce n'est pas déjà fait
           EXPO_PUBLIC_API_URL: https://votre-api-altertrack.onrender.com
           GRADLE_OPTS: "-Dorg.gradle.daemon=false -Dorg.gradle.jvmargs=-Xmx4608m"
         run: |
