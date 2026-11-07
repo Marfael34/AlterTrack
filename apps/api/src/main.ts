@@ -41,9 +41,6 @@ async function bootstrap() {
     credentials: true,
   });
 
-  // Définition du préfixe global pour toutes les routes API
-  app.setGlobalPrefix('api',{exclude: ['/'] });
-
   // Validation globale stricte des entrées
   app.useGlobalPipes(
     new ValidationPipe({
