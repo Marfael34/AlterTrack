@@ -167,7 +167,7 @@ export class CompaniesService {
     const where: Prisma.CompanyWhereInput = {};
 
     if (userId) {
-      where.userId = userId;
+      where.OR = [{ userId }, { userId: null }];
     }
 
     if (query.statuses && query.statuses.length > 0) {
@@ -177,9 +177,15 @@ export class CompaniesService {
     }
 
     if (query.cities && query.cities.length > 0) {
-      where.OR = query.cities.map((c) => ({
+      const cityOR = query.cities.map((c) => ({
         city: { contains: c, mode: 'insensitive' as const },
       }));
+      if (where.OR) {
+        where.AND = [{ OR: where.OR }, { OR: cityOR }];
+        delete where.OR;
+      } else {
+        where.OR = cityOR;
+      }
     } else if (query.city) {
       where.city = { contains: query.city, mode: 'insensitive' as const };
     }
@@ -192,7 +198,11 @@ export class CompaniesService {
         { email: { contains: query.search, mode: 'insensitive' as const } },
       ];
       if (where.OR) {
-        where.AND = [{ OR: where.OR }, { OR: searchOR }];
+        where.AND = [
+          ...((where.AND as any[]) || []),
+          { OR: where.OR },
+          { OR: searchOR },
+        ];
         delete where.OR;
       } else {
         where.OR = searchOR;
@@ -349,7 +359,7 @@ export class CompaniesService {
   async getStats(userId?: string) {
     const groups = (await (this.prisma.company.groupBy as any)({
       by: ['status'],
-      where: userId ? { userId } : undefined,
+      where: userId ? { OR: [{ userId }, { userId: null }] } : undefined,
       _count: {
         id: true,
       },
@@ -377,7 +387,7 @@ export class CompaniesService {
     const records = await this.prisma.company.findMany({
       where: {
         city: { not: null },
-        ...(userId ? { userId } : {}),
+        ...(userId ? { OR: [{ userId }, { userId: null }] } : {}),
       },
       select: {
         city: true,
@@ -975,6 +985,7 @@ export class CompaniesService {
                 city: rawCity || existing.city || null,
                 phone: rawPhone || existing.phone || null,
                 notes: rawNotes || existing.notes || null,
+                ...(userId ? { userId } : {}),
               },
             });
             imported.push({
@@ -1067,6 +1078,7 @@ export class CompaniesService {
             phone: rawPhone || null,
             notes: rawNotes || null,
             status: parsedStatus,
+            userId: userId || null,
           },
         });
 
