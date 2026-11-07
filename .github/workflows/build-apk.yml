@@ -32,8 +32,8 @@ jobs:
 
       - name: Build Android APK (Expo / Gradle)
         env:
-          # Remplacez par votre URL Render si ce n'est pas déjà fait
-          EXPO_PUBLIC_API_URL: https://votre-api-altertrack.onrender.com
+          EXPO_PUBLIC_API_URL: https://altertrack.onrender.com
+          EXPO_PUBLIC_API_KEY: 8f3b7c9a2d5e1f406b8e3a9c2d7f1e504b8a2c6d9e3f0a7b1c4d8e2f5a9b0c3d
           GRADLE_OPTS: "-Dorg.gradle.daemon=false -Dorg.gradle.jvmargs=-Xmx4608m"
         run: |
           cd apps/mobile

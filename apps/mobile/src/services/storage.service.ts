@@ -8,7 +8,8 @@ const API_KEY_KEY = 'altertrack_api_key';
 const PROD_API_URL = process.env.EXPO_PUBLIC_API_URL?.trim().replace(/\/+$/, '') || '';
 const DEFAULT_WEB_URL = PROD_API_URL || 'http://localhost:3000';
 const DEFAULT_API_KEY =
-  process.env.EXPO_PUBLIC_API_KEY?.trim() || 'altertrack_dev_secret_key_2026_super_safe';
+  process.env.EXPO_PUBLIC_API_KEY?.trim() ||
+  '8f3b7c9a2d5e1f406b8e3a9c2d7f1e504b8a2c6d9e3f0a7b1c4d8e2f5a9b0c3d';
 
 export const StorageService = {
   getProductionUrl(): string {
@@ -32,7 +33,7 @@ export const StorageService = {
   async getServerUrl(): Promise<string> {
     // En production : l'URL est celle définie dans EXPO_PUBLIC_API_URL
     if (this.isProduction()) {
-      return PROD_API_URL || 'https://altertrack.duckdns.org';
+      return PROD_API_URL || 'https://altertrack.onrender.com';
     }
 
     const isWeb = Platform.OS === 'web';
