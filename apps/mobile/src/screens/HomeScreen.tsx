@@ -19,7 +19,6 @@ import { CompanyMapView } from '../components/CompanyMapView';
 import { FiltersModal } from '../components/FiltersModal';
 import { ReferencePointModal } from '../components/ReferencePointModal';
 import { CityItem } from '../components/CityFilterBar';
-import { FilterTabs } from '../components/FilterTabs';
 import { Colors } from '../constants/colors';
 import { useAuth } from '../context/AuthContext';
 import { AlertService as Alert } from '../services/alert.service';
@@ -795,21 +794,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           <Ionicons name="chevron-forward" size={16} color={Colors.status.TO_CALL} />
         </TouchableOpacity>
       )}
-
-      {/* Barre de statuts KPIs interactive avec compteurs en temps réel */}
-      <FilterTabs
-        selectedStatuses={selectedStatuses}
-        onToggleStatus={(status) => {
-          setSelectedStatuses((prev) =>
-            prev.includes(status)
-              ? prev.filter((s) => s !== status)
-              : [status]
-          );
-        }}
-        onSelectAll={() => setSelectedStatuses([])}
-        stats={stats}
-        totalCount={totalCount}
-      />
+      
 
       {/* Point de repère ultra-discret (affiché uniquement si configuré) */}
       {refPoint && (

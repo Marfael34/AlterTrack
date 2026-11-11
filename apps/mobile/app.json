@@ -7,6 +7,9 @@
     "icon": "./assets/icon.png",
     "scheme": "altertrack",
     "userInterfaceStyle": "dark",
+    "updates": {
+      "fallbackToCacheTimeout": 0
+    },
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
@@ -41,15 +44,11 @@
         {
           "locationWhenInUsePermission": "AlterTrack utilise votre position pour calculer la distance des entreprises autour de vous."
         }
-      ]
+      ],
+      "expo-status-bar"
     ],
     "web": {
       "favicon": "./assets/favicon.png"
-    },
-    "extra": {
-      "eas": {
-        "projectId": "c6851702-e698-44f5-ab78-341994cd0ac4"
-      }
     },
     "owner": "marfael"
   }

@@ -80,6 +80,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
     note: string;
   } | null>(null);
   const [isPreviewModalOpen, setIsPreviewModalOpen] = useState(false);
+  const [showGoogleHelp, setShowGoogleHelp] = useState(false);
 
   useEffect(() => {
     if (propRefPoint !== undefined) {
@@ -177,7 +178,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
         },
       ],
     );
-  };
+  };  
 
   const loadInitialSettings = async () => {
     try {
@@ -478,61 +479,8 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
         <View style={styles.section}>
           <View style={styles.sectionHeaderRow}>
             <Ionicons name="person-circle-outline" size={22} color={Colors.brandCyan} />
-            <Text style={styles.sectionTitle}>Mon Compte & Envoi Gmail</Text>
+            <Text style={styles.sectionTitle}>Mon Compte</Text>
           </View>
-          <Text style={styles.sectionDescription}>
-            Configurez vos identifiants d'envoi Gmail pour que vos candidatures et mails de test soient expédiés avec votre propre adresse e-mail.
-          </Text>
-
-          {/* Badge utilisateur connecté */}
-          <View style={styles.accountBadge}>
-            <View style={styles.accountAvatar}>
-              <Text style={styles.accountAvatarText}>
-                {(user?.fullName || user?.email || 'U').charAt(0).toUpperCase()}
-              </Text>
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.accountName}>
-                {user?.fullName || 'Utilisateur AlterTrack'}
-              </Text>
-              <Text style={styles.accountEmail}>{user?.email}</Text>
-            </View>
-            <TouchableOpacity
-              style={styles.logoutBtn}
-              onPress={handleLogout}
-              activeOpacity={0.7}
-            >
-              <Ionicons name="log-out-outline" size={16} color={Colors.danger} />
-              <Text style={styles.logoutBtnText}>Déconnexion</Text>
-            </TouchableOpacity>
-          </View>
-
-          {/* Statut d'activation de l'envoi Gmail */}
-          {user?.hasGmailConfigured ? (
-            <View style={styles.gmailStatusBadgeSuccess}>
-              <Ionicons name="checkmark-circle" size={18} color={Colors.success} />
-              <View style={{ flex: 1 }}>
-                <Text style={styles.gmailStatusTitleSuccess}>
-                  Envoi Gmail direct actif ✅
-                </Text>
-                <Text style={styles.gmailStatusTextSuccess}>
-                  Vos candidatures et relances sont expédiées réellement depuis {user.gmailUser || user.email}.
-                </Text>
-              </View>
-            </View>
-          ) : (
-            <View style={styles.gmailStatusBadgeWarning}>
-              <Ionicons name="warning" size={18} color={Colors.warning} />
-              <View style={{ flex: 1 }}>
-                <Text style={styles.gmailStatusTitleWarning}>
-                  Envoi direct Gmail non configuré ⚠️
-                </Text>
-                <Text style={styles.gmailStatusTextWarning}>
-                  Pour envoyer vos candidatures directement depuis AlterTrack avec votre adresse Gmail ({user?.email}), renseignez votre mot de passe d'application Google (16 lettres) ci-dessous.
-                </Text>
-              </View>
-            </View>
-          )}
 
           <Text style={styles.fieldLabel}>Nom complet</Text>
           <CenteredTextInput
@@ -553,6 +501,30 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
             keyboardType="email-address"
             autoCapitalize="none"
           />
+          {/* Statut d'activation de l'envoi Gmail */}
+          {user?.hasGmailConfigured ? (
+            <View style={styles.gmailStatusBadgeSuccess}>
+              <Ionicons name="checkmark-circle" size={18} color={Colors.success} />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.gmailStatusTitleSuccess}>
+                  Envoi Gmail direct actif ✅
+                </Text>
+
+              </View>
+            </View>
+          ) : (
+            <View style={styles.gmailStatusBadgeWarning}>
+              <Ionicons name="warning" size={18} color={Colors.warning} />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.gmailStatusTitleWarning}>
+                  Envoi direct Gmail non configuré ⚠️
+                </Text>
+                <Text style={styles.gmailStatusTextWarning}>
+                  Pour envoyer vos candidatures directement depuis AlterTrack avec votre adresse Gmail ({user?.email}), renseignez votre mot de passe d'application Google (16 lettres) ci-dessous.
+                </Text>
+              </View>
+            </View>
+          )}
 
           <Text style={styles.fieldLabel}>Mot de passe d'application Google (16 lettres)</Text>
           <View style={styles.passwordInputWrapper}>
@@ -577,65 +549,135 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
             </TouchableOpacity>
           </View>
 
-          {/* Guide Google App Password */}
-          <View style={styles.gmailHelpCard}>
+          {/* Bouton de bascule d'aide avec icône (i) et texte "Aide" */}
+          <TouchableOpacity
+            style={styles.helpToggleBtn}
+            onPress={() => setShowGoogleHelp(!showGoogleHelp)}
+            activeOpacity={0.7}
+          >
             <Ionicons name="information-circle-outline" size={16} color={Colors.brandCyan} />
-            <View style={{ flex: 1, gap: 4 }}>
-              <Text style={styles.gmailHelpText}>
-                <Text style={{ fontWeight: '700', color: Colors.text }}>Comment obtenir le mot de passe ?</Text> Activez la validation en 2 étapes sur Google, puis générez un mot de passe d'application (16 lettres sans espace) pour AlterTrack.
-              </Text>
-              <TouchableOpacity
-                style={styles.openGoogleLinkBtn}
-                onPress={handleOpenGoogleAppPasswords}
-                activeOpacity={0.7}
-              >
-                <Ionicons name="open-outline" size={13} color={Colors.brandCyan} />
-                <Text style={styles.openGoogleLinkBtnText}>
-                  Ouvrir la page Google App Passwords ↗
+            <Text style={styles.helpToggleText}>Aide</Text>
+          </TouchableOpacity>
+
+          {/* Guide Google App Password (s'affiche uniquement si showGoogleHelp est true) */}
+          {showGoogleHelp && (
+            <View style={styles.gmailHelpCard}>
+              <View style={{ flex: 1, gap: 4 }}>
+                <Text style={styles.gmailHelpText}>
+                  <Text style={{ fontWeight: '700', color: Colors.text }}>
+                    Comment obtenir le mot de passe ?
+                  </Text>{' '}
+                  Activez la validation en 2 étapes sur Google, puis générez un mot de passe d'application (16 lettres sans espace) pour AlterTrack.
                 </Text>
-              </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.openGoogleLinkBtn}
+                  onPress={handleOpenGoogleAppPasswords}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="open-outline" size={13} color={Colors.brandCyan} />
+                  <Text style={styles.openGoogleLinkBtnText}>
+                    Ouvrir la page Google App Passwords ↗
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
+        </View>
+
+        {/* Section 1 : Gestion du CV PDF */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeaderRow}>
+            <Ionicons name="document-text-outline" size={20} color={Colors.status.TO_CALL} />
+            <Text style={styles.sectionTitle}>Curriculum Vitae (PDF)</Text>
+          </View>
+          <Text style={styles.sectionDescription}>
+            Ce fichier est stocké sur votre téléphone et synchronisé sur le serveur
+            afin d'être joint automatiquement à toutes vos candidatures et relances.
+          </Text>
+
+          <View style={styles.cvCard}>
+            <Ionicons
+              name={hasCv ? 'document-attach' : 'alert-circle-outline'}
+              size={30}
+              color={hasCv ? Colors.success : Colors.warning}
+            />
+            <View style={styles.cvInfo}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Text style={styles.cvStatus}>
+                  {hasCv ? 'CV actif & stocké sur l\'app' : 'Aucun CV enregistré'}
+                </Text>
+                {hasCv && (
+                  <View style={styles.cvSyncTag}>
+                    <Text style={styles.cvSyncTagText}>actif ✅</Text>
+                  </View>
+                )}
+              </View>
+              <Text style={styles.cvName} numberOfLines={1}>
+                {activeCvName || 'Veuillez sélectionner un fichier PDF'}
+              </Text>
+              {hasCv && cvDetails?.fileSize ? (
+                <Text style={styles.cvMetaText}>
+                  Taille : {Math.round(cvDetails.fileSize / 1024)} Ko • Format PDF
+                </Text>
+              ) : null}
             </View>
           </View>
 
-          <View style={styles.profileActionBtnsCol}>
+          <View style={styles.cvActionsRow}>
             <TouchableOpacity
-              style={[styles.saveProfileBtn, savingProfile && styles.buttonDisabled]}
-              onPress={handleSaveProfile}
-              disabled={savingProfile}
+              style={[
+                styles.cvButton,
+                { flex: 1 },
+                uploadingCv && styles.buttonDisabled,
+              ]}
+              onPress={handlePickAndUploadCv}
+              disabled={uploadingCv || deletingCv}
               activeOpacity={0.8}
             >
-              {savingProfile ? (
+              {uploadingCv ? (
                 <ActivityIndicator color="#FFFFFF" size="small" />
               ) : (
                 <>
-                  <Ionicons name="save-outline" size={18} color="#FFFFFF" />
-                  <Text style={styles.saveProfileBtnText}>Enregistrer mes paramètres Gmail</Text>
+                  <Ionicons name="cloud-upload-outline" size={17} color="#FFFFFF" />
+                  <Text style={styles.cvButtonText}>
+                    {hasCv ? 'Remplacer le CV' : 'Importer mon CV (PDF)'}
+                  </Text>
                 </>
               )}
             </TouchableOpacity>
 
-            <TouchableOpacity
-              style={[
-                styles.testGmailBtn,
-                testingGmail && styles.buttonDisabled,
-              ]}
-              onPress={handleTestGmail}
-              disabled={testingGmail}
-              activeOpacity={0.8}
-            >
-              {testingGmail ? (
-                <ActivityIndicator color={Colors.accent} size="small" />
-              ) : (
-                <>
-                  <Ionicons name="paper-plane-outline" size={16} color={Colors.accent} />
-                  <Text style={styles.testGmailBtnText}>Tester l'envoi Gmail vers mon adresse</Text>
-                </>
-              )}
-            </TouchableOpacity>
+            {hasCv && (
+              <TouchableOpacity
+                style={styles.viewCvBtn}
+                onPress={handleViewCv}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="eye-outline" size={16} color={Colors.accent} />
+                <Text style={styles.viewCvBtnText}>Voir</Text>
+              </TouchableOpacity>
+            )}
+
+            {hasCv && (
+              <TouchableOpacity
+                style={[
+                  styles.deleteCvBtn,
+                  deletingCv && styles.buttonDisabled,
+                ]}
+                onPress={handleDeleteCv}
+                disabled={deletingCv || uploadingCv}
+                activeOpacity={0.8}
+              >
+                {deletingCv ? (
+                  <ActivityIndicator color={Colors.danger} size="small" />
+                ) : (
+                  <Ionicons name="trash-outline" size={17} color={Colors.danger} />
+                )}
+              </TouchableOpacity>
+            )}
           </View>
         </View>
 
-        {/* Section 1 : Connexion Serveur PC / Tailscale */}
+        {/* Section 2 : Connexion Serveur PC / Tailscale */}
         <View style={styles.section}>
           <View style={styles.sectionHeaderRow}>
             <Ionicons name="server-outline" size={20} color={Colors.primary} />
@@ -749,99 +791,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
           </TouchableOpacity>
         </View>
 
-        {/* Section 2 : Gestion du CV PDF */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeaderRow}>
-            <Ionicons name="document-text-outline" size={20} color={Colors.status.TO_CALL} />
-            <Text style={styles.sectionTitle}>Curriculum Vitae (PDF)</Text>
-          </View>
-          <Text style={styles.sectionDescription}>
-            Ce fichier est stocké sur votre téléphone et synchronisé sur le serveur
-            afin d'être joint automatiquement à toutes vos candidatures et relances.
-          </Text>
-
-          <View style={styles.cvCard}>
-            <Ionicons
-              name={hasCv ? 'document-attach' : 'alert-circle-outline'}
-              size={30}
-              color={hasCv ? Colors.success : Colors.warning}
-            />
-            <View style={styles.cvInfo}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                <Text style={styles.cvStatus}>
-                  {hasCv ? 'CV actif & stocké sur l\'app' : 'Aucun CV enregistré'}
-                </Text>
-                {hasCv && (
-                  <View style={styles.cvSyncTag}>
-                    <Text style={styles.cvSyncTagText}>Synchronisé ✅</Text>
-                  </View>
-                )}
-              </View>
-              <Text style={styles.cvName} numberOfLines={1}>
-                {activeCvName || 'Veuillez sélectionner un fichier PDF'}
-              </Text>
-              {hasCv && cvDetails?.fileSize ? (
-                <Text style={styles.cvMetaText}>
-                  Taille : {Math.round(cvDetails.fileSize / 1024)} Ko • Format PDF
-                </Text>
-              ) : null}
-            </View>
-          </View>
-
-          <View style={styles.cvActionsRow}>
-            <TouchableOpacity
-              style={[
-                styles.cvButton,
-                { flex: 1 },
-                uploadingCv && styles.buttonDisabled,
-              ]}
-              onPress={handlePickAndUploadCv}
-              disabled={uploadingCv || deletingCv}
-              activeOpacity={0.8}
-            >
-              {uploadingCv ? (
-                <ActivityIndicator color="#FFFFFF" size="small" />
-              ) : (
-                <>
-                  <Ionicons name="cloud-upload-outline" size={17} color="#FFFFFF" />
-                  <Text style={styles.cvButtonText}>
-                    {hasCv ? 'Remplacer le CV' : 'Importer mon CV (PDF)'}
-                  </Text>
-                </>
-              )}
-            </TouchableOpacity>
-
-            {hasCv && (
-              <TouchableOpacity
-                style={styles.viewCvBtn}
-                onPress={handleViewCv}
-                activeOpacity={0.8}
-              >
-                <Ionicons name="eye-outline" size={16} color={Colors.accent} />
-                <Text style={styles.viewCvBtnText}>Voir</Text>
-              </TouchableOpacity>
-            )}
-
-            {hasCv && (
-              <TouchableOpacity
-                style={[
-                  styles.deleteCvBtn,
-                  deletingCv && styles.buttonDisabled,
-                ]}
-                onPress={handleDeleteCv}
-                disabled={deletingCv || uploadingCv}
-                activeOpacity={0.8}
-              >
-                {deletingCv ? (
-                  <ActivityIndicator color={Colors.danger} size="small" />
-                ) : (
-                  <Ionicons name="trash-outline" size={17} color={Colors.danger} />
-                )}
-              </TouchableOpacity>
-            )}
-          </View>
-        </View>
-
+       
         {/* Section : Adresse fixe de référence (Distance) */}
         <View style={styles.section}>
           <View style={styles.sectionHeaderRow}>
@@ -1671,4 +1621,16 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     fontSize: 13,
   },
+  helpToggleBtn: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  gap: 6,
+  paddingVertical: 6,
+  alignSelf: 'flex-start',
+},
+helpToggleText: {
+  fontSize: 14,
+  fontWeight: '600',
+  color: Colors.brandCyan,
+},
 });

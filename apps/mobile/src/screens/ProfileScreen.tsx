@@ -392,33 +392,6 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
         </View>
 
         {/* 2. ADRESSE FIXE DE RÉFÉRENCE */}
-        <View style={styles.card}>
-          <View style={styles.cardHeaderRow}>
-            <View style={styles.cardTitleGroup}>
-              <View style={[styles.iconCircle, { backgroundColor: '#00D2C420' }]}>
-                <Ionicons name="navigate-circle" size={20} color={Colors.brandCyan} />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.cardTitle}>Adresse de référence</Text>
-                <Text style={styles.cardSubtitle} numberOfLines={2}>
-                  {refPoint?.label || 'Non définie (domicile ou point de départ)'}
-                </Text>
-              </View>
-            </View>
-          </View>
-
-          <View style={styles.cardActionsRow}>
-            <TouchableOpacity
-              style={styles.actionBtnOutline}
-              onPress={() => setIsRefPointModalOpen(true)}
-            >
-              <Ionicons name="location-outline" size={16} color={Colors.brandCyan} />
-              <Text style={styles.actionBtnOutlineText}>
-                {refPoint ? 'Modifier l\'adresse' : 'Définir mon adresse'}
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </View>
 
         {/* 3. EXPÉDITION GMAIL */}
         <View style={styles.card}>
