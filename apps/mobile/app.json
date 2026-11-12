@@ -24,6 +24,7 @@
       }
     },
     "android": {
+      "usesCleartextTraffic": true,
       "package": "com.altertrack.app",
       "versionCode": 1,
       "adaptiveIcon": {

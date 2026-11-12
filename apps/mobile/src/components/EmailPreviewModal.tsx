@@ -296,7 +296,7 @@ export const EmailPreviewModal: React.FC<EmailPreviewModalProps> = ({
               <View style={styles.headerTitleRow}>
                 <Ionicons name="sparkles" size={18} color={Colors.accent} />
                 <Text style={styles.headerTitle} numberOfLines={1}>
-                  Aperçu & Test de l'e-mail IA
+                  Aperçu mail test
                 </Text>
               </View>
               <Text style={styles.headerSubtitle} numberOfLines={1}>
@@ -374,6 +374,23 @@ export const EmailPreviewModal: React.FC<EmailPreviewModalProps> = ({
                     )}
                   </TouchableOpacity>
                 )}
+                </View>
+                
+               {/* Mail */}
+                <View style={styles.fieldBlock}>
+                <View style={styles.fieldHeaderRow}>
+                  <Text style={styles.fieldLabel}>Destinataire :</Text>
+                </View>
+                <TextInput
+                  style={styles.testEmailInput}
+                  value={testEmail}
+                  onChangeText={setTestEmail}
+                  placeholder="votre.email@gmail.com"
+                  placeholderTextColor={Colors.textMuted}
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                />
               </View>
 
               {/* Objet du mail */}
@@ -460,28 +477,20 @@ export const EmailPreviewModal: React.FC<EmailPreviewModalProps> = ({
                 </View>
               )}
 
-              {/* Section Test d'envoi */}
-              <View style={styles.testSectionCard}>
-                <View style={styles.testHeaderRow}>
-                  <Ionicons name="paper-plane-outline" size={18} color={Colors.primary} />
-                  <Text style={styles.testTitle}>Envoyer à une adresse de test (Format Entreprise)</Text>
-                </View>
-                <Text style={styles.testDescription}>
-                  Envoyez cet e-mail exact à l'adresse de votre choix. Le destinataire le recevra exactement comme une vraie entreprise (avec l'objet ci-dessus, le texte personnalisé et votre CV joint, sans mention de test).
-                </Text>
+             
+            </KeyboardAwareCenteredScrollView>
+          )}
 
-                <TextInput
-                  style={styles.testEmailInput}
-                  value={testEmail}
-                  onChangeText={setTestEmail}
-                  placeholder="votre.email@gmail.com"
-                  placeholderTextColor={Colors.textMuted}
-                  keyboardType="email-address"
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                />
-
-                <TouchableOpacity
+          {/* Footer */}
+          <View style={styles.modalFooter}>
+            <TouchableOpacity
+              style={styles.footerCloseBtn}
+              onPress={onClose}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.footerCloseBtnText}>Fermer</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
                   style={[
                     styles.sendTestBtn,
                     sendingTest && styles.btnDisabled,
@@ -496,7 +505,7 @@ export const EmailPreviewModal: React.FC<EmailPreviewModalProps> = ({
                     <>
                       <Ionicons name="paper-plane-outline" size={16} color="#FFFFFF" />
                       <Text style={styles.sendTestBtnText}>
-                        Envoyer l'e-mail à cette adresse
+                        Envoyer test
                       </Text>
                     </>
                   )}
@@ -530,19 +539,6 @@ export const EmailPreviewModal: React.FC<EmailPreviewModalProps> = ({
                     </View>
                   </View>
                 )}
-              </View>
-            </KeyboardAwareCenteredScrollView>
-          )}
-
-          {/* Footer */}
-          <View style={styles.modalFooter}>
-            <TouchableOpacity
-              style={styles.footerCloseBtn}
-              onPress={onClose}
-              activeOpacity={0.8}
-            >
-              <Text style={styles.footerCloseBtnText}>Fermer</Text>
-            </TouchableOpacity>
           </View>
         </View>
       </View>

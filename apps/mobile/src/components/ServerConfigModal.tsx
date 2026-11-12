@@ -10,7 +10,6 @@ import {
   View,
 } from 'react-native';
 import { Colors } from '../constants/colors';
-import { ApiService } from '../services/api.service';
 import { StorageService } from '../services/storage.service';
 import { CenteredTextInput } from './KeyboardAwareCenteredScrollView';
 
@@ -61,7 +60,17 @@ export const ServerConfigModal: React.FC<ServerConfigModalProps> = ({
 
     try {
       await StorageService.setServerUrl(cleanUrl);
-      const health = await ApiService.checkHealth();
+      const response = await fetch(`${cleanUrl}/health`, {
+        headers: {
+          'x-api-key': process.env.EXPO_PUBLIC_API_KEY || '',
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status} sur ${cleanUrl}/health`);
+      }
+
+      const health = await response.json();
       setTestResult({
         success: true,
         message: `Connexion réussie ! API : ${health.status} | Base : ${health.database}`,
@@ -72,9 +81,7 @@ export const ServerConfigModal: React.FC<ServerConfigModalProps> = ({
     } catch (err: any) {
       setTestResult({
         success: false,
-        message:
-          err?.message ||
-          'Impossible de joindre le serveur. Vérifiez que Docker est allumé et l’URL exacte.',
+        message: `Erreur (${cleanUrl}) : ${err?.message || 'Échec réseau'}`,
       });
     } finally {
       setTesting(false);

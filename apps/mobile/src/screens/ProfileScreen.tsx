@@ -23,7 +23,7 @@ import { useAuth } from '../context/AuthContext';
 import { AlertService as Alert } from '../services/alert.service';
 import { ApiService } from '../services/api.service';
 import { LocationService, ReferencePoint } from '../services/location.service';
-import { formatStandardCvName } from '../services/storage.service';
+import { StorageService, formatStandardCvName } from '../services/storage.service';
 import { CompanyStats } from '../types/company';
 
 interface ProfileScreenProps {
@@ -42,7 +42,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
   const [stats, setStats] = useState<CompanyStats | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [loadingCvUrl, setLoadingCvUrl] = useState(false);
-  const [exportingFormat, setExportingFormat] = useState<'xlsx' | 'csv' | null>(null);
+  const [deletingCv, setDeletingCv] = useState(false);
 
   // Adresse fixe de référence
   const [refPoint, setRefPoint] = useState<ReferencePoint | null>(propRefPoint || null);
@@ -146,19 +146,34 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
     }
   };
 
-  const handleExportSpreadsheet = async (format: 'xlsx' | 'csv') => {
-    setExportingFormat(format);
-    try {
-      const url = await ApiService.getSpreadsheetExportUrl(format);
-      await Linking.openURL(url);
-    } catch (err: any) {
-      Alert.alert(
-        'Export de données',
-        err?.message || 'Impossible de générer le fichier tableur.',
-      );
-    } finally {
-      setExportingFormat(null);
-    }
+  const handleDeleteCv = () => {
+    Alert.alert(
+      'Supprimer mon CV',
+      'Confirmez-vous la suppression de votre CV stocké sur votre téléphone et le serveur ?\n\nVos prochains e-mails seront envoyés sans pièce jointe.',
+      [
+        { text: 'Annuler', style: 'cancel' },
+        {
+          text: 'Supprimer définitivement',
+          style: 'destructive',
+          onPress: async () => {
+            setDeletingCv(true);
+            try {
+              await ApiService.deleteCv();
+              await StorageService.removeLocalCv();
+              await refreshProfile();
+              Alert.alert(
+                'CV supprimé ✅',
+                'Le fichier CV a été retiré de l\'application et du serveur.',
+              );
+            } catch (err: any) {
+              Alert.alert('Erreur', err?.message || 'Échec de la suppression du CV.');
+            } finally {
+              setDeletingCv(false);
+            }
+          },
+        },
+      ],
+    );
   };
 
   const handleLogout = () => {
@@ -268,7 +283,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
           </View>
         </View>
 
-        {/* ACCÈS CENTRAL AUX PARAMÈTRES (Recommandé par l'utilisateur) */}
+        {/* ACCÈS CENTRAL AUX PARAMÈTRES */}
         <TouchableOpacity
           style={styles.settingsBannerCard}
           onPress={onOpenSettings}
@@ -287,7 +302,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
               </View>
             </View>
             <Text style={styles.settingsBannerSubtitle}>
-              Modèle de mail IA, serveur, notifications, tests d'envoi & CV
+              Modèle de mail IA, serveur, notifications, tests d'envoi & export
             </Text>
           </View>
           <Ionicons name="chevron-forward" size={22} color={Colors.textSecondary} />
@@ -363,37 +378,47 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
 
           <View style={styles.cardActionsRow}>
             {user?.hasCv ? (
-              <TouchableOpacity
-                style={styles.actionBtnOutline}
-                onPress={handleViewCv}
-                disabled={loadingCvUrl}
-              >
-                {loadingCvUrl ? (
-                  <ActivityIndicator size="small" color={Colors.brandCyan} />
-                ) : (
-                  <>
-                    <Ionicons name="eye-outline" size={16} color={Colors.brandCyan} />
-                    <Text style={styles.actionBtnOutlineText}>Aperçu PDF</Text>
-                  </>
-                )}
-              </TouchableOpacity>
-            ) : null}
+              <>
+                <TouchableOpacity
+                  style={styles.actionBtnOutline}
+                  onPress={handleViewCv}
+                  disabled={loadingCvUrl || deletingCv}
+                >
+                  {loadingCvUrl ? (
+                    <ActivityIndicator size="small" color={Colors.brandCyan} />
+                  ) : (
+                    <>
+                      <Ionicons name="eye-outline" size={16} color={Colors.brandCyan} />
+                      <Text style={styles.actionBtnOutlineText}>Aperçu PDF</Text>
+                    </>
+                  )}
+                </TouchableOpacity>
 
-            <TouchableOpacity
-              style={styles.actionBtnPrimary}
-              onPress={onOpenSettings}
-            >
-              <Ionicons name="cloud-upload-outline" size={16} color="#0B0F19" />
-              <Text style={styles.actionBtnPrimaryText}>
-                {user?.hasCv ? 'Gérer mon CV' : 'Importer mon CV'}
+                <TouchableOpacity
+                  style={[styles.deleteCvBtn, deletingCv && { opacity: 0.6 }]}
+                  onPress={handleDeleteCv}
+                  disabled={deletingCv || loadingCvUrl}
+                  accessibilityLabel="Supprimer mon CV"
+                >
+                  {deletingCv ? (
+                    <ActivityIndicator size="small" color={Colors.danger} />
+                  ) : (
+                    <>
+                      <Ionicons name="trash-outline" size={16} color={Colors.danger} />
+                      <Text style={styles.deleteCvBtnText}>Supprimer</Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+              </>
+            ) : (
+              <Text style={styles.noCvHintText}>
+                Aucun CV enregistré sur le serveur.
               </Text>
-            </TouchableOpacity>
+            )}
           </View>
         </View>
 
-        {/* 2. ADRESSE FIXE DE RÉFÉRENCE */}
-
-        {/* 3. EXPÉDITION GMAIL */}
+        {/* 2. EXPÉDITION GMAIL */}
         <View style={styles.card}>
           <View style={styles.cardHeaderRow}>
             <View style={styles.cardTitleGroup}>
@@ -434,65 +459,6 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
             >
               <Ionicons name="paper-plane-outline" size={16} color={Colors.text} />
               <Text style={styles.actionBtnSecondaryText}>Tester l'envoi</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        {/* DONNÉES & TABLEUR */}
-        <View style={styles.sectionHeader}>
-          <Ionicons name="download-outline" size={18} color={Colors.brandCyan} />
-          <Text style={styles.sectionTitle}>Données & Tableur</Text>
-        </View>
-
-        <View style={styles.card}>
-          <View style={styles.cardHeaderRow}>
-            <View style={styles.cardTitleGroup}>
-              <View style={[styles.iconCircle, { backgroundColor: '#10B98120' }]}>
-                <Ionicons name="grid" size={20} color="#10B981" />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.cardTitle}>Exporter toutes les entreprises</Text>
-                <Text style={styles.cardSubtitle}>
-                  Téléchargez la base complète avec coordonnées, statuts, dates, notes et historique des activités.
-                </Text>
-              </View>
-            </View>
-            <View style={[styles.badge, { backgroundColor: '#00D2C415', borderColor: Colors.brandCyan }]}>
-              <Text style={[styles.badgeText, { color: Colors.brandCyan }]}>
-                {totalTracked} fiche{totalTracked > 1 ? 's' : ''}
-              </Text>
-            </View>
-          </View>
-
-          <View style={styles.cardActionsRow}>
-            <TouchableOpacity
-              style={[styles.actionBtnPrimary, exportingFormat === 'xlsx' && { opacity: 0.7 }]}
-              onPress={() => handleExportSpreadsheet('xlsx')}
-              disabled={exportingFormat !== null}
-            >
-              {exportingFormat === 'xlsx' ? (
-                <ActivityIndicator size="small" color="#0B0F19" />
-              ) : (
-                <>
-                  <Ionicons name="document-text" size={16} color="#0B0F19" />
-                  <Text style={styles.actionBtnPrimaryText}>Tableur Excel (.xlsx)</Text>
-                </>
-              )}
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[styles.actionBtnOutline, exportingFormat === 'csv' && { opacity: 0.7 }]}
-              onPress={() => handleExportSpreadsheet('csv')}
-              disabled={exportingFormat !== null}
-            >
-              {exportingFormat === 'csv' ? (
-                <ActivityIndicator size="small" color={Colors.brandCyan} />
-              ) : (
-                <>
-                  <Ionicons name="code-download-outline" size={16} color={Colors.brandCyan} />
-                  <Text style={styles.actionBtnOutlineText}>Format CSV (.csv)</Text>
-                </>
-              )}
             </TouchableOpacity>
           </View>
         </View>
@@ -981,6 +947,27 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
     color: Colors.brandCyan,
+  },
+  deleteCvBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: `${Colors.danger}15`,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: `${Colors.danger}40`,
+  },
+  deleteCvBtnText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: Colors.danger,
+  },
+  noCvHintText: {
+    fontSize: 12,
+    color: Colors.textMuted,
+    fontStyle: 'italic',
   },
   actionBtnPrimary: {
     flexDirection: 'row',

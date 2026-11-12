@@ -1,5 +1,4 @@
 import { Ionicons } from '@expo/vector-icons';
-import * as DocumentPicker from 'expo-document-picker';
 import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
@@ -22,7 +21,8 @@ import { AlertService as Alert } from '../services/alert.service';
 import { ApiService } from '../services/api.service';
 import { LocationService, ReferencePoint } from '../services/location.service';
 import { NotificationService } from '../services/notification.service';
-import { StorageService, formatStandardCvName } from '../services/storage.service';
+import { StorageService } from '../services/storage.service';
+import { CompanyStats } from '../types/company';
 import { AppConfig } from '../types/config';
 
 interface SettingsScreenProps {
@@ -36,7 +36,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
   refPoint: propRefPoint,
   onUpdateRefPoint,
 }) => {
-  const { user, updateProfile, refreshProfile, logout } = useAuth();
+  const { user, updateProfile, logout } = useAuth();
 
   const [profileFullName, setProfileFullName] = useState(user?.fullName || '');
   const [profileGmailUser, setProfileGmailUser] = useState(user?.gmailUser || '');
@@ -50,23 +50,18 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
   const [serverUrl, setServerUrl] = useState('');
   const [apiKey, setApiKey] = useState('');
   const [template, setTemplate] = useState('');
-  const [activeCvName, setActiveCvName] = useState<string | null>(null);
-  const [hasCv, setHasCv] = useState(false);
-  const [cvDetails, setCvDetails] = useState<{
-    fileName: string;
-    fileSize?: number;
-    uploadedAt?: string;
-  } | null>(null);
+  const [hasCv, setHasCv] = useState(Boolean(user?.hasCv));
   const [pushToken, setPushToken] = useState<string | null>(null);
   const [tunnelUrl, setTunnelUrl] = useState<string>('');
 
   const [loadingConfig, setLoadingConfig] = useState(true);
   const [savingTemplate, setSavingTemplate] = useState(false);
-  const [uploadingCv, setUploadingCv] = useState(false);
-  const [deletingCv, setDeletingCv] = useState(false);
   const [testingConnection, setTestingConnection] = useState(false);
   const [registeringPush, setRegisteringPush] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState<'IDLE' | 'SUCCESS' | 'ERROR'>('IDLE');
+
+  const [stats, setStats] = useState<CompanyStats | null>(null);
+  const [exportingFormat, setExportingFormat] = useState<'xlsx' | 'csv' | null>(null);
 
   const [testEmail, setTestEmail] = useState('');
   const [testCompany, setTestCompany] = useState('Capgemini');
@@ -92,6 +87,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
     if (user) {
       setProfileFullName(user.fullName || '');
       setProfileGmailUser(user.gmailUser || user.email || '');
+      setHasCv(Boolean(user.hasCv));
     }
   }, [user]);
 
@@ -178,15 +174,14 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
         },
       ],
     );
-  };  
+  };
 
   const loadInitialSettings = async () => {
     try {
-      const [url, key, savedTestEmail, localCv] = await Promise.all([
+      const [url, key, savedTestEmail] = await Promise.all([
         StorageService.getServerUrl(),
         StorageService.getApiKey(),
         StorageService.getTestEmail(),
-        StorageService.getLocalCv(),
       ]);
       setServerUrl(url);
       setApiKey(key);
@@ -195,23 +190,16 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
       }
       setTunnelUrl(StorageService.getTunnelUrl());
 
-      if (localCv) {
-        setCvDetails(localCv);
-        setActiveCvName(localCv.fileName);
-        setHasCv(true);
-      }
-
-      // Charge la configuration distante si le serveur est joignable
+      // Charge la configuration distante et les statistiques si le serveur est joignable
       try {
-        const config: AppConfig = await ApiService.getConfig();
+        const [config, companyStats] = await Promise.all([
+          ApiService.getConfig(),
+          ApiService.getCompanyStats().catch(() => null),
+        ]);
         setTemplate(config.template);
-        if (config.hasCv) {
-          setHasCv(true);
-          const fallbackStd = formatStandardCvName(user?.fullName || profileFullName);
-          setActiveCvName(user?.cvOriginalName || config.cvOriginalName || localCv?.fileName || fallbackStd);
-        } else if (!localCv) {
-          setHasCv(false);
-          setActiveCvName(null);
+        setHasCv(config.hasCv);
+        if (companyStats) {
+          setStats(companyStats);
         }
         setPushToken(config.expoPushToken || null);
       } catch {
@@ -219,6 +207,21 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
       }
     } finally {
       setLoadingConfig(false);
+    }
+  };
+
+  const handleExportSpreadsheet = async (format: 'xlsx' | 'csv') => {
+    setExportingFormat(format);
+    try {
+      const url = await ApiService.getSpreadsheetExportUrl(format);
+      await Linking.openURL(url);
+    } catch (err: any) {
+      Alert.alert(
+        'Export de données',
+        err?.message || 'Impossible de générer le fichier tableur.',
+      );
+    } finally {
+      setExportingFormat(null);
     }
   };
 
@@ -236,12 +239,17 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
         `Serveur AlterTrack joignable !\nStatut : ${health.status}\nBase de données : ${health.database}`,
       );
 
-      // Recharger le template, CV et token push
-      const config = await ApiService.getConfig();
+      // Recharger le template, stats et token push
+      const [config, companyStats] = await Promise.all([
+        ApiService.getConfig(),
+        ApiService.getCompanyStats().catch(() => null),
+      ]);
       setTemplate(config.template);
       setHasCv(config.hasCv);
-      setActiveCvName(config.cvOriginalName || null);
       setPushToken(config.expoPushToken || null);
+      if (companyStats) {
+        setStats(companyStats);
+      }
     } catch (err) {
       setConnectionStatus('ERROR');
       Alert.alert(
@@ -298,122 +306,6 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
     }
   };
 
-  const handlePickAndUploadCv = async () => {
-    try {
-      const result = await DocumentPicker.getDocumentAsync({
-        type: ['application/pdf', 'application/x-pdf', '*/*'],
-        copyToCacheDirectory: true,
-      });
-
-      if (result.canceled || !result.assets || result.assets.length === 0) {
-        return;
-      }
-
-      const file = result.assets[0];
-      const rawName = file.name || 'CV.pdf';
-      const isPdfMime = file.mimeType
-        ? file.mimeType.toLowerCase().includes('pdf')
-        : false;
-      const isPdfExt = rawName.toLowerCase().endsWith('.pdf');
-
-      if (!isPdfMime && !isPdfExt) {
-        Alert.alert(
-          'Format non reconnu',
-          'Veuillez sélectionner un document au format PDF (.pdf).',
-        );
-        return;
-      }
-
-      // Format uniforme : nom_prenom_CV.pdf
-      const standardName = formatStandardCvName(user?.fullName || profileFullName);
-
-      setUploadingCv(true);
-
-      const updated = await ApiService.uploadCv(
-        file.uri,
-        standardName,
-        (file as unknown as { file?: unknown }).file,
-      );
-
-      const localInfo = {
-        fileName: updated.cvOriginalName || standardName,
-        fileSize: file.size,
-        fileUri: file.uri,
-        uploadedAt: new Date().toISOString(),
-        isSynced: true,
-      };
-
-      await StorageService.setLocalCv(localInfo);
-      setCvDetails(localInfo);
-      setHasCv(true);
-      setActiveCvName(localInfo.fileName);
-
-      try {
-        await refreshProfile();
-      } catch {
-        // ignore offline
-      }
-
-      const formattedSize = file.size
-        ? ` (${Math.round(file.size / 1024)} Ko)`
-        : '';
-
-      Alert.alert(
-        'CV stocké et synchronisé 🎉',
-        `Le fichier "${localInfo.fileName}"${formattedSize} a été enregistré dans l'application et synchronisé sur votre serveur.\n\nIl sera joint automatiquement à toutes vos candidatures et relances.`,
-      );
-    } catch (err) {
-      Alert.alert('Erreur', err instanceof Error ? err.message : "Échec de l'upload du CV");
-    } finally {
-      setUploadingCv(false);
-    }
-  };
-
-  const handleViewCv = async () => {
-    try {
-      const url = await ApiService.getCvDownloadUrl();
-      await Linking.openURL(url);
-    } catch (err: any) {
-      Alert.alert(
-        'Visualisation du CV',
-        err?.message || 'Impossible d\'ouvrir le CV.',
-      );
-    }
-  };
-
-  const handleDeleteCv = () => {
-    Alert.alert(
-      'Supprimer mon CV',
-      'Confirmez-vous la suppression de votre CV stocké sur votre téléphone et le serveur ?\n\nVos prochains e-mails seront envoyés sans pièce jointe.',
-      [
-        { text: 'Annuler', style: 'cancel' },
-        {
-          text: 'Supprimer définitivement',
-          style: 'destructive',
-          onPress: async () => {
-            setDeletingCv(true);
-            try {
-              await ApiService.deleteCv();
-              await StorageService.removeLocalCv();
-              setHasCv(false);
-              setActiveCvName(null);
-              setCvDetails(null);
-              await refreshProfile();
-              Alert.alert(
-                'CV supprimé ✅',
-                'Le fichier CV a été retiré de l\'application et du serveur.',
-              );
-            } catch (err: any) {
-              Alert.alert('Erreur', err?.message || 'Échec de la suppression');
-            } finally {
-              setDeletingCv(false);
-            }
-          },
-        },
-      ],
-    );
-  };
-
   const handleSendTestEmail = async () => {
     const trimmedEmail = testEmail.trim();
     if (!trimmedEmail || !trimmedEmail.includes('@') || !trimmedEmail.includes('.')) {
@@ -464,6 +356,17 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
     }
   };
 
+  const totalTracked = stats
+    ? stats.AUTO_SEND +
+      stats.TO_SEND +
+      stats.WAITING_FOR_REPLY +
+      stats.TO_FOLLOW_UP +
+      stats.TO_CALL +
+      stats.REPLY_RECEIVED +
+      stats.REFUSED +
+      stats.ACCEPTED
+    : 0;
+
   return (
     <View style={styles.container}>
       <View style={styles.header}>
@@ -509,7 +412,6 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
                 <Text style={styles.gmailStatusTitleSuccess}>
                   Envoi Gmail direct actif ✅
                 </Text>
-
               </View>
             </View>
           ) : (
@@ -584,214 +486,66 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
           )}
         </View>
 
-        {/* Section 1 : Gestion du CV PDF */}
+        {/* Section : Données & Tableur */}
         <View style={styles.section}>
-          <View style={styles.sectionHeaderRow}>
-            <Ionicons name="document-text-outline" size={20} color={Colors.status.TO_CALL} />
-            <Text style={styles.sectionTitle}>Curriculum Vitae (PDF)</Text>
+          <View style={styles.exportHeaderRow}>
+            <View style={styles.sectionHeaderRow}>
+              <Ionicons name="download-outline" size={20} color={Colors.brandCyan} />
+              <Text style={styles.sectionTitle}>Données & Tableur</Text>
+            </View>
+            {stats ? (
+              <View style={styles.exportBadge}>
+                <Text style={styles.exportBadgeText}>
+                  {totalTracked} fiche{totalTracked > 1 ? 's' : ''}
+                </Text>
+              </View>
+            ) : null}
           </View>
           <Text style={styles.sectionDescription}>
-            Ce fichier est stocké sur votre téléphone et synchronisé sur le serveur
-            afin d'être joint automatiquement à toutes vos candidatures et relances.
+            Téléchargez la base complète de vos entreprises avec coordonnées, statuts, dates, notes et historique des activités.
           </Text>
 
-          <View style={styles.cvCard}>
-            <Ionicons
-              name={hasCv ? 'document-attach' : 'alert-circle-outline'}
-              size={30}
-              color={hasCv ? Colors.success : Colors.warning}
-            />
-            <View style={styles.cvInfo}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                <Text style={styles.cvStatus}>
-                  {hasCv ? 'CV actif & stocké sur l\'app' : 'Aucun CV enregistré'}
-                </Text>
-                {hasCv && (
-                  <View style={styles.cvSyncTag}>
-                    <Text style={styles.cvSyncTagText}>actif ✅</Text>
-                  </View>
-                )}
-              </View>
-              <Text style={styles.cvName} numberOfLines={1}>
-                {activeCvName || 'Veuillez sélectionner un fichier PDF'}
-              </Text>
-              {hasCv && cvDetails?.fileSize ? (
-                <Text style={styles.cvMetaText}>
-                  Taille : {Math.round(cvDetails.fileSize / 1024)} Ko • Format PDF
-                </Text>
-              ) : null}
-            </View>
-          </View>
-
-          <View style={styles.cvActionsRow}>
+          <View style={styles.exportActionsRow}>
             <TouchableOpacity
               style={[
-                styles.cvButton,
-                { flex: 1 },
-                uploadingCv && styles.buttonDisabled,
+                styles.exportBtnPrimary,
+                exportingFormat === 'xlsx' && styles.buttonDisabled,
               ]}
-              onPress={handlePickAndUploadCv}
-              disabled={uploadingCv || deletingCv}
+              onPress={() => handleExportSpreadsheet('xlsx')}
+              disabled={exportingFormat !== null}
               activeOpacity={0.8}
             >
-              {uploadingCv ? (
-                <ActivityIndicator color="#FFFFFF" size="small" />
+              {exportingFormat === 'xlsx' ? (
+                <ActivityIndicator size="small" color="#0B0F19" />
               ) : (
                 <>
-                  <Ionicons name="cloud-upload-outline" size={17} color="#FFFFFF" />
-                  <Text style={styles.cvButtonText}>
-                    {hasCv ? 'Remplacer le CV' : 'Importer mon CV (PDF)'}
-                  </Text>
+                  <Ionicons name="document-text" size={16} color="#0B0F19" />
+                  <Text style={styles.exportBtnPrimaryText}>Tableur Excel (.xlsx)</Text>
                 </>
               )}
             </TouchableOpacity>
 
-            {hasCv && (
-              <TouchableOpacity
-                style={styles.viewCvBtn}
-                onPress={handleViewCv}
-                activeOpacity={0.8}
-              >
-                <Ionicons name="eye-outline" size={16} color={Colors.accent} />
-                <Text style={styles.viewCvBtnText}>Voir</Text>
-              </TouchableOpacity>
-            )}
-
-            {hasCv && (
-              <TouchableOpacity
-                style={[
-                  styles.deleteCvBtn,
-                  deletingCv && styles.buttonDisabled,
-                ]}
-                onPress={handleDeleteCv}
-                disabled={deletingCv || uploadingCv}
-                activeOpacity={0.8}
-              >
-                {deletingCv ? (
-                  <ActivityIndicator color={Colors.danger} size="small" />
-                ) : (
-                  <Ionicons name="trash-outline" size={17} color={Colors.danger} />
-                )}
-              </TouchableOpacity>
-            )}
-          </View>
-        </View>
-
-        {/* Section 2 : Connexion Serveur PC / Tailscale */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeaderRow}>
-            <Ionicons name="server-outline" size={20} color={Colors.primary} />
-            <Text style={styles.sectionTitle}>Connexion Serveur</Text>
-          </View>
-
-          <Text style={styles.fieldLabel}>URL du serveur NestJS</Text>
-          <CenteredTextInput
-            style={styles.input}
-            value={serverUrl}
-            onChangeText={setServerUrl}
-            placeholder="https://...trycloudflare.com ou http://192.168.x.y:3000"
-            placeholderTextColor={Colors.textMuted}
-            autoCapitalize="none"
-            autoCorrect={false}
-          />
-
-          {/* Raccourcis d'URL (Tunnel Cloudflare 4G/5G, Wi-Fi local) */}
-          <View style={styles.presetsRow}>
-            {tunnelUrl ? (
-              <TouchableOpacity
-                style={[
-                  styles.presetChip,
-                  serverUrl === tunnelUrl && styles.presetChipActive,
-                ]}
-                onPress={() => setServerUrl(tunnelUrl)}
-                activeOpacity={0.7}
-              >
-                <Ionicons
-                  name="globe-outline"
-                  size={13}
-                  color={serverUrl === tunnelUrl ? '#FFFFFF' : Colors.accent}
-                />
-                <Text
-                  style={[
-                    styles.presetChipText,
-                    serverUrl === tunnelUrl && styles.presetChipTextActive,
-                  ]}
-                >
-                  Tunnel 4G/5G
-                </Text>
-              </TouchableOpacity>
-            ) : null}
-
             <TouchableOpacity
               style={[
-                styles.presetChip,
-                serverUrl === StorageService.getLocalWifiUrl() && styles.presetChipActive,
+                styles.exportBtnOutline,
+                exportingFormat === 'csv' && styles.buttonDisabled,
               ]}
-              onPress={() => setServerUrl(StorageService.getLocalWifiUrl())}
-              activeOpacity={0.7}
+              onPress={() => handleExportSpreadsheet('csv')}
+              disabled={exportingFormat !== null}
+              activeOpacity={0.8}
             >
-              <Ionicons
-                name="wifi-outline"
-                size={13}
-                color={serverUrl === StorageService.getLocalWifiUrl() ? '#FFFFFF' : Colors.primary}
-              />
-              <Text
-                style={[
-                  styles.presetChipText,
-                  serverUrl === StorageService.getLocalWifiUrl() && styles.presetChipTextActive,
-                ]}
-              >
-                Wi-Fi local (PC)
-              </Text>
+              {exportingFormat === 'csv' ? (
+                <ActivityIndicator size="small" color={Colors.brandCyan} />
+              ) : (
+                <>
+                  <Ionicons name="code-download-outline" size={16} color={Colors.brandCyan} />
+                  <Text style={styles.exportBtnOutlineText}>Format CSV (.csv)</Text>
+                </>
+              )}
             </TouchableOpacity>
           </View>
-
-          <View style={styles.tunnelInfoCard}>
-            <Ionicons name="information-circle-outline" size={16} color={Colors.accent} />
-            <Text style={styles.tunnelInfoText}>
-              <Text style={{ fontWeight: '700', color: Colors.text }}>Accès partout (4G/5G) :</Text> Utilisez le Tunnel Cloudflare pour joindre votre serveur en déplacement.
-            </Text>
-          </View>
-
-          <Text style={styles.fieldLabel}>Clé d'API statique (x-api-key)</Text>
-          <CenteredTextInput
-            style={styles.input}
-            value={apiKey}
-            onChangeText={setApiKey}
-            placeholder="Clé secrète configurée dans .env"
-            placeholderTextColor={Colors.textMuted}
-            autoCapitalize="none"
-            secureTextEntry
-          />
-
-          <TouchableOpacity
-            style={[styles.testButton, testingConnection && styles.buttonDisabled]}
-            onPress={handleTestConnection}
-            disabled={testingConnection}
-            activeOpacity={0.8}
-          >
-            {testingConnection ? (
-              <ActivityIndicator color="#FFFFFF" size="small" />
-            ) : (
-              <>
-                <Ionicons
-                  name={
-                    connectionStatus === 'SUCCESS'
-                      ? 'checkmark-circle'
-                      : connectionStatus === 'ERROR'
-                      ? 'alert-circle'
-                      : 'wifi-outline'
-                  }
-                  size={16}
-                  color="#FFFFFF"
-                />
-                <Text style={styles.testButtonText}>Tester la connexion</Text>
-              </>
-            )}
-          </TouchableOpacity>
         </View>
 
-       
         {/* Section : Adresse fixe de référence (Distance) */}
         <View style={styles.section}>
           <View style={styles.sectionHeaderRow}>
@@ -1006,61 +760,115 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
           )}
         </View>
 
-        {/* Section 4 : Notifications Push */}
+        {/* Section 2 : Connexion Serveur PC / Tailscale */}
         <View style={styles.section}>
           <View style={styles.sectionHeaderRow}>
-            <Ionicons
-              name="notifications-outline"
-              size={20}
-              color={Colors.status.REPLY_RECEIVED}
-            />
-            <Text style={styles.sectionTitle}>Notifications Push (Expo)</Text>
+            <Ionicons name="server-outline" size={20} color={Colors.primary} />
+            <Text style={styles.sectionTitle}>Connexion Serveur</Text>
           </View>
-          <Text style={styles.sectionDescription}>
-            Recevez une alerte instantanée sur ce smartphone dès qu'un recruteur
-            répond ou qu'une relance téléphonique est requise (J+15).
-          </Text>
 
-          <View style={styles.cvCard}>
-            <Ionicons
-              name={pushToken ? 'notifications-circle' : 'notifications-off-outline'}
-              size={28}
-              color={pushToken ? Colors.status.REPLY_RECEIVED : Colors.textMuted}
-            />
-            <View style={styles.cvInfo}>
-              <Text style={styles.cvStatus}>
-                {pushToken
-                  ? 'Notifications activées'
-                  : NotificationService.isExpoGo
-                    ? 'Mode Expo Go (Actif sur APK)'
-                    : 'Token non synchronisé'}
+          <Text style={styles.fieldLabel}>URL du serveur NestJS</Text>
+          <CenteredTextInput
+            style={styles.input}
+            value={serverUrl}
+            onChangeText={setServerUrl}
+            placeholder="https://...trycloudflare.com ou http://192.168.x.y:3000"
+            placeholderTextColor={Colors.textMuted}
+            autoCapitalize="none"
+            autoCorrect={false}
+          />
+
+          {/* Raccourcis d'URL (Tunnel Cloudflare 4G/5G, Wi-Fi local) */}
+          <View style={styles.presetsRow}>
+            {tunnelUrl ? (
+              <TouchableOpacity
+                style={[
+                  styles.presetChip,
+                  serverUrl === tunnelUrl && styles.presetChipActive,
+                ]}
+                onPress={() => setServerUrl(tunnelUrl)}
+                activeOpacity={0.7}
+              >
+                <Ionicons
+                  name="globe-outline"
+                  size={13}
+                  color={serverUrl === tunnelUrl ? '#FFFFFF' : Colors.accent}
+                />
+                <Text
+                  style={[
+                    styles.presetChipText,
+                    serverUrl === tunnelUrl && styles.presetChipTextActive,
+                  ]}
+                >
+                  Tunnel 4G/5G
+                </Text>
+              </TouchableOpacity>
+            ) : null}
+
+            <TouchableOpacity
+              style={[
+                styles.presetChip,
+                serverUrl === StorageService.getLocalWifiUrl() && styles.presetChipActive,
+              ]}
+              onPress={() => setServerUrl(StorageService.getLocalWifiUrl())}
+              activeOpacity={0.7}
+            >
+              <Ionicons
+                name="wifi-outline"
+                size={13}
+                color={serverUrl === StorageService.getLocalWifiUrl() ? '#FFFFFF' : Colors.primary}
+              />
+              <Text
+                style={[
+                  styles.presetChipText,
+                  serverUrl === StorageService.getLocalWifiUrl() && styles.presetChipTextActive,
+                ]}
+              >
+                Wi-Fi local (PC)
               </Text>
-              <Text style={styles.cvName} numberOfLines={1}>
-                {pushToken
-                  ? pushToken
-                  : NotificationService.isExpoGo
-                    ? 'Push distants désactivés par Expo Go. Candidatures 100% actives.'
-                    : 'Appuyez ci-dessous pour autoriser et lier ce téléphone'}
-              </Text>
-            </View>
+            </TouchableOpacity>
           </View>
+
+          <View style={styles.tunnelInfoCard}>
+            <Ionicons name="information-circle-outline" size={16} color={Colors.accent} />
+            <Text style={styles.tunnelInfoText}>
+              <Text style={{ fontWeight: '700', color: Colors.text }}>Accès partout (4G/5G) :</Text> Utilisez le Tunnel Cloudflare pour joindre votre serveur en déplacement.
+            </Text>
+          </View>
+
+          <Text style={styles.fieldLabel}>Clé d'API statique (x-api-key)</Text>
+          <CenteredTextInput
+            style={styles.input}
+            value={apiKey}
+            onChangeText={setApiKey}
+            placeholder="Clé secrète configurée dans .env"
+            placeholderTextColor={Colors.textMuted}
+            autoCapitalize="none"
+            secureTextEntry
+          />
 
           <TouchableOpacity
-            style={[styles.pushButton, registeringPush && styles.buttonDisabled]}
-            onPress={handleRegisterPush}
-            disabled={registeringPush}
+            style={[styles.testButton, testingConnection && styles.buttonDisabled]}
+            onPress={handleTestConnection}
+            disabled={testingConnection}
             activeOpacity={0.8}
           >
-            {registeringPush ? (
+            {testingConnection ? (
               <ActivityIndicator color="#FFFFFF" size="small" />
             ) : (
               <>
-                <Ionicons name="refresh-outline" size={18} color="#FFFFFF" />
-                <Text style={styles.pushButtonText}>
-                  {pushToken
-                    ? 'Re-synchroniser ce téléphone'
-                    : 'Activer les notifications push'}
-                </Text>
+                <Ionicons
+                  name={
+                    connectionStatus === 'SUCCESS'
+                      ? 'checkmark-circle'
+                      : connectionStatus === 'ERROR'
+                      ? 'alert-circle'
+                      : 'wifi-outline'
+                  }
+                  size={16}
+                  color="#FFFFFF"
+                />
+                <Text style={styles.testButtonText}>Tester la connexion</Text>
               </>
             )}
           </TouchableOpacity>
@@ -1233,55 +1041,6 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     fontSize: 13,
   },
-  cvSyncTag: {
-    backgroundColor: `${Colors.success}20`,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 6,
-    borderWidth: 1,
-    borderColor: `${Colors.success}40`,
-  },
-  cvSyncTagText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: Colors.success,
-  },
-  cvMetaText: {
-    fontSize: 11,
-    color: Colors.textMuted,
-    marginTop: 3,
-  },
-  cvActionsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  viewCvBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    backgroundColor: `${Colors.accent}18`,
-    borderWidth: 1,
-    borderColor: `${Colors.accent}50`,
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-  },
-  viewCvBtnText: {
-    color: Colors.accent,
-    fontWeight: '700',
-    fontSize: 13,
-  },
-  deleteCvBtn: {
-    backgroundColor: `${Colors.danger}15`,
-    borderWidth: 1,
-    borderColor: `${Colors.danger}40`,
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   saveTemplateButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1448,6 +1207,65 @@ const styles = StyleSheet.create({
     color: Colors.textMuted,
     marginTop: 4,
     lineHeight: 15,
+  },
+  exportHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 4,
+  },
+  exportBadge: {
+    backgroundColor: `${Colors.brandCyan}15`,
+    borderColor: Colors.brandCyan,
+    borderWidth: 1,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+  },
+  exportBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: Colors.brandCyan,
+  },
+  exportActionsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginTop: 4,
+  },
+  exportBtnPrimary: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: Colors.brandGreen,
+    paddingVertical: 11,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+  },
+  exportBtnPrimaryText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#0B0F19',
+  },
+  exportBtnOutline: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: Colors.surface,
+    paddingVertical: 11,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: `${Colors.brandCyan}80`,
+  },
+  exportBtnOutlineText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: Colors.brandCyan,
   },
   accountBadge: {
     flexDirection: 'row',
@@ -1622,15 +1440,15 @@ const styles = StyleSheet.create({
     fontSize: 13,
   },
   helpToggleBtn: {
-  flexDirection: 'row',
-  alignItems: 'center',
-  gap: 6,
-  paddingVertical: 6,
-  alignSelf: 'flex-start',
-},
-helpToggleText: {
-  fontSize: 14,
-  fontWeight: '600',
-  color: Colors.brandCyan,
-},
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 6,
+    alignSelf: 'flex-start',
+  },
+  helpToggleText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: Colors.brandCyan,
+  },
 });
