@@ -1,4 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
+import Constants from 'expo-constants';
 import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
@@ -37,7 +38,8 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
   refPoint: propRefPoint,
   onUpdateRefPoint,
 }) => {
-  const { user, updateProfile, refreshProfile, logout } = useAuth();
+  const { user, updateProfile, refreshProfile } = useAuth();
+  const appVersion = Constants.expoConfig?.version ?? '1.0.0';
 
   const [stats, setStats] = useState<CompanyStats | null>(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -170,23 +172,6 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
             } finally {
               setDeletingCv(false);
             }
-          },
-        },
-      ],
-    );
-  };
-
-  const handleLogout = () => {
-    Alert.alert(
-      'Déconnexion',
-      'Êtes-vous certain de vouloir vous déconnecter d\'AlterTrack ?',
-      [
-        { text: 'Annuler', style: 'cancel' },
-        {
-          text: 'Se déconnecter',
-          style: 'destructive',
-          onPress: async () => {
-            await logout();
           },
         },
       ],
@@ -463,45 +448,9 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
           </View>
         </View>
 
-        {/* SÉCURITÉ & SESSION */}
-        <View style={styles.sectionHeader}>
-          <Ionicons name="shield-checkmark-outline" size={18} color={Colors.brandCyan} />
-          <Text style={styles.sectionTitle}>Session & Sécurité</Text>
-        </View>
-
-        <View style={styles.card}>
-          <TouchableOpacity
-            style={styles.menuRow}
-            onPress={onOpenSettings}
-            activeOpacity={0.7}
-          >
-            <View style={styles.menuRowLeft}>
-              <Ionicons name="options-outline" size={20} color={Colors.textSecondary} />
-              <Text style={styles.menuRowText}>Toutes les options de l'application</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} />
-          </TouchableOpacity>
-
-          <View style={styles.divider} />
-
-          <TouchableOpacity
-            style={styles.menuRow}
-            onPress={handleLogout}
-            activeOpacity={0.7}
-          >
-            <View style={styles.menuRowLeft}>
-              <Ionicons name="log-out-outline" size={20} color={Colors.danger} />
-              <Text style={[styles.menuRowText, { color: Colors.danger }]}>
-                Se déconnecter
-              </Text>
-            </View>
-            <Ionicons name="chevron-forward" size={18} color={Colors.danger} />
-          </TouchableOpacity>
-        </View>
-
         {/* VERSION */}
         <View style={styles.footer}>
-          <Text style={styles.footerText}>AlterTrack Mobile • v1.0.0</Text>
+          <Text style={styles.footerText}>AlterTrack Mobile • v{appVersion}</Text>
           <Text style={styles.footerSubText}>
             Plateforme optimisée pour la recherche d'alternance
           </Text>
@@ -998,29 +947,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
     color: Colors.text,
-  },
-
-  // MENUS
-  menuRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 10,
-  },
-  menuRowLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  menuRowText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: Colors.text,
-  },
-  divider: {
-    height: 1,
-    backgroundColor: Colors.border,
-    marginVertical: 4,
   },
 
   // FOOTER

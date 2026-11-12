@@ -1,4 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
+import Constants from 'expo-constants';
 import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
@@ -37,6 +38,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
   onUpdateRefPoint,
 }) => {
   const { user, updateProfile, logout } = useAuth();
+  const appVersion = Constants.expoConfig?.version ?? '1.0.0';
 
   const [profileFullName, setProfileFullName] = useState(user?.fullName || '');
   const [profileGmailUser, setProfileGmailUser] = useState(user?.gmailUser || '');
@@ -164,13 +166,15 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
   const handleLogout = () => {
     Alert.alert(
       'Déconnexion',
-      'Êtes-vous sûr de vouloir vous déconnecter de votre compte AlterTrack ?',
+      'Êtes-vous certain de vouloir vous déconnecter d\'AlterTrack ?',
       [
         { text: 'Annuler', style: 'cancel' },
         {
           text: 'Se déconnecter',
           style: 'destructive',
-          onPress: () => logout(),
+          onPress: async () => {
+            await logout();
+          },
         },
       ],
     );
@@ -486,64 +490,118 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
           )}
         </View>
 
-        {/* Section : Données & Tableur */}
+        {/* Section 2 : Connexion Serveur PC / Tailscale */}
         <View style={styles.section}>
-          <View style={styles.exportHeaderRow}>
-            <View style={styles.sectionHeaderRow}>
-              <Ionicons name="download-outline" size={20} color={Colors.brandCyan} />
-              <Text style={styles.sectionTitle}>Données & Tableur</Text>
-            </View>
-            {stats ? (
-              <View style={styles.exportBadge}>
-                <Text style={styles.exportBadgeText}>
-                  {totalTracked} fiche{totalTracked > 1 ? 's' : ''}
+          <View style={styles.sectionHeaderRow}>
+            <Ionicons name="server-outline" size={20} color={Colors.primary} />
+            <Text style={styles.sectionTitle}>Connexion Serveur</Text>
+          </View>
+
+          <Text style={styles.fieldLabel}>URL du serveur NestJS</Text>
+          <CenteredTextInput
+            style={styles.input}
+            value={serverUrl}
+            onChangeText={setServerUrl}
+            placeholder="https://...trycloudflare.com ou http://192.168.x.y:3000"
+            placeholderTextColor={Colors.textMuted}
+            autoCapitalize="none"
+            autoCorrect={false}
+          />
+
+          {/* Raccourcis d'URL (Tunnel Cloudflare 4G/5G, Wi-Fi local) */}
+          <View style={styles.presetsRow}>
+            {tunnelUrl ? (
+              <TouchableOpacity
+                style={[
+                  styles.presetChip,
+                  serverUrl === tunnelUrl && styles.presetChipActive,
+                ]}
+                onPress={() => setServerUrl(tunnelUrl)}
+                activeOpacity={0.7}
+              >
+                <Ionicons
+                  name="globe-outline"
+                  size={13}
+                  color={serverUrl === tunnelUrl ? '#FFFFFF' : Colors.accent}
+                />
+                <Text
+                  style={[
+                    styles.presetChipText,
+                    serverUrl === tunnelUrl && styles.presetChipTextActive,
+                  ]}
+                >
+                  Tunnel 4G/5G
                 </Text>
-              </View>
+              </TouchableOpacity>
             ) : null}
-          </View>
-          <Text style={styles.sectionDescription}>
-            Téléchargez la base complète de vos entreprises avec coordonnées, statuts, dates, notes et historique des activités.
-          </Text>
-
-          <View style={styles.exportActionsRow}>
-            <TouchableOpacity
-              style={[
-                styles.exportBtnPrimary,
-                exportingFormat === 'xlsx' && styles.buttonDisabled,
-              ]}
-              onPress={() => handleExportSpreadsheet('xlsx')}
-              disabled={exportingFormat !== null}
-              activeOpacity={0.8}
-            >
-              {exportingFormat === 'xlsx' ? (
-                <ActivityIndicator size="small" color="#0B0F19" />
-              ) : (
-                <>
-                  <Ionicons name="document-text" size={16} color="#0B0F19" />
-                  <Text style={styles.exportBtnPrimaryText}>Tableur Excel (.xlsx)</Text>
-                </>
-              )}
-            </TouchableOpacity>
 
             <TouchableOpacity
               style={[
-                styles.exportBtnOutline,
-                exportingFormat === 'csv' && styles.buttonDisabled,
+                styles.presetChip,
+                serverUrl === StorageService.getLocalWifiUrl() && styles.presetChipActive,
               ]}
-              onPress={() => handleExportSpreadsheet('csv')}
-              disabled={exportingFormat !== null}
-              activeOpacity={0.8}
+              onPress={() => setServerUrl(StorageService.getLocalWifiUrl())}
+              activeOpacity={0.7}
             >
-              {exportingFormat === 'csv' ? (
-                <ActivityIndicator size="small" color={Colors.brandCyan} />
-              ) : (
-                <>
-                  <Ionicons name="code-download-outline" size={16} color={Colors.brandCyan} />
-                  <Text style={styles.exportBtnOutlineText}>Format CSV (.csv)</Text>
-                </>
-              )}
+              <Ionicons
+                name="wifi-outline"
+                size={13}
+                color={serverUrl === StorageService.getLocalWifiUrl() ? '#FFFFFF' : Colors.primary}
+              />
+              <Text
+                style={[
+                  styles.presetChipText,
+                  serverUrl === StorageService.getLocalWifiUrl() && styles.presetChipTextActive,
+                ]}
+              >
+                Wi-Fi local (PC)
+              </Text>
             </TouchableOpacity>
           </View>
+
+          <View style={styles.tunnelInfoCard}>
+            <Ionicons name="information-circle-outline" size={16} color={Colors.accent} />
+            <Text style={styles.tunnelInfoText}>
+              <Text style={{ fontWeight: '700', color: Colors.text }}>Accès partout (4G/5G) :</Text> Utilisez le Tunnel Cloudflare pour joindre votre serveur en déplacement.
+            </Text>
+          </View>
+
+          <Text style={styles.fieldLabel}>Clé d'API statique (x-api-key)</Text>
+          <CenteredTextInput
+            style={styles.input}
+            value={apiKey}
+            onChangeText={setApiKey}
+            placeholder="Clé secrète configurée dans .env"
+            placeholderTextColor={Colors.textMuted}
+            autoCapitalize="none"
+            secureTextEntry
+          />
+
+          <TouchableOpacity
+            style={[styles.testButton, testingConnection && styles.buttonDisabled]}
+            onPress={handleTestConnection}
+            disabled={testingConnection}
+            activeOpacity={0.8}
+          >
+            {testingConnection ? (
+              <ActivityIndicator color="#FFFFFF" size="small" />
+            ) : (
+              <>
+                <Ionicons
+                  name={
+                    connectionStatus === 'SUCCESS'
+                      ? 'checkmark-circle'
+                      : connectionStatus === 'ERROR'
+                      ? 'alert-circle'
+                      : 'wifi-outline'
+                  }
+                  size={16}
+                  color="#FFFFFF"
+                />
+                <Text style={styles.testButtonText}>Tester la connexion</Text>
+              </>
+            )}
+          </TouchableOpacity>
         </View>
 
         {/* Section : Adresse fixe de référence (Distance) */}
@@ -760,117 +818,146 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
           )}
         </View>
 
-        {/* Section 2 : Connexion Serveur PC / Tailscale */}
+        {/* Section : Données & Tableur */}
         <View style={styles.section}>
-          <View style={styles.sectionHeaderRow}>
-            <Ionicons name="server-outline" size={20} color={Colors.primary} />
-            <Text style={styles.sectionTitle}>Connexion Serveur</Text>
-          </View>
-
-          <Text style={styles.fieldLabel}>URL du serveur NestJS</Text>
-          <CenteredTextInput
-            style={styles.input}
-            value={serverUrl}
-            onChangeText={setServerUrl}
-            placeholder="https://...trycloudflare.com ou http://192.168.x.y:3000"
-            placeholderTextColor={Colors.textMuted}
-            autoCapitalize="none"
-            autoCorrect={false}
-          />
-
-          {/* Raccourcis d'URL (Tunnel Cloudflare 4G/5G, Wi-Fi local) */}
-          <View style={styles.presetsRow}>
-            {tunnelUrl ? (
-              <TouchableOpacity
-                style={[
-                  styles.presetChip,
-                  serverUrl === tunnelUrl && styles.presetChipActive,
-                ]}
-                onPress={() => setServerUrl(tunnelUrl)}
-                activeOpacity={0.7}
-              >
-                <Ionicons
-                  name="globe-outline"
-                  size={13}
-                  color={serverUrl === tunnelUrl ? '#FFFFFF' : Colors.accent}
-                />
-                <Text
-                  style={[
-                    styles.presetChipText,
-                    serverUrl === tunnelUrl && styles.presetChipTextActive,
-                  ]}
-                >
-                  Tunnel 4G/5G
+          <View style={styles.exportHeaderRow}>
+            <View style={styles.sectionHeaderRow}>
+              <Ionicons name="download-outline" size={20} color={Colors.brandCyan} />
+              <Text style={styles.sectionTitle}>Données & Tableur</Text>
+            </View>
+            {stats ? (
+              <View style={styles.exportBadge}>
+                <Text style={styles.exportBadgeText}>
+                  {totalTracked} fiche{totalTracked > 1 ? 's' : ''}
                 </Text>
-              </TouchableOpacity>
+              </View>
             ) : null}
+          </View>
+          <Text style={styles.sectionDescription}>
+            Téléchargez la base complète de vos entreprises avec coordonnées, statuts, dates, notes et historique des activités.
+          </Text>
+
+          <View style={styles.exportActionsRow}>
+            <TouchableOpacity
+              style={[
+                styles.exportBtnPrimary,
+                exportingFormat === 'xlsx' && styles.buttonDisabled,
+              ]}
+              onPress={() => handleExportSpreadsheet('xlsx')}
+              disabled={exportingFormat !== null}
+              activeOpacity={0.8}
+            >
+              {exportingFormat === 'xlsx' ? (
+                <ActivityIndicator size="small" color="#0B0F19" />
+              ) : (
+                <>
+                  <Ionicons name="document-text" size={16} color="#0B0F19" />
+                  <Text style={styles.exportBtnPrimaryText}>Tableur Excel (.xlsx)</Text>
+                </>
+              )}
+            </TouchableOpacity>
 
             <TouchableOpacity
               style={[
-                styles.presetChip,
-                serverUrl === StorageService.getLocalWifiUrl() && styles.presetChipActive,
+                styles.exportBtnOutline,
+                exportingFormat === 'csv' && styles.buttonDisabled,
               ]}
-              onPress={() => setServerUrl(StorageService.getLocalWifiUrl())}
-              activeOpacity={0.7}
+              onPress={() => handleExportSpreadsheet('csv')}
+              disabled={exportingFormat !== null}
+              activeOpacity={0.8}
             >
-              <Ionicons
-                name="wifi-outline"
-                size={13}
-                color={serverUrl === StorageService.getLocalWifiUrl() ? '#FFFFFF' : Colors.primary}
-              />
-              <Text
-                style={[
-                  styles.presetChipText,
-                  serverUrl === StorageService.getLocalWifiUrl() && styles.presetChipTextActive,
-                ]}
-              >
-                Wi-Fi local (PC)
-              </Text>
+              {exportingFormat === 'csv' ? (
+                <ActivityIndicator size="small" color={Colors.brandCyan} />
+              ) : (
+                <>
+                  <Ionicons name="code-download-outline" size={16} color={Colors.brandCyan} />
+                  <Text style={styles.exportBtnOutlineText}>Format CSV (.csv)</Text>
+                </>
+              )}
             </TouchableOpacity>
           </View>
+        </View>
 
-          <View style={styles.tunnelInfoCard}>
-            <Ionicons name="information-circle-outline" size={16} color={Colors.accent} />
-            <Text style={styles.tunnelInfoText}>
-              <Text style={{ fontWeight: '700', color: Colors.text }}>Accès partout (4G/5G) :</Text> Utilisez le Tunnel Cloudflare pour joindre votre serveur en déplacement.
-            </Text>
+        {/* Section 4 : Notifications Push */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeaderRow}>
+            <Ionicons
+              name="notifications-outline"
+              size={20}
+              color={Colors.status.REPLY_RECEIVED}
+            />
+            <Text style={styles.sectionTitle}>Notifications Push (Expo)</Text>
+          </View>
+          <Text style={styles.sectionDescription}>
+            Recevez une alerte instantanée sur ce smartphone dès qu'un recruteur
+            répond ou qu'une relance téléphonique est requise (J+15).
+          </Text>
+
+          <View style={styles.cvCard}>
+            <Ionicons
+              name={pushToken ? 'notifications-circle' : 'notifications-off-outline'}
+              size={28}
+              color={pushToken ? Colors.status.REPLY_RECEIVED : Colors.textMuted}
+            />
+            <View style={styles.cvInfo}>
+              <Text style={styles.cvStatus}>
+                {pushToken
+                  ? 'Notifications activées'
+                  : NotificationService.isExpoGo
+                    ? 'Mode Expo Go (Actif sur APK)'
+                    : 'Token non synchronisé'}
+              </Text>
+              <Text style={styles.cvName} numberOfLines={1}>
+                {pushToken
+                  ? pushToken
+                  : NotificationService.isExpoGo
+                    ? 'Push distants désactivés par Expo Go. Candidatures 100% actives.'
+                    : 'Appuyez ci-dessous pour autoriser et lier ce téléphone'}
+              </Text>
+            </View>
           </View>
 
-          <Text style={styles.fieldLabel}>Clé d'API statique (x-api-key)</Text>
-          <CenteredTextInput
-            style={styles.input}
-            value={apiKey}
-            onChangeText={setApiKey}
-            placeholder="Clé secrète configurée dans .env"
-            placeholderTextColor={Colors.textMuted}
-            autoCapitalize="none"
-            secureTextEntry
-          />
-
           <TouchableOpacity
-            style={[styles.testButton, testingConnection && styles.buttonDisabled]}
-            onPress={handleTestConnection}
-            disabled={testingConnection}
+            style={[styles.pushButton, registeringPush && styles.buttonDisabled]}
+            onPress={handleRegisterPush}
+            disabled={registeringPush}
             activeOpacity={0.8}
           >
-            {testingConnection ? (
+            {registeringPush ? (
               <ActivityIndicator color="#FFFFFF" size="small" />
             ) : (
               <>
-                <Ionicons
-                  name={
-                    connectionStatus === 'SUCCESS'
-                      ? 'checkmark-circle'
-                      : connectionStatus === 'ERROR'
-                      ? 'alert-circle'
-                      : 'wifi-outline'
-                  }
-                  size={16}
-                  color="#FFFFFF"
-                />
-                <Text style={styles.testButtonText}>Tester la connexion</Text>
+                <Ionicons name="refresh-outline" size={18} color="#FFFFFF" />
+                <Text style={styles.pushButtonText}>
+                  {pushToken
+                    ? 'Re-synchroniser ce téléphone'
+                    : 'Activer les notifications push'}
+                </Text>
               </>
             )}
+          </TouchableOpacity>
+        </View>
+
+        {/* Section 5 : Session & Sécurité */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeaderRow}>
+            <Ionicons name="shield-checkmark-outline" size={20} color={Colors.brandCyan} />
+            <Text style={styles.sectionTitle}>Session & Sécurité</Text>
+          </View>
+          <Text style={styles.sectionDescription}>
+            Déconnectez votre compte AlterTrack de cet appareil.
+          </Text>
+
+          <TouchableOpacity
+            style={styles.logoutSessionRow}
+            onPress={handleLogout}
+            activeOpacity={0.7}
+          >
+            <View style={styles.logoutSessionLeft}>
+              <Ionicons name="log-out-outline" size={20} color={Colors.danger} />
+              <Text style={styles.logoutSessionText}>Se déconnecter</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={Colors.danger} />
           </TouchableOpacity>
         </View>
 
@@ -881,7 +968,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
             style={styles.footerLogo}
             resizeMode="contain"
           />
-          <Text style={styles.footerVersion}>AlterTrack v1.0.0 — Auto-hébergé</Text>
+          <Text style={styles.footerVersion}>AlterTrack v{appVersion} — Auto-hébergé</Text>
         </View>
       </KeyboardAwareCenteredScrollView>
 
@@ -1070,6 +1157,27 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontWeight: '700',
     fontSize: 13,
+  },
+  logoutSessionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: `${Colors.danger}12`,
+    borderWidth: 1,
+    borderColor: `${Colors.danger}40`,
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+  logoutSessionLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  logoutSessionText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: Colors.danger,
   },
   footerBrand: {
     alignItems: 'center',
