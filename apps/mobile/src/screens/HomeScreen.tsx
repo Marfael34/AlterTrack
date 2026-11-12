@@ -1480,17 +1480,7 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '700',
   },
-  cancelSelectionBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 8,
-    backgroundColor: `${Colors.textSecondary}25`,
-    gap: 4,
-  },
-  cancelSelectionText: {
-    color: Colors.textSecondary,
+  statLabel: {
     fontSize: 12,
     fontWeight: '600',
   },
@@ -1612,7 +1602,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: 3,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: '#1F2937',
   },
   viewModeTab: {
     flex: 1,
@@ -1754,4 +1744,3 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
 });
-

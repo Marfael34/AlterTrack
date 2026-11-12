@@ -58,7 +58,6 @@ export const ApiService = {
       } else {
         throw networkErr;
       }
-    }
 
     if (!response.ok) {
       let errorMessage = `Erreur HTTP ${response.status}`;

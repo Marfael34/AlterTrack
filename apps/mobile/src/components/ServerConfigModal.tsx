@@ -16,48 +16,23 @@ import { CenteredTextInput } from './KeyboardAwareCenteredScrollView';
 interface ServerConfigModalProps {
   visible: boolean;
   onClose: () => void;
-  onSaved?: (url: string) => void;
+  currentUrl: string;
+  onSave: (newUrl: string) => void;
 }
 
-export const ServerConfigModal: React.FC<ServerConfigModalProps> = ({
+export default function ServerConfigModal({
   visible,
   onClose,
-  onSaved,
-}) => {
-  const [serverUrl, setServerUrl] = useState('');
-  const [tunnelUrl, setTunnelUrl] = useState('');
-  const [localWifiUrl, setLocalWifiUrl] = useState('');
+  currentUrl,
+  onSave,
+}: ServerConfigModalProps) {
+  const [url, setUrl] = useState(currentUrl);
   const [testing, setTesting] = useState(false);
-  const [testResult, setTestResult] = useState<{
-    success: boolean;
-    message: string;
-  } | null>(null);
+  const [testResult, setTestResult] = useState<'success' | 'error' | null>(null);
 
-  useEffect(() => {
-    if (visible) {
-      void (async () => {
-        const current = await StorageService.getServerUrl();
-        setServerUrl(current);
-        setTunnelUrl(StorageService.getTunnelUrl());
-        setLocalWifiUrl(StorageService.getLocalWifiUrl());
-        setTestResult(null);
-      })();
-    }
-  }, [visible]);
-
-  const handleTestAndSave = async () => {
-    const cleanUrl = serverUrl.trim().replace(/\/+$/, '');
-    if (!cleanUrl) {
-      setTestResult({
-        success: false,
-        message: 'Veuillez saisir une URL de serveur valide.',
-      });
-      return;
-    }
-
+  const handleTestConnection = async () => {
     setTesting(true);
     setTestResult(null);
-
     try {
       await StorageService.setServerUrl(cleanUrl);
       const response = await fetch(`${cleanUrl}/health`, {
@@ -89,37 +64,30 @@ export const ServerConfigModal: React.FC<ServerConfigModalProps> = ({
   };
 
   return (
-    <Modal
-      visible={visible}
-      animationType="slide"
-      transparent
-      onRequestClose={onClose}
-    >
-      <View style={styles.modalOverlay}>
-        <SafeAreaView style={styles.modalContainer}>
-          <View style={styles.modalCard}>
-            {/* Header */}
-            <View style={styles.header}>
-              <View style={styles.headerTitleRow}>
-                <Ionicons name="server-outline" size={22} color={Colors.brandCyan} />
-                <Text style={styles.headerTitle}>Configuration Serveur (Dev)</Text>
-              </View>
-              <TouchableOpacity
-                onPress={onClose}
-                style={styles.closeButton}
-                activeOpacity={0.7}
-              >
-                <Ionicons name="close" size={22} color={Colors.textSecondary} />
-              </TouchableOpacity>
+    <Modal visible={visible} animationType="fade" transparent={true}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={styles.modalOverlay}
+      >
+        <View style={styles.modalContent}>
+          
+          <View style={styles.modalHeader}>
+            <View style={styles.headerTitleRow}>
+              <Ionicons name="server-outline" size={20} color="#6366F1" style={{ marginRight: 8 }} />
+              <Text style={styles.modalTitle}>Configuration API</Text>
             </View>
+            <TouchableOpacity onPress={onClose} activeOpacity={0.7}>
+              <Ionicons name="close" size={22} color="#94A3B8" />
+            </TouchableOpacity>
+          </View>
 
-            <Text style={styles.subtitle}>
-              Définissez l’adresse URL de l’API NestJS pour connecter l’application.
-            </Text>
+          <Text style={styles.modalDescription}>
+            Définissez l'URL de votre backend NestJS pour synchroniser vos candidatures en temps réel.
+          </Text>
 
-            {/* Input URL */}
-            <Text style={styles.label}>URL du serveur</Text>
-            <CenteredTextInput
+          <View style={styles.inputContainer}>
+            <Text style={styles.inputLabel}>URL du Serveur</Text>
+            <TextInput
               style={styles.input}
               value={serverUrl}
               onChangeText={(text) => {

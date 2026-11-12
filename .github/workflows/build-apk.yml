@@ -1,0 +1,52 @@
+name: Build AlterTrack APK
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Setup Java JDK
+        uses: actions/setup-java@v5
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build Android APK (Expo / Gradle)
+        env:
+          EXPO_PUBLIC_API_URL: https://altertrack.onrender.com
+          EXPO_PUBLIC_API_KEY: 8f3b7c9a2d5e1f406b8e3a9c2d7f1e504b8a2c6d9e3f0a7b1c4d8e2f5a9b0c3d
+          GRADLE_OPTS: "-Dorg.gradle.daemon=false -Dorg.gradle.jvmargs=-Xmx4608m"
+        run: |
+          cd apps/mobile
+          npx expo prebuild --platform android
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleRelease --stacktrace
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: apps/mobile/android/app/build/outputs/apk/release/app-release.apk
+          tag_name: ${{ github.ref_name }}
+          name: AlterTrack ${{ github.ref_name }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

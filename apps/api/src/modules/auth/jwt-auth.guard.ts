@@ -48,19 +48,35 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
       ) {
         // Associer au premier utilisateur système par défaut si aucun Bearer token
         if (!request.headers['authorization']) {
-          const defaultUser = await this.prisma.user.findFirst({
-            select: {
-              id: true,
-              email: true,
-              fullName: true,
-              gmailUser: true,
-              gmailAppPassword: true,
-              template: true,
-              cvFilePath: true,
-              cvOriginalName: true,
-              expoPushToken: true,
-            },
-          });
+          const defaultUser =
+            (await this.prisma.user.findFirst({
+              where: { email: { not: 'candidat@altertrack.local' } },
+              orderBy: { createdAt: 'desc' },
+              select: {
+                id: true,
+                email: true,
+                fullName: true,
+                gmailUser: true,
+                gmailAppPassword: true,
+                template: true,
+                cvFilePath: true,
+                cvOriginalName: true,
+                expoPushToken: true,
+              },
+            })) ||
+            (await this.prisma.user.findFirst({
+              select: {
+                id: true,
+                email: true,
+                fullName: true,
+                gmailUser: true,
+                gmailAppPassword: true,
+                template: true,
+                cvFilePath: true,
+                cvOriginalName: true,
+                expoPushToken: true,
+              },
+            }));
           if (defaultUser) {
             request.user = defaultUser;
           }
