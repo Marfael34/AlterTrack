@@ -9,7 +9,19 @@ import {
   StatusBar,
   FlatList,
 } from 'react-native';
-import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { CompanyCard } from '../components/CompanyCard';
+import { CompanyMapView } from '../components/CompanyMapView';
+import { FiltersModal } from '../components/FiltersModal';
+import { ReferencePointModal } from '../components/ReferencePointModal';
+import { CityItem } from '../components/CityFilterBar';
+import { Colors } from '../constants/colors';
+import { useAuth } from '../context/AuthContext';
+import { AlertService as Alert } from '../services/alert.service';
+import { ApiService } from '../services/api.service';
+import { FilterStorageService } from '../services/filterStorage.service';
+import { StorageService } from '../services/storage.service';
+import { LocationService, ReferencePoint } from '../services/location.service';
+import { Company, CompanyStats, STATUS_LABELS, Status } from '../types/company';
 
 interface HomeScreenProps {
   navigation: any;
@@ -87,7 +99,10 @@ export default function HomeScreen({ navigation, stats, companies = [] }: HomeSc
             <Text style={styles.statNumber}>{stats?.offer || 0}</Text>
             <Text style={styles.statLabel}>Offres</Text>
           </View>
-        </View>
+          <Ionicons name="chevron-forward" size={16} color={Colors.status.TO_CALL} />
+        </TouchableOpacity>
+      )}
+      
 
         {/* Bouton d'Action Principal */}
         <TouchableOpacity 

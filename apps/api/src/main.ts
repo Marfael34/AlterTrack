@@ -58,7 +58,7 @@ async function bootstrap() {
 
   const port = configService.get<number>('port') || 3000;
 
-  await app.listen(port, '0.0.0.0');
+  await app.listen(process.env.PORT || 3000, '0.0.0.0');
   logger.log(`Serveur AlterTrack API démarré sur le port ${port}`);
 }
 

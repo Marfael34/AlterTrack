@@ -234,16 +234,7 @@ export const AddressFieldAssistant: React.FC<AddressFieldAssistantProps> = ({
           <Ionicons name="location-sharp" size={17} color={Colors.accent} />
           <Text style={styles.sectionTitle}>Localisation de l'entreprise</Text>
         </View>
-        <View style={styles.helpBadge}>
-          <Ionicons name="sparkles" size={11} color={Colors.accent} />
-          <Text style={styles.helpBadgeText}>Aide à la saisie</Text>
-        </View>
       </View>
-
-      <Text style={styles.sectionSubtitle}>
-        Recherchez l'adresse officielle pour éviter les fautes de frappe et garantir un placement parfait sur la carte.
-      </Text>
-
       {/* Barre de recherche intelligente avec autocomplétion instantanée */}
       <View style={styles.searchBox}>
         <Ionicons name="search" size={18} color={Colors.accent} style={styles.searchIcon} />

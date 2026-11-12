@@ -9,7 +9,9 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { Colors } from '../constants/colors';
+import { StorageService } from '../services/storage.service';
+import { CenteredTextInput } from './KeyboardAwareCenteredScrollView';
 
 interface ServerConfigModalProps {
   visible: boolean;
@@ -32,14 +34,30 @@ export default function ServerConfigModal({
     setTesting(true);
     setTestResult(null);
     try {
-      const response = await fetch(`${url}/health`, { method: 'GET' });
-      if (response.ok) {
-        setTestResult('success');
-      } else {
-        setTestResult('error');
+      await StorageService.setServerUrl(cleanUrl);
+      const response = await fetch(`${cleanUrl}/health`, {
+        headers: {
+          'x-api-key': process.env.EXPO_PUBLIC_API_KEY || '',
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status} sur ${cleanUrl}/health`);
       }
-    } catch (e) {
-      setTestResult('error');
+
+      const health = await response.json();
+      setTestResult({
+        success: true,
+        message: `Connexion réussie ! API : ${health.status} | Base : ${health.database}`,
+      });
+      if (onSaved) {
+        onSaved(cleanUrl);
+      }
+    } catch (err: any) {
+      setTestResult({
+        success: false,
+        message: `Erreur (${cleanUrl}) : ${err?.message || 'Échec réseau'}`,
+      });
     } finally {
       setTesting(false);
     }

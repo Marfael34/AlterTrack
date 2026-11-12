@@ -698,61 +698,10 @@ export const CompanyDetailScreen: React.FC<CompanyDetailScreenProps> = ({
             >
               <Ionicons name="eye-outline" size={15} color={Colors.accent} />
               <Text style={styles.followUpPreviewBtnText}>Aperçu / Tester la relance</Text>
-            </TouchableOpacity>
+              </TouchableOpacity>
+              
           </View>
         )}
-
-        {/* Carte Localisation & Distance */}
-        <View style={styles.locationCard}>
-          <View style={styles.locationHeaderRow}>
-            <View style={styles.locationIconWrap}>
-              <Ionicons name="location" size={20} color={Colors.accent} />
-            </View>
-            <View style={styles.locationInfoCol}>
-              <Text style={styles.locationAddressText}>
-                {address ? `${address}` : ''}
-                {address && city ? ` • ${city}` : city || 'Localisation non renseignée'}
-              </Text>
-              {distanceKm !== null && refPoint ? (
-                <TouchableOpacity
-                  style={styles.locationDistanceRow}
-                  onPress={() => setIsRefPointModalOpen(true)}
-                  activeOpacity={0.7}
-                >
-                  <Ionicons
-                    name={refPoint.isGps ? 'navigate' : 'home'}
-                    size={13}
-                    color={Colors.accent}
-                  />
-                  <Text style={styles.locationDistanceText}>
-                    À {LocationService.formatDistance(distanceKm)} de {refPoint.label}
-                  </Text>
-                  <Ionicons name="create-outline" size={13} color={Colors.textMuted} />
-                </TouchableOpacity>
-              ) : (
-                <TouchableOpacity
-                  style={styles.setRefPointBtn}
-                  onPress={() => setIsRefPointModalOpen(true)}
-                  activeOpacity={0.7}
-                >
-                  <Ionicons name="add-circle-outline" size={14} color={Colors.primary} />
-                  <Text style={styles.setRefPointText}>
-                    Définir mon adresse fixe pour calculer la distance
-                  </Text>
-                </TouchableOpacity>
-              )}
-            </View>
-          </View>
-
-          <TouchableOpacity
-            style={styles.openMapsButton}
-            onPress={handleOpenMaps}
-            activeOpacity={0.8}
-          >
-            <Ionicons name="map-outline" size={15} color="#FFFFFF" />
-            <Text style={styles.openMapsButtonText}>Ouvrir l'itinéraire (Plans / GPS)</Text>
-          </TouchableOpacity>
-        </View>
 
         {/* Sélecteur de statut */}
         <View style={styles.section}>
