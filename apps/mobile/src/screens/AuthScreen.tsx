@@ -15,7 +15,7 @@ import {
 } from '../components/KeyboardAwareCenteredScrollView';
 import { Colors } from '../constants/colors';
 import { useAuth } from '../context/AuthContext';
-import { ServerConfigModal } from '../components/ServerConfigModal';
+import ServerConfigModal from '../components/ServerConfigModal';
 
 export const AuthScreen: React.FC = () => {
   const { login, register } = useAuth();
@@ -456,7 +456,11 @@ export const AuthScreen: React.FC = () => {
       <ServerConfigModal
         visible={isServerModalOpen}
         onClose={() => setIsServerModalOpen(false)}
-        onSaved={() => setErrorMessage(null)}
+        currentUrl="" // ou l'URL actuelle si disponible dans ton state
+        onSave={() => {
+          setErrorMessage(null);
+          setIsServerModalOpen(false);
+        }}
       />
     </KeyboardAvoidingView>
   );

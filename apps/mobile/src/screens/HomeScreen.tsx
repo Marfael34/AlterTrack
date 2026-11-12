@@ -28,6 +28,7 @@ import { StorageService } from '../services/storage.service';
 import { LocationService, ReferencePoint } from '../services/location.service';
 import { Company, CompanyStats, STATUS_LABELS, Status } from '../types/company';
 
+
 interface HomeScreenProps {
   onSelectCompany: (company: Company) => void;
   onOpenSettings: () => void;
@@ -1742,5 +1743,21 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 12,
     fontWeight: '700',
+  },
+  cancelSelectionBtn: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  backgroundColor: Colors.cardBackground,
+  borderWidth: 1,
+  borderColor: Colors.border,
+  paddingHorizontal: 10,
+  paddingVertical: 5,
+  borderRadius: 10,
+  gap: 5,
+  },
+  cancelSelectionText: {
+    color: Colors.textSecondary,
+    fontSize: 12,
+    fontWeight: '600',
   },
 });

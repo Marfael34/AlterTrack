@@ -58,6 +58,7 @@ export const ApiService = {
       } else {
         throw networkErr;
       }
+    }
 
     if (!response.ok) {
       let errorMessage = `Erreur HTTP ${response.status}`;
@@ -256,7 +257,6 @@ export const ApiService = {
     const url = `${baseUrl}${cleanEndpoint}`;
 
     // 1. Sur Mobile (Android / iOS) : Privilégier le streaming natif OkHttp / NSURLSession
-    // Cela contourne complètement JS FormData/fetch et élimine l'erreur "Unsupported FormDataPart implementation"
     if (Platform.OS !== 'web' && typeof FileSystem.uploadAsync === 'function') {
       try {
         const res = await FileSystem.uploadAsync(url, fileUri, {
@@ -296,7 +296,6 @@ export const ApiService = {
     const formData = new FormData();
     let fileAppended = false;
 
-    // A. Sur Web ou si webFile est fourni
     if (
       (typeof Blob !== 'undefined' && webFile instanceof Blob) ||
       (typeof File !== 'undefined' && webFile instanceof File)
@@ -305,7 +304,6 @@ export const ApiService = {
       fileAppended = true;
     }
 
-    // B. Tentative via fetch(fileUri).blob() (compatible WinterCG Expo fetch)
     if (!fileAppended) {
       try {
         const fileResponse = await fetch(fileUri);
@@ -317,7 +315,6 @@ export const ApiService = {
       }
     }
 
-    // C. Tentative via la classe File d'expo-file-system (implémente .bytes() pour Expo modern fetch)
     if (!fileAppended) {
       try {
         if (typeof ExpoFile === 'function') {
@@ -330,7 +327,6 @@ export const ApiService = {
       }
     }
 
-    // D. Dernier recours (objet React Native classique)
     if (!fileAppended) {
       const cleanUri =
         Platform.OS === 'ios' ? fileUri.replace('file://', '') : fileUri;

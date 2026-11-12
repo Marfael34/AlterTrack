@@ -1,17 +1,19 @@
 import { Ionicons } from '@expo/vector-icons';
-import React, { useEffect, useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   ActivityIndicator,
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   SafeAreaView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
 import { Colors } from '../constants/colors';
 import { StorageService } from '../services/storage.service';
-import { CenteredTextInput } from './KeyboardAwareCenteredScrollView';
 
 interface ServerConfigModalProps {
   visible: boolean;
@@ -26,13 +28,38 @@ export default function ServerConfigModal({
   currentUrl,
   onSave,
 }: ServerConfigModalProps) {
-  const [url, setUrl] = useState(currentUrl);
+  const [serverUrl, setServerUrl] = useState(currentUrl);
+  const [tunnelUrl, setTunnelUrl] = useState<string | null>(null);
+  const [localWifiUrl, setLocalWifiUrl] = useState<string | null>(null);
   const [testing, setTesting] = useState(false);
-  const [testResult, setTestResult] = useState<'success' | 'error' | null>(null);
+  const [testResult, setTestResult] = useState<{
+    success: boolean;
+    message: string;
+  } | null>(null);
 
-  const handleTestConnection = async () => {
+  useEffect(() => {
+    if (visible) {
+      setServerUrl(currentUrl);
+      setTestResult(null);
+      // Récupération des URLs de secours enregistrées
+      setTunnelUrl(StorageService.getTunnelUrl());
+      setLocalWifiUrl(StorageService.getLocalWifiUrl());
+    }
+  }, [visible, currentUrl]);
+
+  const handleTestAndSave = async () => {
+    const cleanUrl = serverUrl.trim().replace(/\/+$/, '');
+    if (!cleanUrl) {
+      setTestResult({
+        success: false,
+        message: 'Veuillez entrer une URL valide.',
+      });
+      return;
+    }
+
     setTesting(true);
     setTestResult(null);
+
     try {
       await StorageService.setServerUrl(cleanUrl);
       const response = await fetch(`${cleanUrl}/health`, {
@@ -50,9 +77,8 @@ export default function ServerConfigModal({
         success: true,
         message: `Connexion réussie ! API : ${health.status} | Base : ${health.database}`,
       });
-      if (onSaved) {
-        onSaved(cleanUrl);
-      }
+
+      onSave(cleanUrl);
     } catch (err: any) {
       setTestResult({
         success: false,
@@ -69,24 +95,27 @@ export default function ServerConfigModal({
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.modalOverlay}
       >
-        <View style={styles.modalContent}>
-          
-          <View style={styles.modalHeader}>
-            <View style={styles.headerTitleRow}>
-              <Ionicons name="server-outline" size={20} color="#6366F1" style={{ marginRight: 8 }} />
-              <Text style={styles.modalTitle}>Configuration API</Text>
+        <SafeAreaView style={styles.modalContainer}>
+          <View style={styles.modalCard}>
+            <View style={styles.header}>
+              <View style={styles.headerTitleRow}>
+                <Ionicons name="server-outline" size={20} color="#6366F1" />
+                <Text style={styles.headerTitle}>Configuration API</Text>
+              </View>
+              <TouchableOpacity
+                style={styles.closeButton}
+                onPress={onClose}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="close" size={20} color={Colors.textSecondary} />
+              </TouchableOpacity>
             </View>
-            <TouchableOpacity onPress={onClose} activeOpacity={0.7}>
-              <Ionicons name="close" size={22} color="#94A3B8" />
-            </TouchableOpacity>
-          </View>
 
-          <Text style={styles.modalDescription}>
-            Définissez l'URL de votre backend NestJS pour synchroniser vos candidatures en temps réel.
-          </Text>
+            <Text style={styles.subtitle}>
+              Définissez l'URL de votre backend NestJS pour synchroniser vos candidatures en temps réel.
+            </Text>
 
-          <View style={styles.inputContainer}>
-            <Text style={styles.inputLabel}>URL du Serveur</Text>
+            <Text style={styles.label}>URL du Serveur</Text>
             <TextInput
               style={styles.input}
               value={serverUrl}
@@ -101,64 +130,68 @@ export default function ServerConfigModal({
             />
 
             {/* Quick Presets */}
-            <Text style={styles.subLabel}>Raccourcis rapides :</Text>
-            <View style={styles.presetsRow}>
-              {tunnelUrl ? (
-                <TouchableOpacity
-                  style={[
-                    styles.presetChip,
-                    serverUrl === tunnelUrl && styles.presetChipActive,
-                  ]}
-                  onPress={() => {
-                    setServerUrl(tunnelUrl);
-                    setTestResult(null);
-                  }}
-                  activeOpacity={0.7}
-                >
-                  <Ionicons
-                    name="globe-outline"
-                    size={14}
-                    color={serverUrl === tunnelUrl ? '#FFFFFF' : Colors.brandCyan}
-                  />
-                  <Text
-                    style={[
-                      styles.presetChipText,
-                      serverUrl === tunnelUrl && styles.presetChipTextActive,
-                    ]}
-                  >
-                    Tunnel 4G/5G
-                  </Text>
-                </TouchableOpacity>
-              ) : null}
+            {(tunnelUrl || localWifiUrl) && (
+              <>
+                <Text style={styles.subLabel}>Raccourcis rapides :</Text>
+                <View style={styles.presetsRow}>
+                  {tunnelUrl ? (
+                    <TouchableOpacity
+                      style={[
+                        styles.presetChip,
+                        serverUrl === tunnelUrl && styles.presetChipActive,
+                      ]}
+                      onPress={() => {
+                        setServerUrl(tunnelUrl);
+                        setTestResult(null);
+                      }}
+                      activeOpacity={0.7}
+                    >
+                      <Ionicons
+                        name="globe-outline"
+                        size={14}
+                        color={serverUrl === tunnelUrl ? '#FFFFFF' : Colors.brandCyan}
+                      />
+                      <Text
+                        style={[
+                          styles.presetChipText,
+                          serverUrl === tunnelUrl && styles.presetChipTextActive,
+                        ]}
+                      >
+                        Tunnel 4G/5G
+                      </Text>
+                    </TouchableOpacity>
+                  ) : null}
 
-              {localWifiUrl ? (
-                <TouchableOpacity
-                  style={[
-                    styles.presetChip,
-                    serverUrl === localWifiUrl && styles.presetChipActive,
-                  ]}
-                  onPress={() => {
-                    setServerUrl(localWifiUrl);
-                    setTestResult(null);
-                  }}
-                  activeOpacity={0.7}
-                >
-                  <Ionicons
-                    name="wifi-outline"
-                    size={14}
-                    color={serverUrl === localWifiUrl ? '#FFFFFF' : Colors.primary}
-                  />
-                  <Text
-                    style={[
-                      styles.presetChipText,
-                      serverUrl === localWifiUrl && styles.presetChipTextActive,
-                    ]}
-                  >
-                    Wi-Fi local (PC)
-                  </Text>
-                </TouchableOpacity>
-              ) : null}
-            </View>
+                  {localWifiUrl ? (
+                    <TouchableOpacity
+                      style={[
+                        styles.presetChip,
+                        serverUrl === localWifiUrl && styles.presetChipActive,
+                      ]}
+                      onPress={() => {
+                        setServerUrl(localWifiUrl);
+                        setTestResult(null);
+                      }}
+                      activeOpacity={0.7}
+                    >
+                      <Ionicons
+                        name="wifi-outline"
+                        size={14}
+                        color={serverUrl === localWifiUrl ? '#FFFFFF' : Colors.primary}
+                      />
+                      <Text
+                        style={[
+                          styles.presetChipText,
+                          serverUrl === localWifiUrl && styles.presetChipTextActive,
+                        ]}
+                      >
+                        Wi-Fi local (PC)
+                      </Text>
+                    </TouchableOpacity>
+                  ) : null}
+                </View>
+              </>
+            )}
 
             {/* Test Feedback Result */}
             {testResult && (
@@ -221,10 +254,10 @@ export default function ServerConfigModal({
             </View>
           </View>
         </SafeAreaView>
-      </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
-};
+}
 
 const styles = StyleSheet.create({
   modalOverlay: {

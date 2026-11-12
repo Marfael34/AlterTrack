@@ -206,147 +206,147 @@ export const AddCompanyScreen: React.FC<AddCompanyScreenProps> = ({
           contentContainerStyle={styles.scrollContent}
           keyboardDismissMode="on-drag"
         >
-        {/* Raccourci import tableur */}
-        <TouchableOpacity
-          style={[styles.importBanner, importing && styles.buttonDisabled]}
-          onPress={handlePickAndImportSpreadsheet}
-          disabled={importing}
-          activeOpacity={0.8}
-        >
-          {importing ? (
-            <ActivityIndicator color={Colors.primary} size="small" />
-          ) : (
-            <>
-              <View style={styles.importIconCircle}>
-                <Ionicons name="document-text-outline" size={20} color={Colors.primary} />
-              </View>
-              <View style={styles.importBannerTextContainer}>
-                <Text style={styles.importBannerTitle}>
-                  Importer depuis un tableur
-                </Text>
-                <Text style={styles.importBannerSubtitle}>
-                  Fichier Excel (.xlsx, .xls) ou CSV en 1 clic
-                </Text>
-              </View>
-              <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} />
-            </>
-          )}
-        </TouchableOpacity>
+          {/* Raccourci import tableur */}
+          <TouchableOpacity
+            style={[styles.importBanner, importing && styles.buttonDisabled]}
+            onPress={handlePickAndImportSpreadsheet}
+            disabled={importing}
+            activeOpacity={0.8}
+          >
+            {importing ? (
+              <ActivityIndicator color={Colors.primary} size="small" />
+            ) : (
+              <>
+                <View style={styles.importIconCircle}>
+                  <Ionicons name="document-text-outline" size={20} color={Colors.primary} />
+                </View>
+                <View style={styles.importBannerTextContainer}>
+                  <Text style={styles.importBannerTitle}>
+                    Importer depuis un tableur
+                  </Text>
+                  <Text style={styles.importBannerSubtitle}>
+                    Fichier Excel (.xlsx, .xls) ou CSV en 1 clic
+                  </Text>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} />
+              </>
+            )}
+          </TouchableOpacity>
 
-        <View style={styles.dividerRow}>
-          <View style={styles.dividerLine} />
-          <Text style={styles.dividerText}>OU SAISIE MANUELLE</Text>
-          <View style={styles.dividerLine} />
-        </View>
+          <View style={styles.dividerRow}>
+            <View style={styles.dividerLine} />
+            <Text style={styles.dividerText}>OU SAISIE MANUELLE</Text>
+            <View style={styles.dividerLine} />
+          </View>
 
-        <Text style={styles.fieldLabel}>Nom de l'entreprise *</Text>
-        <CenteredTextInput
-          style={styles.input}
-          value={name}
-          onChangeText={setName}
-          placeholder="Ex: Capgemini, Thales, Startup..."
-          placeholderTextColor={Colors.textMuted}
-          autoFocus
-        />
+          <Text style={styles.fieldLabel}>Nom de l'entreprise *</Text>
+          <CenteredTextInput
+            style={styles.input}
+            value={name}
+            onChangeText={setName}
+            placeholder="Ex: Capgemini, Thales, Startup..."
+            placeholderTextColor={Colors.textMuted}
+            autoFocus
+          />
 
-        <AddressFieldAssistant
-          address={address}
-          city={city}
-          latitude={latitude}
-          longitude={longitude}
-          onChangeAddress={setAddress}
-          onChangeCity={setCity}
-          onChangeCoordinates={({ latitude: lat, longitude: lng }) => {
-            setLatitude(lat);
-            setLongitude(lng);
-          }}
-          refPoint={refPoint}
-        />
+          <AddressFieldAssistant
+            address={address}
+            city={city}
+            latitude={latitude}
+            longitude={longitude}
+            onChangeAddress={setAddress}
+            onChangeCity={setCity}
+            onChangeCoordinates={({ latitude: lat, longitude: lng }) => {
+              setLatitude(lat);
+              setLongitude(lng);
+            }}
+            refPoint={refPoint}
+          />
 
-        <Text style={styles.fieldLabel}>Adresse e-mail de contact *</Text>
-        <CenteredTextInput
-          style={styles.input}
-          value={email}
-          onChangeText={setEmail}
-          placeholder="Ex: rh@entreprise.com"
-          placeholderTextColor={Colors.textMuted}
-          keyboardType="email-address"
-          autoCapitalize="none"
-        />
+          <Text style={styles.fieldLabel}>Adresse e-mail de contact *</Text>
+          <CenteredTextInput
+            style={styles.input}
+            value={email}
+            onChangeText={setEmail}
+            placeholder="Ex: rh@entreprise.com"
+            placeholderTextColor={Colors.textMuted}
+            keyboardType="email-address"
+            autoCapitalize="none"
+          />
 
-        <Text style={styles.fieldLabel}>Numéro de téléphone</Text>
-        <CenteredTextInput
-          style={styles.input}
-          value={phone}
-          onChangeText={setPhone}
-          placeholder="Ex: 06 12 34 56 78 (pour l'étape d'appel)"
-          placeholderTextColor={Colors.textMuted}
-          keyboardType="phone-pad"
-        />
+          <Text style={styles.fieldLabel}>Numéro de téléphone</Text>
+          <CenteredTextInput
+            style={styles.input}
+            value={phone}
+            onChangeText={setPhone}
+            placeholder="Ex: 06 12 34 56 78 (pour l'étape d'appel)"
+            placeholderTextColor={Colors.textMuted}
+            keyboardType="phone-pad"
+          />
 
-        {/* Sélecteur de statut initial */}
-        <Text style={styles.fieldLabel}>Statut initial</Text>
-        <View style={styles.statusChipsContainer}>
-          {STATUS_CHOICES.map((choice) => {
-            const isSelected = status === choice.key;
-            return (
-              <TouchableOpacity
-                key={choice.key}
-                style={[
-                  styles.statusChip,
-                  isSelected && {
-                    backgroundColor: `${choice.color}25`,
-                    borderColor: choice.color,
-                  },
-                ]}
-                onPress={() => setStatus(choice.key)}
-                activeOpacity={0.7}
-              >
-                <View
+          {/* Sélecteur de statut initial */}
+          <Text style={styles.fieldLabel}>Statut initial</Text>
+          <View style={styles.statusChipsContainer}>
+            {STATUS_CHOICES.map((choice) => {
+              const isSelected = status === choice.key;
+              return (
+                <TouchableOpacity
+                  key={choice.key}
                   style={[
-                    styles.statusDot,
-                    { backgroundColor: choice.color },
+                    styles.statusChip,
+                    isSelected && {
+                      backgroundColor: `${choice.color}25`,
+                      borderColor: choice.color,
+                    },
                   ]}
-                />
-                <Text
-                  style={[
-                    styles.statusChipText,
-                    isSelected && { color: '#FFFFFF', fontWeight: '700' },
-                  ]}
+                  onPress={() => setStatus(choice.key)}
+                  activeOpacity={0.7}
                 >
-                  {choice.label}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
+                  <View
+                    style={[
+                      styles.statusDot,
+                      { backgroundColor: choice.color },
+                    ]}
+                  />
+                  <Text
+                    style={[
+                      styles.statusChipText,
+                      isSelected && { color: '#FFFFFF', fontWeight: '700' },
+                    ]}
+                  >
+                    {choice.label}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
 
-        <Text style={styles.fieldLabel}>Note / Description personnelle</Text>
-        <CenteredTextInput
-          style={[styles.input, styles.textArea]}
-          value={notes}
-          onChangeText={setNotes}
-          placeholder="Texte libre strictement personnel (non transmis à l'IA)..."
-          placeholderTextColor={Colors.textMuted}
-          multiline
-          numberOfLines={4}
-          textAlignVertical="top"
-        />
+          <Text style={styles.fieldLabel}>Note / Description personnelle</Text>
+          <CenteredTextInput
+            style={[styles.input, styles.textArea]}
+            value={notes}
+            onChangeText={setNotes}
+            placeholder="Texte libre strictement personnel (non transmis à l'IA)..."
+            placeholderTextColor={Colors.textMuted}
+            multiline
+            numberOfLines={4}
+            textAlignVertical="top"
+          />
 
-        <TouchableOpacity
-          style={[styles.createButton, loading && styles.buttonDisabled]}
-          onPress={handleCreate}
-          disabled={loading}
-          activeOpacity={0.8}
-        >
-          {loading ? (
-            <ActivityIndicator color="#FFFFFF" size="small" />
-          ) : (
-            <Text style={styles.createButtonText}>Créer la fiche entreprise</Text>
-          )}
-        </TouchableOpacity>
-      </KeyboardAwareCenteredScrollView>
-    </KeyboardAvoidingView>
+          <TouchableOpacity
+            style={[styles.createButton, loading && styles.buttonDisabled]}
+            onPress={handleCreate}
+            disabled={loading}
+            activeOpacity={0.8}
+          >
+            {loading ? (
+              <ActivityIndicator color="#FFFFFF" size="small" />
+            ) : (
+              <Text style={styles.createButtonText}>Créer la fiche entreprise</Text>
+            )}
+          </TouchableOpacity>
+        </KeyboardAwareCenteredScrollView>
+      </KeyboardAvoidingView>
 
       {/* Barre d'action rapide pour fermer le clavier */}
       {isKeyboardVisible && (

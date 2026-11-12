@@ -77,7 +77,7 @@ export const KeyboardAwareCenteredScrollView = forwardRef<
   KeyboardAwareCenteredScrollViewProps
 >(({ extraBottomPadding = 40, topOffset = 0, style, contentContainerStyle, children, onScroll, ...props }, ref) => {
   const containerRef = useRef<View>(null);
-  const innerScrollRef = useRef<ScrollView>(null);
+  const innerScrollRef = useRef<any>(null);
   const scrollOffsetRef = useRef<number>(0);
   const [keyboardHeight, setKeyboardHeight] = useState<number>(0);
   const keyboardHeightRef = useRef<number>(0);
@@ -252,7 +252,7 @@ export const KeyboardAwareCenteredScrollView = forwardRef<
         handleFocus,
       }}
     >
-      <View ref={containerRef} style={[styles.wrapper, style]}>
+      <View ref={containerRef as any} style={[styles.wrapper, style]}>
         <ScrollView
           ref={innerScrollRef}
           {...props}
@@ -295,7 +295,7 @@ export const CenteredTextInput = forwardRef<TextInput, TextInputProps>(
       }
     };
 
-    return <TextInput ref={innerRef} {...props} onFocus={handleFocus} />;
+    return <TextInput ref={innerRef as any} {...props} onFocus={handleFocus} />;
   },
 );
 
@@ -309,4 +309,3 @@ const styles = StyleSheet.create({
     flex: 1,
   },
 });
-
