@@ -1,17 +1,19 @@
-import React, { useState } from 'react';
+import { Ionicons } from '@expo/vector-icons';
+import React, { useState, useEffect } from 'react';
 import {
-  View,
+  ActivityIndicator,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  SafeAreaView,
+  StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
-  StyleSheet,
-  Modal,
-  KeyboardAvoidingView,
-  Platform,
+  View,
 } from 'react-native';
 import { Colors } from '../constants/colors';
 import { StorageService } from '../services/storage.service';
-import { CenteredTextInput } from './KeyboardAwareCenteredScrollView';
 
 interface ServerConfigModalProps {
   visible: boolean;
@@ -26,13 +28,38 @@ export default function ServerConfigModal({
   currentUrl,
   onSave,
 }: ServerConfigModalProps) {
-  const [url, setUrl] = useState(currentUrl);
+  const [serverUrl, setServerUrl] = useState(currentUrl);
+  const [tunnelUrl, setTunnelUrl] = useState<string | null>(null);
+  const [localWifiUrl, setLocalWifiUrl] = useState<string | null>(null);
   const [testing, setTesting] = useState(false);
-  const [testResult, setTestResult] = useState<'success' | 'error' | null>(null);
+  const [testResult, setTestResult] = useState<{
+    success: boolean;
+    message: string;
+  } | null>(null);
 
-  const handleTestConnection = async () => {
+  useEffect(() => {
+    if (visible) {
+      setServerUrl(currentUrl);
+      setTestResult(null);
+      // Récupération des URLs de secours enregistrées
+      setTunnelUrl(StorageService.getTunnelUrl());
+      setLocalWifiUrl(StorageService.getLocalWifiUrl());
+    }
+  }, [visible, currentUrl]);
+
+  const handleTestAndSave = async () => {
+    const cleanUrl = serverUrl.trim().replace(/\/+$/, '');
+    if (!cleanUrl) {
+      setTestResult({
+        success: false,
+        message: 'Veuillez entrer une URL valide.',
+      });
+      return;
+    }
+
     setTesting(true);
     setTestResult(null);
+
     try {
       await StorageService.setServerUrl(cleanUrl);
       const response = await fetch(`${cleanUrl}/health`, {
@@ -50,9 +77,8 @@ export default function ServerConfigModal({
         success: true,
         message: `Connexion réussie ! API : ${health.status} | Base : ${health.database}`,
       });
-      if (onSaved) {
-        onSaved(cleanUrl);
-      }
+
+      onSave(cleanUrl);
     } catch (err: any) {
       setTestResult({
         success: false,
@@ -69,72 +95,165 @@ export default function ServerConfigModal({
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.modalOverlay}
       >
-        <View style={styles.modalContent}>
-          
-          <View style={styles.modalHeader}>
-            <View style={styles.headerTitleRow}>
-              <Ionicons name="server-outline" size={20} color="#6366F1" style={{ marginRight: 8 }} />
-              <Text style={styles.modalTitle}>Configuration API</Text>
+        <SafeAreaView style={styles.modalContainer}>
+          <View style={styles.modalCard}>
+            <View style={styles.header}>
+              <View style={styles.headerTitleRow}>
+                <Ionicons name="server-outline" size={20} color="#6366F1" />
+                <Text style={styles.headerTitle}>Configuration API</Text>
+              </View>
+              <TouchableOpacity
+                style={styles.closeButton}
+                onPress={onClose}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="close" size={20} color={Colors.textSecondary} />
+              </TouchableOpacity>
             </View>
-            <TouchableOpacity onPress={onClose} activeOpacity={0.7}>
-              <Ionicons name="close" size={22} color="#94A3B8" />
-            </TouchableOpacity>
-          </View>
 
-          <Text style={styles.modalDescription}>
-            Définissez l'URL de votre backend NestJS pour synchroniser vos candidatures en temps réel.
-          </Text>
+            <Text style={styles.subtitle}>
+              Définissez l'URL de votre backend NestJS pour synchroniser vos candidatures en temps réel.
+            </Text>
 
-          <View style={styles.inputContainer}>
-            <Text style={styles.inputLabel}>URL du Serveur</Text>
+            <Text style={styles.label}>URL du Serveur</Text>
             <TextInput
               style={styles.input}
-              value={url}
-              onChangeText={setUrl}
-              placeholder="https://api.altertrack.render.com"
-              placeholderTextColor="#475569"
+              value={serverUrl}
+              onChangeText={(text) => {
+                setServerUrl(text);
+                setTestResult(null);
+              }}
+              placeholder="https://...trycloudflare.com ou http://192.168.x.y:3000"
+              placeholderTextColor={Colors.textMuted}
               autoCapitalize="none"
               autoCorrect={false}
             />
-          </View>
 
-          {testResult === 'success' && (
-            <View style={[styles.alertBox, { backgroundColor: 'rgba(16, 185, 129, 0.15)', borderColor: '#10B981' }]}>
-              <Ionicons name="checkmark-circle" size={18} color="#10B981" />
-              <Text style={[styles.alertText, { color: '#10B981' }]}>Connexion au serveur établie avec succès !</Text>
+            {/* Quick Presets */}
+            {(tunnelUrl || localWifiUrl) && (
+              <>
+                <Text style={styles.subLabel}>Raccourcis rapides :</Text>
+                <View style={styles.presetsRow}>
+                  {tunnelUrl ? (
+                    <TouchableOpacity
+                      style={[
+                        styles.presetChip,
+                        serverUrl === tunnelUrl && styles.presetChipActive,
+                      ]}
+                      onPress={() => {
+                        setServerUrl(tunnelUrl);
+                        setTestResult(null);
+                      }}
+                      activeOpacity={0.7}
+                    >
+                      <Ionicons
+                        name="globe-outline"
+                        size={14}
+                        color={serverUrl === tunnelUrl ? '#FFFFFF' : Colors.brandCyan}
+                      />
+                      <Text
+                        style={[
+                          styles.presetChipText,
+                          serverUrl === tunnelUrl && styles.presetChipTextActive,
+                        ]}
+                      >
+                        Tunnel 4G/5G
+                      </Text>
+                    </TouchableOpacity>
+                  ) : null}
+
+                  {localWifiUrl ? (
+                    <TouchableOpacity
+                      style={[
+                        styles.presetChip,
+                        serverUrl === localWifiUrl && styles.presetChipActive,
+                      ]}
+                      onPress={() => {
+                        setServerUrl(localWifiUrl);
+                        setTestResult(null);
+                      }}
+                      activeOpacity={0.7}
+                    >
+                      <Ionicons
+                        name="wifi-outline"
+                        size={14}
+                        color={serverUrl === localWifiUrl ? '#FFFFFF' : Colors.primary}
+                      />
+                      <Text
+                        style={[
+                          styles.presetChipText,
+                          serverUrl === localWifiUrl && styles.presetChipTextActive,
+                        ]}
+                      >
+                        Wi-Fi local (PC)
+                      </Text>
+                    </TouchableOpacity>
+                  ) : null}
+                </View>
+              </>
+            )}
+
+            {/* Test Feedback Result */}
+            {testResult && (
+              <View
+                style={[
+                  styles.resultBox,
+                  testResult.success ? styles.resultSuccess : styles.resultError,
+                ]}
+              >
+                <Ionicons
+                  name={
+                    testResult.success
+                      ? 'checkmark-circle-outline'
+                      : 'alert-circle-outline'
+                  }
+                  size={20}
+                  color={testResult.success ? Colors.success : Colors.danger}
+                />
+                <Text
+                  style={[
+                    styles.resultText,
+                    testResult.success
+                      ? styles.resultTextSuccess
+                      : styles.resultTextError,
+                  ]}
+                >
+                  {testResult.message}
+                </Text>
+              </View>
+            )}
+
+            {/* Actions */}
+            <View style={styles.actionsRow}>
+              <TouchableOpacity
+                style={styles.cancelBtn}
+                onPress={onClose}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.cancelBtnText}>Fermer</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[
+                  styles.saveBtn,
+                  testing && styles.saveBtnDisabled,
+                ]}
+                onPress={handleTestAndSave}
+                disabled={testing}
+                activeOpacity={0.8}
+              >
+                {testing ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <>
+                    <Ionicons name="flash-outline" size={16} color="#FFFFFF" />
+                    <Text style={styles.saveBtnText}>Tester & Enregistrer</Text>
+                  </>
+                )}
+              </TouchableOpacity>
             </View>
-          )}
-
-          {testResult === 'error' && (
-            <View style={[styles.alertBox, { backgroundColor: 'rgba(239, 68, 68, 0.15)', borderColor: '#EF4444' }]}>
-              <Ionicons name="alert-circle" size={18} color="#EF4444" />
-              <Text style={[styles.alertText, { color: '#EF4444' }]}>Impossible de joindre le serveur.</Text>
-            </View>
-          )}
-
-          <View style={styles.buttonRow}>
-            <TouchableOpacity
-              style={styles.testButton}
-              onPress={handleTestConnection}
-              disabled={testing}
-              activeOpacity={0.8}
-            >
-              <Text style={styles.testButtonText}>{testing ? 'Test en cours...' : 'Tester'}</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.saveButton}
-              onPress={() => {
-                onSave(url);
-                onClose();
-              }}
-              activeOpacity={0.8}
-            >
-              <Text style={styles.saveButtonText}>Enregistrer</Text>
-            </TouchableOpacity>
           </View>
-
-        </View>
+        </SafeAreaView>
       </KeyboardAvoidingView>
     </Modal>
   );
@@ -145,97 +264,168 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.75)',
     justifyContent: 'center',
-    padding: 20,
+    padding: 16,
   },
-  modalContent: {
-    backgroundColor: '#111827',
-    borderRadius: 16,
-    padding: 20,
+  modalContainer: {
+    width: '100%',
+    maxWidth: 520,
+    alignSelf: 'center',
+  },
+  modalCard: {
+    backgroundColor: Colors.cardBackground,
+    borderRadius: 20,
+    padding: 22,
     borderWidth: 1,
-    borderColor: '#1F2937',
+    borderColor: Colors.border,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.35,
+    shadowRadius: 10,
+    elevation: 8,
   },
-  modalHeader: {
+  header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: 8,
   },
   headerTitleRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 10,
   },
-  modalTitle: {
+  headerTitle: {
     fontSize: 18,
-    fontWeight: '600',
-    color: '#F8FAFC',
+    fontWeight: '700',
+    color: Colors.text,
   },
-  modalDescription: {
+  closeButton: {
+    padding: 6,
+    borderRadius: 10,
+    backgroundColor: Colors.surface,
+  },
+  subtitle: {
     fontSize: 13,
-    color: '#94A3B8',
-    marginBottom: 20,
+    color: Colors.textSecondary,
+    marginBottom: 18,
     lineHeight: 18,
   },
-  inputContainer: {
-    marginBottom: 16,
-  },
-  inputLabel: {
-    fontSize: 12,
-    fontWeight: '500',
-    color: '#94A3B8',
+  label: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: Colors.textSecondary,
     marginBottom: 6,
   },
+  subLabel: {
+    fontSize: 12,
+    color: Colors.textMuted,
+    marginBottom: 8,
+    marginTop: 4,
+  },
   input: {
-    backgroundColor: '#1F2937',
+    backgroundColor: Colors.surface,
+    borderColor: Colors.border,
     borderWidth: 1,
-    borderColor: '#374151',
     borderRadius: 12,
     paddingHorizontal: 14,
     paddingVertical: 12,
-    color: '#F8FAFC',
+    color: Colors.text,
     fontSize: 14,
+    marginBottom: 10,
   },
-  alertBox: {
+  presetsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 16,
+  },
+  presetChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 12,
+    gap: 6,
+    backgroundColor: Colors.surface,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
     borderRadius: 10,
     borderWidth: 1,
-    marginBottom: 16,
-    gap: 8,
+    borderColor: Colors.border,
   },
-  alertText: {
-    fontSize: 13,
+  presetChipActive: {
+    backgroundColor: Colors.surfaceHighlight,
+    borderColor: Colors.brandCyan,
+  },
+  presetChipText: {
+    fontSize: 12,
+    color: Colors.textSecondary,
     fontWeight: '500',
   },
-  buttonRow: {
+  presetChipTextActive: {
+    color: Colors.brandCyan,
+    fontWeight: '700',
+  },
+  resultBox: {
     flexDirection: 'row',
-    gap: 12,
-    marginTop: 4,
-  },
-  testButton: {
-    flex: 1,
-    backgroundColor: '#1F2937',
-    paddingVertical: 12,
-    borderRadius: 12,
     alignItems: 'center',
+    gap: 10,
+    padding: 12,
+    borderRadius: 12,
+    marginBottom: 16,
+  },
+  resultSuccess: {
+    backgroundColor: 'rgba(0, 240, 153, 0.1)',
     borderWidth: 1,
-    borderColor: '#374151',
+    borderColor: 'rgba(0, 240, 153, 0.3)',
   },
-  testButtonText: {
-    color: '#E2E8F0',
-    fontWeight: '600',
-    fontSize: 14,
+  resultError: {
+    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(239, 68, 68, 0.3)',
   },
-  saveButton: {
+  resultText: {
+    fontSize: 13,
     flex: 1,
-    backgroundColor: '#6366F1',
+  },
+  resultTextSuccess: {
+    color: Colors.success,
+  },
+  resultTextError: {
+    color: Colors.danger,
+  },
+  actionsRow: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 10,
+    marginTop: 6,
+  },
+  cancelBtn: {
+    paddingHorizontal: 16,
     paddingVertical: 12,
     borderRadius: 12,
+    backgroundColor: Colors.surface,
+    justifyContent: 'center',
     alignItems: 'center',
   },
-  saveButtonText: {
-    color: '#FFFFFF',
-    fontWeight: '600',
+  cancelBtnText: {
+    color: Colors.textSecondary,
     fontSize: 14,
+    fontWeight: '600',
+  },
+  saveBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 18,
+    paddingVertical: 12,
+    borderRadius: 12,
+    backgroundColor: Colors.primary,
+    justifyContent: 'center',
+  },
+  saveBtnDisabled: {
+    opacity: 0.6,
+  },
+  saveBtnText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '700',
   },
 });

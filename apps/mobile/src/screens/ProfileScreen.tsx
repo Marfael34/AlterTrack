@@ -1,13 +1,18 @@
-import React, { useState } from 'react';
+import { Ionicons } from '@expo/vector-icons';
+import Constants from 'expo-constants';
+import React, { useEffect, useState } from 'react';
 import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  SafeAreaView,
-  StatusBar,
-  Switch,
+  ActivityIndicator,
+  KeyboardAvoidingView,
+  Linking,
+  Modal,
+  Platform,
+  RefreshControl,
   ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 import {
   CenteredTextInput,
@@ -22,8 +27,10 @@ import { LocationService, ReferencePoint } from '../services/location.service';
 import { StorageService, formatStandardCvName } from '../services/storage.service';
 import { CompanyStats } from '../types/company';
 
-interface SettingsScreenProps {
-  navigation: any;
+interface ProfileScreenProps {
+  onOpenSettings: () => void;
+  refPoint?: ReferencePoint | null;
+  onUpdateRefPoint?: (point: ReferencePoint | null) => void;
 }
 
 export const ProfileScreen: React.FC<ProfileScreenProps> = ({
@@ -31,7 +38,8 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
   refPoint: propRefPoint,
   onUpdateRefPoint,
 }) => {
-  const { user, updateProfile, refreshProfile, logout } = useAuth();
+  const { user, updateProfile, refreshProfile } = useAuth();
+  const appVersion = Constants.expoConfig?.version ?? '1.0.0';
 
   const [stats, setStats] = useState<CompanyStats | null>(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -170,23 +178,6 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
     );
   };
 
-  const handleLogout = () => {
-    Alert.alert(
-      'Déconnexion',
-      'Êtes-vous certain de vouloir vous déconnecter d\'AlterTrack ?',
-      [
-        { text: 'Annuler', style: 'cancel' },
-        {
-          text: 'Se déconnecter',
-          style: 'destructive',
-          onPress: async () => {
-            await logout();
-          },
-        },
-      ],
-    );
-  };
-
   // Calcul des initiales pour l'avatar
   const getInitials = (name?: string | null, email?: string): string => {
     if (name && name.trim().length > 0) {
@@ -216,31 +207,65 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
     : 0;
 
   return (
-    <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor="#0B0F19" />
-      
+    <View style={styles.container}>
+      {/* Header supérieur */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton} activeOpacity={0.7}>
-          <Ionicons name="arrow-back" size={20} color="#F8FAFC" />
+        <Text style={styles.headerTitle}>Mon Profil</Text>
+        <TouchableOpacity
+          style={styles.headerIconBtn}
+          onPress={onOpenSettings}
+          accessibilityLabel="Ouvrir les paramètres"
+        >
+          <Ionicons name="settings-outline" size={22} color={Colors.text} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Paramètres</Text>
-        <View style={{ width: 40 }} />
       </View>
 
-      <ScrollView contentContainerStyle={styles.content}>
-        <Text style={styles.sectionHeader}>Préférences</Text>
-        
-        <View style={styles.settingItem}>
-          <View style={styles.settingInfo}>
-            <Ionicons name="notifications-outline" size={20} color="#6366F1" style={{ marginRight: 12 }} />
-            <Text style={styles.settingText}>Notifications Push</Text>
-          </View>
-          <Switch
-            value={notificationsEnabled}
-            onValueChange={setNotificationsEnabled}
-            trackColor={{ false: '#1F2937', true: '#6366F1' }}
-            thumbColor="#F8FAFC"
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            tintColor={Colors.brandCyan}
+            colors={[Colors.brandCyan]}
           />
+        }
+      >
+        {/* CARTE HERO UTILISATEUR */}
+        <View style={styles.heroCard}>
+          <View style={styles.avatarRow}>
+            <View style={styles.avatarCircle}>
+              <Text style={styles.avatarText}>
+                {getInitials(user?.fullName, user?.email)}
+              </Text>
+              <View style={styles.avatarOnlineDot} />
+            </View>
+
+            <View style={styles.heroInfo}>
+              <View style={styles.nameRow}>
+                <Text style={styles.userName} numberOfLines={1}>
+                  {user?.fullName || 'Candidat Alternance'}
+                </Text>
+                <TouchableOpacity
+                  style={styles.editPill}
+                  onPress={handleOpenEditModal}
+                  accessibilityLabel="Modifier le profil"
+                >
+                  <Ionicons name="pencil" size={12} color={Colors.brandCyan} />
+                  <Text style={styles.editPillText}>Modifier</Text>
+                </TouchableOpacity>
+              </View>
+
+              <Text style={styles.userEmail} numberOfLines={1}>
+                {user?.email}
+              </Text>
+
+              <View style={styles.statusBadge}>
+                <View style={styles.statusDot} />
+                <Text style={styles.statusText}>Compte Alternant Actif</Text>
+              </View>
+            </View>
+          </View>
         </View>
 
         {/* ACCÈS CENTRAL AUX PARAMÈTRES */}
@@ -248,7 +273,8 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
           style={styles.settingsBannerCard}
           onPress={onOpenSettings}
           activeOpacity={0.7}
-          onPress={() => navigation.navigate('ServerConfig' as any)}
+          accessibilityRole="button"
+          accessibilityLabel="Accéder aux paramètres de l'application"
         >
           <View style={styles.settingsBannerIconWrapper}>
             <Ionicons name="settings-sharp" size={24} color={Colors.brandCyan} />
@@ -264,7 +290,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
               Modèle de mail IA, serveur, notifications, tests d'envoi & export
             </Text>
           </View>
-          <Ionicons name="chevron-forward" size={18} color="#64748B" />
+          <Ionicons name="chevron-forward" size={22} color={Colors.textSecondary} />
         </TouchableOpacity>
 
         {/* MINI DASHBOARD STATISTIQUES */}
@@ -422,45 +448,9 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
           </View>
         </View>
 
-        {/* SÉCURITÉ & SESSION */}
-        <View style={styles.sectionHeader}>
-          <Ionicons name="shield-checkmark-outline" size={18} color={Colors.brandCyan} />
-          <Text style={styles.sectionTitle}>Session & Sécurité</Text>
-        </View>
-
-        <View style={styles.card}>
-          <TouchableOpacity
-            style={styles.menuRow}
-            onPress={onOpenSettings}
-            activeOpacity={0.7}
-          >
-            <View style={styles.menuRowLeft}>
-              <Ionicons name="options-outline" size={20} color={Colors.textSecondary} />
-              <Text style={styles.menuRowText}>Toutes les options de l'application</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} />
-          </TouchableOpacity>
-
-          <View style={styles.divider} />
-
-          <TouchableOpacity
-            style={styles.menuRow}
-            onPress={handleLogout}
-            activeOpacity={0.7}
-          >
-            <View style={styles.menuRowLeft}>
-              <Ionicons name="log-out-outline" size={20} color={Colors.danger} />
-              <Text style={[styles.menuRowText, { color: Colors.danger }]}>
-                Se déconnecter
-              </Text>
-            </View>
-            <Ionicons name="chevron-forward" size={18} color={Colors.danger} />
-          </TouchableOpacity>
-        </View>
-
         {/* VERSION */}
         <View style={styles.footer}>
-          <Text style={styles.footerText}>AlterTrack Mobile • v1.0.0</Text>
+          <Text style={styles.footerText}>AlterTrack Mobile • v{appVersion}</Text>
           <Text style={styles.footerSubText}>
             Plateforme optimisée pour la recherche d'alternance
           </Text>
@@ -478,45 +468,323 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
           style={styles.modalOverlay}
         >
-          <View style={styles.settingInfo}>
-            <Ionicons name="log-out-outline" size={20} color="#EF4444" style={{ marginRight: 12 }} />
-            <Text style={[styles.settingText, { color: '#EF4444' }]}>Se déconnecter</Text>
+          <View style={styles.modalContainer}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Modifier mon profil</Text>
+              <TouchableOpacity
+                onPress={() => setIsEditModalOpen(false)}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <Ionicons name="close" size={24} color={Colors.textSecondary} />
+              </TouchableOpacity>
+            </View>
+
+            <KeyboardAwareCenteredScrollView contentContainerStyle={styles.modalBody}>
+              <Text style={styles.inputLabel}>Nom complet (Prénom et Nom)</Text>
+              <CenteredTextInput
+                style={styles.textInput}
+                value={editFullName}
+                onChangeText={setEditFullName}
+                placeholder="ex: Raphael Martinez"
+                placeholderTextColor={Colors.textMuted}
+                autoCapitalize="words"
+              />
+              <Text style={styles.inputHint}>
+                Ce nom est automatiquement utilisé pour standardiser le fichier de votre CV (ex: martinez_raphael_CV.pdf).
+              </Text>
+
+              <Text style={[styles.inputLabel, { marginTop: 16 }]}>
+                Adresse Gmail d'envoi
+              </Text>
+              <CenteredTextInput
+                style={styles.textInput}
+                value={editGmailUser}
+                onChangeText={setEditGmailUser}
+                placeholder="votre.email@gmail.com"
+                placeholderTextColor={Colors.textMuted}
+                autoCapitalize="none"
+                keyboardType="email-address"
+              />
+
+              <Text style={[styles.inputLabel, { marginTop: 16 }]}>
+                Mot de passe d'application Google (16 caractères)
+              </Text>
+              <View style={styles.passwordWrapper}>
+                <CenteredTextInput
+                  style={[styles.textInput, { flex: 1, marginBottom: 0 }]}
+                  value={editGmailAppPassword}
+                  onChangeText={setEditGmailAppPassword}
+                  placeholder={user?.hasGmailAppPassword ? '•••• •••• •••• •••• (inchangé)' : 'abcd efgh ijkl mnop'}
+                  placeholderTextColor={Colors.textMuted}
+                  secureTextEntry={!showGmailPassword}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                />
+                <TouchableOpacity
+                  style={styles.eyeBtn}
+                  onPress={() => setShowGmailPassword(!showGmailPassword)}
+                >
+                  <Ionicons
+                    name={showGmailPassword ? 'eye-off' : 'eye'}
+                    size={20}
+                    color={Colors.textSecondary}
+                  />
+                </TouchableOpacity>
+              </View>
+              <Text style={styles.inputHint}>
+                Générez ce mot de passe dans votre compte Google (Sécurité &gt; Mots de passe d'application).
+              </Text>
+
+              <View style={styles.modalButtonsRow}>
+                <TouchableOpacity
+                  style={styles.modalCancelBtn}
+                  onPress={() => setIsEditModalOpen(false)}
+                >
+                  <Text style={styles.modalCancelBtnText}>Annuler</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.modalSaveBtn}
+                  onPress={handleSaveProfile}
+                  disabled={savingProfile}
+                >
+                  {savingProfile ? (
+                    <ActivityIndicator size="small" color="#0B0F19" />
+                  ) : (
+                    <Text style={styles.modalSaveBtnText}>Enregistrer</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+            </KeyboardAwareCenteredScrollView>
           </View>
-        </TouchableOpacity>
-      </ScrollView>
-    </SafeAreaView>
+        </KeyboardAvoidingView>
+      </Modal>
+
+      {/* MODAL ADRESSE DE RÉFÉRENCE */}
+      <ReferencePointModal
+        visible={isRefPointModalOpen}
+        onClose={() => setIsRefPointModalOpen(false)}
+        currentPoint={refPoint}
+        onSave={(point) => {
+          setRefPoint(point);
+          if (onUpdateRefPoint) onUpdateRefPoint(point);
+          setIsRefPointModalOpen(false);
+        }}
+      />
+    </View>
   );
-}
+};
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0B0F19',
+    backgroundColor: Colors.background,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingVertical: 14,
+    paddingHorizontal: 18,
+    paddingTop: Platform.OS === 'ios' ? 12 : 16,
+    paddingBottom: 14,
     borderBottomWidth: 1,
-    borderBottomColor: '#1F2937',
-  },
-  backButton: {
-    backgroundColor: '#1E293B',
-    padding: 8,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: '#334155',
+    borderBottomColor: Colors.border,
+    backgroundColor: Colors.cardBackground,
   },
   headerTitle: {
-    fontSize: 17,
+    fontSize: 20,
+    fontWeight: '800',
+    color: Colors.text,
+    letterSpacing: 0.3,
+  },
+  headerIconBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: Colors.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  scrollContent: {
+    padding: 16,
+    paddingBottom: 32,
+  },
+
+  // CARTE HERO
+  heroCard: {
+    backgroundColor: Colors.cardBackground,
+    borderRadius: 16,
+    padding: 18,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    marginBottom: 16,
+    ...(Platform.OS === 'web'
+      ? { boxShadow: '0 4px 16px rgba(0, 0, 0, 0.3)' }
+      : {
+          elevation: 3,
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: 2 },
+          shadowOpacity: 0.2,
+          shadowRadius: 4,
+        }),
+  },
+  avatarRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  avatarCircle: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: Colors.brandCyan + '25',
+    borderWidth: 2,
+    borderColor: Colors.brandCyan,
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
+    marginRight: 16,
+  },
+  avatarText: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: Colors.brandCyan,
+    letterSpacing: 1,
+  },
+  avatarOnlineDot: {
+    position: 'absolute',
+    bottom: 2,
+    right: 2,
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    backgroundColor: Colors.brandGreen,
+    borderWidth: 2,
+    borderColor: Colors.cardBackground,
+  },
+  heroInfo: {
+    flex: 1,
+  },
+  nameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 4,
+  },
+  userName: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: Colors.text,
+    flex: 1,
+    marginRight: 8,
+  },
+  editPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: Colors.surface,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  editPillText: {
+    fontSize: 11,
     fontWeight: '600',
-    color: '#F8FAFC',
+    color: Colors.brandCyan,
   },
-  content: {
-    padding: 20,
+  userEmail: {
+    fontSize: 13,
+    color: Colors.textSecondary,
+    marginBottom: 8,
   },
+  statusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    alignSelf: 'flex-start',
+    backgroundColor: '#00F09915',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#00F09940',
+  },
+  statusDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: Colors.brandGreen,
+  },
+  statusText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: Colors.brandGreen,
+  },
+
+  // BANNIÈRE ACCÈS PARAMÈTRES
+  settingsBannerCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.surface,
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1.5,
+    borderColor: Colors.brandCyan + '50',
+    marginBottom: 20,
+    ...(Platform.OS === 'web'
+      ? { boxShadow: '0 4px 18px rgba(0, 210, 196, 0.12)' }
+      : {
+          elevation: 4,
+          shadowColor: Colors.brandCyan,
+          shadowOffset: { width: 0, height: 3 },
+          shadowOpacity: 0.15,
+          shadowRadius: 5,
+        }),
+  },
+  settingsBannerIconWrapper: {
+    width: 46,
+    height: 46,
+    borderRadius: 12,
+    backgroundColor: Colors.brandCyan + '20',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 14,
+  },
+  settingsBannerContent: {
+    flex: 1,
+    marginRight: 8,
+  },
+  settingsBannerHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 2,
+  },
+  settingsBannerTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: Colors.text,
+  },
+  settingsBadge: {
+    backgroundColor: Colors.brandCyan + '25',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  settingsBadgeText: {
+    fontSize: 9,
+    fontWeight: '700',
+    color: Colors.brandCyan,
+    textTransform: 'uppercase',
+  },
+  settingsBannerSubtitle: {
+    fontSize: 12,
+    color: Colors.textSecondary,
+    lineHeight: 16,
+  },
+
+  // STATS
   sectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -678,39 +946,122 @@ const styles = StyleSheet.create({
   actionBtnSecondaryText: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#94A3B8',
-    textTransform: 'uppercase',
-    marginBottom: 12,
-    marginTop: 8,
+    color: Colors.text,
   },
-  settingItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+
+  // FOOTER
+  footer: {
     alignItems: 'center',
-    backgroundColor: '#111827',
-    padding: 16,
-    borderRadius: 14,
+    marginTop: 12,
+    marginBottom: 8,
+  },
+  footerText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: Colors.textMuted,
+  },
+  footerSubText: {
+    fontSize: 10,
+    color: Colors.textMuted,
+    marginTop: 2,
+  },
+
+  // MODAL
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.75)',
+    justifyContent: 'flex-end',
+  },
+  modalContainer: {
+    backgroundColor: Colors.cardBackground,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    maxHeight: '85%',
     borderWidth: 1,
-    borderColor: '#1F2937',
-    marginBottom: 12,
+    borderColor: Colors.border,
   },
-  settingRowButton: {
+  modalHeader: {
     flexDirection: 'row',
+    alignItems: 'center',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    backgroundColor: '#111827',
-    padding: 16,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: '#1F2937',
+    padding: 18,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
   },
-  settingInfo: {
+  modalTitle: {
+    fontSize: 17,
+    fontWeight: '700',
+    color: Colors.text,
+  },
+  modalBody: {
+    padding: 18,
+    paddingBottom: 28,
+  },
+  inputLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: Colors.textSecondary,
+    marginBottom: 6,
+  },
+  textInput: {
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 14,
+    color: Colors.text,
+    marginBottom: 4,
+  },
+  passwordWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: 10,
+    marginBottom: 4,
   },
-  settingText: {
-    fontSize: 15,
-    color: '#F8FAFC',
-    fontWeight: '500',
+  eyeBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  inputHint: {
+    fontSize: 11,
+    color: Colors.textMuted,
+    lineHeight: 15,
+  },
+  modalButtonsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginTop: 24,
+  },
+  modalCancelBtn: {
+    flex: 1,
+    backgroundColor: Colors.surface,
+    paddingVertical: 12,
+    borderRadius: 10,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  modalCancelBtnText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: Colors.textSecondary,
+  },
+  modalSaveBtn: {
+    flex: 1,
+    backgroundColor: Colors.brandCyan,
+    paddingVertical: 12,
+    borderRadius: 10,
+    alignItems: 'center',
+  },
+  modalSaveBtnText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#0B0F19',
   },
 });

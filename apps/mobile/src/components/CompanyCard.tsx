@@ -368,11 +368,27 @@ const styles = StyleSheet.create({
   },
   contactText: {
     color: Colors.textSecondary,
+    fontSize: 13,
+    flex: 1,
+  },
+  callButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.status.TO_CALL,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+    gap: 4,
+  },
+  callButtonText: {
+    color: '#FFFFFF',
     fontSize: 12,
+    fontWeight: '700',
   },
   notesPreview: {
     color: Colors.textMuted,
     fontSize: 12,
+    marginTop: 6,
     fontStyle: 'italic',
     marginBottom: 6,
     lineHeight: 16,
