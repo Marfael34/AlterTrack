@@ -1,13 +1,14 @@
 import { Ionicons } from '@expo/vector-icons';
 import React, { useEffect, useState } from 'react';
 import {
-  ActivityIndicator,
-  Image,
-  Linking,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
   View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  SafeAreaView,
+  StatusBar,
+  Switch,
+  ScrollView,
 } from 'react-native';
 import {
   CenteredTextInput,
@@ -26,9 +27,7 @@ import { CompanyStats } from '../types/company';
 import { AppConfig } from '../types/config';
 
 interface SettingsScreenProps {
-  onBack: () => void;
-  refPoint?: ReferencePoint | null;
-  onUpdateRefPoint?: (point: ReferencePoint | null) => void;
+  navigation: any;
 }
 
 export const SettingsScreen: React.FC<SettingsScreenProps> = ({
@@ -368,13 +367,15 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
     : 0;
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container}>
+      <StatusBar barStyle="light-content" backgroundColor="#0B0F19" />
+      
       <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton} onPress={onBack}>
-          <Ionicons name="arrow-back" size={22} color={Colors.text} />
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton} activeOpacity={0.7}>
+          <Ionicons name="arrow-back" size={20} color="#F8FAFC" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Paramètres</Text>
-        <View style={{ width: 38 }} />
+        <View style={{ width: 40 }} />
       </View>
 
       <KeyboardAwareCenteredScrollView contentContainerStyle={styles.scrollContent}>
@@ -908,91 +909,25 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
       />
     </View>
   );
-};
+}
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: '#0B0F19',
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingTop: 16,
-    paddingBottom: 12,
+    paddingHorizontal: 20,
+    paddingVertical: 14,
     borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
+    borderBottomColor: '#1F2937',
   },
   backButton: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: Colors.cardBackground,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: Colors.text,
-  },
-  scrollContent: {
-    padding: 16,
-    paddingBottom: 40,
-  },
-  section: {
-    backgroundColor: Colors.cardBackground,
-    borderRadius: 14,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    marginBottom: 20,
-  },
-  sectionHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 6,
-  },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: Colors.text,
-  },
-  sectionDescription: {
-    fontSize: 12,
-    color: Colors.textSecondary,
-    marginBottom: 12,
-    lineHeight: 16,
-  },
-  fieldLabel: {
-    fontSize: 12,
-    color: Colors.textSecondary,
-    marginBottom: 6,
-    marginTop: 8,
-    fontWeight: '600',
-  },
-  input: {
-    backgroundColor: Colors.background,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    color: Colors.text,
-    fontSize: 13,
-  },
-  templateArea: {
-    minHeight: 150,
-    lineHeight: 20,
-  },
-  testButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: Colors.primary,
+    backgroundColor: '#1E293B',
+    padding: 8,
     borderRadius: 10,
     paddingVertical: 12,
     marginTop: 14,
@@ -1106,59 +1041,17 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     backgroundColor: Colors.surface,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: '#334155',
   },
-  presetChipActive: {
-    backgroundColor: `${Colors.accent}25`,
-    borderColor: Colors.accent,
-  },
-  presetChipText: {
-    fontSize: 11,
+  headerTitle: {
+    fontSize: 17,
     fontWeight: '600',
-    color: Colors.textSecondary,
+    color: '#F8FAFC',
   },
-  presetChipTextActive: {
-    color: Colors.accent,
-    fontWeight: '700',
+  content: {
+    padding: 20,
   },
-  tunnelInfoCard: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    backgroundColor: `${Colors.accent}15`,
-    borderColor: `${Colors.accent}40`,
-    borderWidth: 1,
-    borderRadius: 10,
-    padding: 10,
-    gap: 8,
-    marginTop: 10,
-    marginBottom: 6,
-  },
-  tunnelInfoText: {
-    flex: 1,
-    fontSize: 11,
-    color: Colors.textSecondary,
-    lineHeight: 16,
-  },
-  testActionsRow: {
-    flexDirection: 'row',
-    gap: 10,
-    marginTop: 14,
-  },
-  previewBtn: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: `${Colors.accent}18`,
-    borderWidth: 1,
-    borderColor: `${Colors.accent}45`,
-    borderRadius: 10,
-    paddingVertical: 12,
-    gap: 6,
-  },
-  previewBtnText: {
-    color: Colors.accent,
-    fontWeight: '700',
+  sectionHeader: {
     fontSize: 13,
   },
   sendTestMailBtn: {
@@ -1318,126 +1211,40 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: Colors.danger,
     fontWeight: '600',
+    color: '#94A3B8',
+    textTransform: 'uppercase',
+    marginBottom: 12,
+    marginTop: 8,
   },
-  passwordInputWrapper: {
+  settingItem: {
     flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    backgroundColor: Colors.surface,
-    borderRadius: 10,
+    backgroundColor: '#111827',
+    padding: 16,
+    borderRadius: 14,
     borderWidth: 1,
-    borderColor: Colors.border,
-    paddingHorizontal: 10,
+    borderColor: '#1F2937',
     marginBottom: 12,
   },
-  eyeBtn: {
-    padding: 6,
-  },
-  gmailHelpCard: {
+  settingRowButton: {
     flexDirection: 'row',
-    backgroundColor: `${Colors.brandCyan}12`,
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: '#111827',
+    padding: 16,
+    borderRadius: 14,
     borderWidth: 1,
-    borderColor: `${Colors.brandCyan}30`,
-    borderRadius: 10,
-    padding: 12,
-    gap: 8,
-    marginBottom: 16,
+    borderColor: '#1F2937',
   },
-  gmailHelpText: {
-    flex: 1,
-    fontSize: 11,
-    color: Colors.textSecondary,
-    lineHeight: 16,
-  },
-  gmailStatusBadgeSuccess: {
+  settingInfo: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    backgroundColor: `${Colors.success}15`,
-    borderWidth: 1,
-    borderColor: `${Colors.success}50`,
-    borderRadius: 10,
-    padding: 12,
-    marginBottom: 14,
   },
-  gmailStatusTitleSuccess: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: Colors.success,
-    marginBottom: 2,
-  },
-  gmailStatusTextSuccess: {
-    fontSize: 11.5,
-    color: Colors.textSecondary,
-    lineHeight: 16,
-  },
-  gmailStatusBadgeWarning: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    backgroundColor: `${Colors.warning}15`,
-    borderWidth: 1,
-    borderColor: `${Colors.warning}50`,
-    borderRadius: 10,
-    padding: 12,
-    marginBottom: 14,
-  },
-  gmailStatusTitleWarning: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: Colors.warning,
-    marginBottom: 2,
-  },
-  gmailStatusTextWarning: {
-    fontSize: 11.5,
-    color: Colors.textSecondary,
-    lineHeight: 16,
-  },
-  openGoogleLinkBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    alignSelf: 'flex-start',
-    marginTop: 4,
-    paddingVertical: 2,
-  },
-  openGoogleLinkBtnText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: Colors.brandCyan,
-    textDecorationLine: 'underline',
-  },
-  profileActionBtnsCol: {
-    gap: 10,
-  },
-  saveProfileBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: Colors.brandBlue,
-    borderRadius: 10,
-    paddingVertical: 12,
-    gap: 8,
-  },
-  saveProfileBtnText: {
-    color: '#FFFFFF',
-    fontWeight: '700',
-    fontSize: 14,
-  },
-  testGmailBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: `${Colors.accent}18`,
-    borderWidth: 1,
-    borderColor: `${Colors.accent}50`,
-    borderRadius: 10,
-    paddingVertical: 11,
-    gap: 8,
-  },
-  testGmailBtnText: {
-    color: Colors.accent,
-    fontWeight: '700',
-    fontSize: 13,
+  settingText: {
+    fontSize: 15,
+    color: '#F8FAFC',
+    fontWeight: '500',
   },
   helpToggleBtn: {
     flexDirection: 'row',

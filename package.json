@@ -7,6 +7,9 @@
     "apps/*"
   ],
   "scripts": {
+    "build": "npm --prefix apps/mobile run build:web",
+    "build:web": "npm --prefix apps/mobile run build:web",
+    "mobile:build": "npm --prefix apps/mobile run build:web",
     "api:start": "npm --prefix apps/api run start",
     "api:dev": "npm --prefix apps/api run start:dev",
     "api:build": "npm --prefix apps/api run build",

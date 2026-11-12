@@ -161,6 +161,7 @@ Toutes les étapes du projet disposent d'une fiche de suivi détaillée :
 * 📄 [Étape 4 : Application Mobile React Native Expo](docs/suivi/ETAPE_4_APPLICATION_MOBILE_REACT_NATIVE.md)
 * 📄 [Étape 5 : Notifications Push & Déploiement PC](docs/suivi/ETAPE_5_NOTIFICATIONS_PUSH_ET_DEPLOIEMENT.md)
 * 📘 [Guide complet de déploiement serveur 24/7 & Tailscale](docs/GUIDE_DEPLOIEMENT_SERVEUR_TAILSCALE.md)
+* 🌐 [Guide de déploiement Web sur Netlify](docs/GUIDE_DEPLOIEMENT_NETLIFY.md)
 
 ---
 

@@ -4,6 +4,7 @@ import {
   ActivityIndicator,
   Alert,
   Linking,
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -448,6 +449,15 @@ export const CompanyMapView: React.FC<CompanyMapViewProps> = ({
     var mapInstance = null;
     var markersGroup = null;
 
+    function postToNative(payload) {
+      var msg = JSON.stringify(payload);
+      if (window.ReactNativeWebView && window.ReactNativeWebView.postMessage) {
+        window.ReactNativeWebView.postMessage(msg);
+      } else if (window.parent && window.parent !== window) {
+        window.parent.postMessage(msg, '*');
+      }
+    }
+
     function escapeHtml(str) {
       if (!str) return '';
       return String(str)
@@ -707,9 +717,7 @@ export const CompanyMapView: React.FC<CompanyMapViewProps> = ({
                 el.style.zIndex = '9999';
               }
             }
-            if (window.ReactNativeWebView) {
-              window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'SELECT_PIN', companyId: comp.id }));
-            }
+            postToNative({ type: 'SELECT_PIN', companyId: comp.id });
           });
         });
       });
@@ -818,13 +826,9 @@ export const CompanyMapView: React.FC<CompanyMapViewProps> = ({
           }
         }, 800);
 
-        if (window.ReactNativeWebView) {
-          window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'MAP_READY' }));
-        }
+        postToNative({ type: 'MAP_READY' });
       } catch (err) {
-        if (window.ReactNativeWebView) {
-          window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'MAP_READY' }));
-        }
+        postToNative({ type: 'MAP_READY' });
       }
     }
 
@@ -836,9 +840,7 @@ export const CompanyMapView: React.FC<CompanyMapViewProps> = ({
     };
 
     function selectCompany(id) {
-      if (window.ReactNativeWebView) {
-        window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'OPEN_COMPANY', companyId: id }));
-      }
+      postToNative({ type: 'OPEN_COMPANY', companyId: id });
     }
 
     window.centerOnHome = function() {
@@ -874,6 +876,17 @@ export const CompanyMapView: React.FC<CompanyMapViewProps> = ({
 </body>
 </html>`;
   }, [mapDataJson]);
+
+  useEffect(() => {
+    if (Platform.OS !== 'web' || typeof window === 'undefined') return;
+    const onWebMessage = (ev: MessageEvent) => {
+      if (typeof ev.data === 'string') {
+        handleMessage({ nativeEvent: { data: ev.data } });
+      }
+    };
+    window.addEventListener('message', onWebMessage);
+    return () => window.removeEventListener('message', onWebMessage);
+  }, [companies, onSelectCompany]);
 
   const handleMessage = (event: { nativeEvent: { data: string } }) => {
     try {

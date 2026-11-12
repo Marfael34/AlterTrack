@@ -16,17 +16,31 @@ export const StatusBadge: React.FC<StatusBadgeProps> = ({ status, size = 'small'
     <View
       style={[
         styles.badge,
-        size === 'large' ? styles.badgeLarge : size === 'medium' ? styles.badgeMedium : styles.badgeSmall,
-        { backgroundColor: `${badgeColor}22`, borderColor: `${badgeColor}88` },
+        size === 'large'
+          ? styles.badgeLarge
+          : size === 'medium'
+          ? styles.badgeMedium
+          : styles.badgeSmall,
+        {
+          backgroundColor: `${badgeColor}18`,
+          borderColor: `${badgeColor}45`,
+        },
       ]}
     >
-      <View style={[styles.dot, { backgroundColor: badgeColor }]} />
+      <View style={[styles.dotWrapper, { backgroundColor: `${badgeColor}30` }]}>
+        <View style={[styles.dot, { backgroundColor: badgeColor }]} />
+      </View>
       <Text
         style={[
           styles.text,
-          size === 'large' ? styles.textLarge : size === 'medium' ? styles.textMedium : styles.textSmall,
+          size === 'large'
+            ? styles.textLarge
+            : size === 'medium'
+            ? styles.textMedium
+            : styles.textSmall,
           { color: badgeColor },
         ]}
+        numberOfLines={1}
       >
         {label}
       </Text>
@@ -38,38 +52,48 @@ const styles = StyleSheet.create({
   badge: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderRadius: 9999,
+    borderRadius: 20,
     borderWidth: 1,
     alignSelf: 'flex-start',
   },
   badgeSmall: {
     paddingHorizontal: 8,
     paddingVertical: 3,
+    gap: 5,
   },
   badgeMedium: {
     paddingHorizontal: 10,
     paddingVertical: 5,
+    gap: 6,
   },
   badgeLarge: {
     paddingHorizontal: 14,
     paddingVertical: 7,
+    gap: 8,
+  },
+  dotWrapper: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   dot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    marginRight: 6,
+    width: 5,
+    height: 5,
+    borderRadius: 2.5,
   },
   text: {
-    fontWeight: '600',
+    fontWeight: '700',
+    letterSpacing: 0.2,
   },
   textSmall: {
     fontSize: 11,
   },
   textMedium: {
-    fontSize: 13,
+    fontSize: 12,
   },
   textLarge: {
-    fontSize: 15,
+    fontSize: 14,
   },
 });

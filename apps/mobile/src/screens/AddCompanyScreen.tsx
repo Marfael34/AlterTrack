@@ -1,544 +1,221 @@
-import { Ionicons } from '@expo/vector-icons';
-import * as DocumentPicker from 'expo-document-picker';
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useState } from 'react';
 import {
-  ActivityIndicator,
-  Keyboard,
-  KeyboardAvoidingView,
-  Platform,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
   View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  StyleSheet,
+  ScrollView,
+  SafeAreaView,
+  StatusBar,
 } from 'react-native';
-import { AddressFieldAssistant } from '../components/AddressFieldAssistant';
-import {
-  CenteredTextInput,
-  KeyboardAwareCenteredScrollView,
-} from '../components/KeyboardAwareCenteredScrollView';
-import { Colors } from '../constants/colors';
-import { AlertService as Alert } from '../services/alert.service';
-import { ApiService } from '../services/api.service';
-import { ReferencePoint } from '../services/location.service';
-import { Status } from '../types/company';
+import { Ionicons } from '@expo/vector-icons';
 
 interface AddCompanyScreenProps {
-  onBack: () => void;
-  onCreated: () => void;
-  refPoint?: ReferencePoint | null;
+  navigation: any;
+  route?: { params?: { initialData?: any } };
 }
 
-const STATUS_CHOICES: Array<{ key: Status; label: string; color: string }> = [
-  { key: 'AUTO_SEND', label: 'Envoi automatique', color: Colors.status.AUTO_SEND },
-  { key: 'TO_SEND', label: 'À envoyer (manuel)', color: Colors.status.TO_SEND },
-  { key: 'WAITING_FOR_REPLY', label: 'En attente', color: Colors.status.WAITING_FOR_REPLY },
-  { key: 'TO_FOLLOW_UP', label: 'À relancer', color: Colors.status.TO_FOLLOW_UP },
-  { key: 'TO_CALL', label: 'À appeler', color: Colors.status.TO_CALL },
-  { key: 'REPLY_RECEIVED', label: 'Réponse reçue', color: Colors.status.REPLY_RECEIVED },
-  { key: 'REFUSED', label: 'Refusé', color: Colors.status.REFUSED },
-  { key: 'ACCEPTED', label: 'Accepté', color: Colors.status.ACCEPTED },
-];
+export default function AddCompanyScreen({ navigation, route }: AddCompanyScreenProps) {
+  const initialData = route?.params?.initialData;
 
-export const AddCompanyScreen: React.FC<AddCompanyScreenProps> = ({
-  onBack,
-  onCreated,
-  refPoint,
-}) => {
-  const [name, setName] = useState('');
-  const [address, setAddress] = useState('');
-  const [city, setCity] = useState('');
-  const [latitude, setLatitude] = useState<number | undefined>(undefined);
-  const [longitude, setLongitude] = useState<number | undefined>(undefined);
-  const [email, setEmail] = useState('');
-  const [phone, setPhone] = useState('');
-  const [notes, setNotes] = useState('');
-  const [status, setStatus] = useState<Status>('AUTO_SEND');
-  const [loading, setLoading] = useState(false);
-  const [importing, setImporting] = useState(false);
+  const [name, setName] = useState(initialData?.name || '');
+  const [position, setPosition] = useState(initialData?.position || '');
+  const [city, setCity] = useState(initialData?.city || '');
+  const [status, setStatus] = useState(initialData?.status || 'applied');
+  const [notes, setNotes] = useState(initialData?.notes || '');
 
-  const scrollViewRef = useRef<any>(null);
-  const [keyboardHeight, setKeyboardHeight] = useState(0);
-  const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
+  const statuses = [
+    { key: 'applied', label: 'Postulé', color: '#6366F1' },
+    { key: 'interview', label: 'Entretien', color: '#F59E0B' },
+    { key: 'offer', label: 'Offre', color: '#10B981' },
+    { key: 'rejected', label: 'Refusé', color: '#EF4444' },
+  ];
 
-  useEffect(() => {
-    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
-    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
-
-    const showSub = Keyboard.addListener(showEvent, (e) => {
-      setKeyboardHeight(e.endCoordinates.height);
-      setIsKeyboardVisible(true);
-    });
-    const hideSub = Keyboard.addListener(hideEvent, () => {
-      setKeyboardHeight(0);
-      setIsKeyboardVisible(false);
-    });
-
-    return () => {
-      showSub.remove();
-      hideSub.remove();
-    };
-  }, []);
-
-  const handleNotesFocus = () => {
-    setTimeout(() => {
-      scrollViewRef.current?.scrollToEnd({ animated: true });
-    }, 200);
-  };
-
-  const handleCreate = async () => {
-    if (!name.trim()) {
-      Alert.alert('Validation', "Le nom de l'entreprise est obligatoire");
-      return;
-    }
-    if (!email.trim()) {
-      Alert.alert('Validation', "L'adresse email est obligatoire");
-      return;
-    }
-
-    setLoading(true);
-    try {
-      await ApiService.createCompany({
-        name: name.trim(),
-        address: address.trim() || undefined,
-        city: city.trim() || undefined,
-        latitude,
-        longitude,
-        email: email.trim(),
-        phone: phone.trim() || undefined,
-        notes: notes.trim() || undefined,
-        status,
-      });
-
-      Alert.alert('Succès', 'Fiche entreprise ajoutée avec succès !');
-      onCreated();
-      onBack();
-    } catch (err) {
-      Alert.alert('Erreur', err instanceof Error ? err.message : "Échec de l'ajout");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handlePickAndImportSpreadsheet = async () => {
-    try {
-      const result = await DocumentPicker.getDocumentAsync({
-        type: [
-          'text/csv',
-          'text/comma-separated-values',
-          'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-          'application/vnd.ms-excel',
-          '*/*',
-        ],
-        copyToCacheDirectory: true,
-      });
-
-      if (result.canceled || !result.assets || result.assets.length === 0) {
-        return;
-      }
-
-      const file = result.assets[0];
-      setImporting(true);
-
-      const res = await ApiService.importSpreadsheet(
-        file.uri,
-        file.name,
-        (file as unknown as { file?: unknown }).file,
-      );
-
-      let title = 'Importation réussie 🎉';
-      let message = `${res.importedCount} entreprise(s) importée(s) avec succès !`;
-
-      if (res.importedCount === 0) {
-        title = 'Aucune entreprise importée ⚠️';
-        message =
-          res.errors.length > 0
-            ? res.errors.slice(0, 4).join('\n')
-            : "Aucune entreprise valide n'a été détectée. Vérifiez que votre tableau contient au moins une colonne Nom et une colonne Email.";
-        Alert.alert(title, message);
-      } else {
-        if (res.skippedCount > 0) {
-          message += `\n\n${res.skippedCount} ligne(s) ignorée(s) (doublons ou erreurs).`;
-        }
-        if (res.errors.length > 0) {
-          message += `\n\nDétails :\n` + res.errors.slice(0, 3).join('\n');
-          if (res.errors.length > 3) {
-            message += `\n(+ ${res.errors.length - 3} autres)`;
-          }
-        }
-
-        Alert.alert(title, message, [
-          {
-            text: 'Super !',
-            onPress: () => {
-              onCreated();
-              onBack();
-            },
-          },
-        ]);
-      }
-    } catch (err) {
-      Alert.alert(
-        'Erreur d’importation',
-        err instanceof Error ? err.message : 'Échec de l’importation du fichier.',
-      );
-    } finally {
-      setImporting(false);
-    }
+  const handleSave = () => {
+    console.log({ name, position, city, status, notes });
+    navigation.goBack();
   };
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container}>
+      <StatusBar barStyle="light-content" backgroundColor="#0B0F19" />
+      
       <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton} onPress={onBack}>
-          <Ionicons name="close" size={22} color={Colors.text} />
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton} activeOpacity={0.7}>
+          <Ionicons name="arrow-back" size={20} color="#F8FAFC" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Nouvelle entreprise</Text>
-        <View style={{ width: 38 }} />
+        <Text style={styles.headerTitle}>{initialData ? 'Modifier l\'entreprise' : 'Nouvelle Candidature'}</Text>
+        <View style={{ width: 40 }} />
       </View>
 
-      <KeyboardAvoidingView
-        style={styles.keyboardAvoid}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 88 : 0}
-      >
-        <KeyboardAwareCenteredScrollView
-          ref={scrollViewRef}
-          contentContainerStyle={styles.scrollContent}
-          keyboardDismissMode="on-drag"
-        >
-        {/* Raccourci import tableur */}
-        <TouchableOpacity
-          style={[styles.importBanner, importing && styles.buttonDisabled]}
-          onPress={handlePickAndImportSpreadsheet}
-          disabled={importing}
-          activeOpacity={0.8}
-        >
-          {importing ? (
-            <ActivityIndicator color={Colors.primary} size="small" />
-          ) : (
-            <>
-              <View style={styles.importIconCircle}>
-                <Ionicons name="document-text-outline" size={20} color={Colors.primary} />
-              </View>
-              <View style={styles.importBannerTextContainer}>
-                <Text style={styles.importBannerTitle}>
-                  Importer depuis un tableur
-                </Text>
-                <Text style={styles.importBannerSubtitle}>
-                  Fichier Excel (.xlsx, .xls) ou CSV en 1 clic
-                </Text>
-              </View>
-              <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} />
-            </>
-          )}
-        </TouchableOpacity>
-
-        <View style={styles.dividerRow}>
-          <View style={styles.dividerLine} />
-          <Text style={styles.dividerText}>OU SAISIE MANUELLE</Text>
-          <View style={styles.dividerLine} />
+      <ScrollView contentContainerStyle={styles.formContainer} showsVerticalScrollIndicator={false}>
+        
+        <View style={styles.inputGroup}>
+          <Text style={styles.label}>Nom de l'entreprise *</Text>
+          <TextInput
+            style={styles.input}
+            placeholder="Ex: Capgemini, Thales..."
+            placeholderTextColor="#475569"
+            value={name}
+            onChangeText={setName}
+          />
         </View>
 
-        <Text style={styles.fieldLabel}>Nom de l'entreprise *</Text>
-        <CenteredTextInput
-          style={styles.input}
-          value={name}
-          onChangeText={setName}
-          placeholder="Ex: Capgemini, Thales, Startup..."
-          placeholderTextColor={Colors.textMuted}
-          autoFocus
-        />
+        <View style={styles.inputGroup}>
+          <Text style={styles.label}>Intitulé du poste *</Text>
+          <TextInput
+            style={styles.input}
+            placeholder="Ex: Développeur Full-Stack (Alternance)"
+            placeholderTextColor="#475569"
+            value={position}
+            onChangeText={setPosition}
+          />
+        </View>
 
-        <AddressFieldAssistant
-          address={address}
-          city={city}
-          latitude={latitude}
-          longitude={longitude}
-          onChangeAddress={setAddress}
-          onChangeCity={setCity}
-          onChangeCoordinates={({ latitude: lat, longitude: lng }) => {
-            setLatitude(lat);
-            setLongitude(lng);
-          }}
-          refPoint={refPoint}
-        />
+        <View style={styles.inputGroup}>
+          <Text style={styles.label}>Ville / Localisation</Text>
+          <TextInput
+            style={styles.input}
+            placeholder="Ex: Perpignan, Toulouse..."
+            placeholderTextColor="#475569"
+            value={city}
+            onChangeText={setCity}
+          />
+        </View>
 
-        <Text style={styles.fieldLabel}>Adresse e-mail de contact *</Text>
-        <CenteredTextInput
-          style={styles.input}
-          value={email}
-          onChangeText={setEmail}
-          placeholder="Ex: rh@entreprise.com"
-          placeholderTextColor={Colors.textMuted}
-          keyboardType="email-address"
-          autoCapitalize="none"
-        />
-
-        <Text style={styles.fieldLabel}>Numéro de téléphone</Text>
-        <CenteredTextInput
-          style={styles.input}
-          value={phone}
-          onChangeText={setPhone}
-          placeholder="Ex: 06 12 34 56 78 (pour l'étape d'appel)"
-          placeholderTextColor={Colors.textMuted}
-          keyboardType="phone-pad"
-        />
-
-        {/* Sélecteur de statut initial */}
-        <Text style={styles.fieldLabel}>Statut initial</Text>
-        <View style={styles.statusChipsContainer}>
-          {STATUS_CHOICES.map((choice) => {
-            const isSelected = status === choice.key;
-            return (
-              <TouchableOpacity
-                key={choice.key}
-                style={[
-                  styles.statusChip,
-                  isSelected && {
-                    backgroundColor: `${choice.color}25`,
-                    borderColor: choice.color,
-                  },
-                ]}
-                onPress={() => setStatus(choice.key)}
-                activeOpacity={0.7}
-              >
-                <View
+        <View style={styles.inputGroup}>
+          <Text style={styles.label}>Statut actuel</Text>
+          <View style={styles.statusChipsRow}>
+            {statuses.map((item) => {
+              const isSelected = status === item.key;
+              return (
+                <TouchableOpacity
+                  key={item.key}
                   style={[
-                    styles.statusDot,
-                    { backgroundColor: choice.color },
+                    styles.statusChip,
+                    isSelected && { backgroundColor: item.color, borderColor: item.color },
                   ]}
-                />
-                <Text
-                  style={[
-                    styles.statusChipText,
-                    isSelected && { color: '#FFFFFF', fontWeight: '700' },
-                  ]}
+                  onPress={() => setStatus(item.key)}
+                  activeOpacity={0.8}
                 >
-                  {choice.label}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
+                  <Text style={[styles.statusChipText, isSelected && { color: '#FFFFFF', fontWeight: '600' }]}>
+                    {item.label}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
         </View>
 
-        <Text style={styles.fieldLabel}>Note / Description personnelle</Text>
-        <CenteredTextInput
-          style={[styles.input, styles.textArea]}
-          value={notes}
-          onChangeText={setNotes}
-          placeholder="Texte libre strictement personnel (non transmis à l'IA)..."
-          placeholderTextColor={Colors.textMuted}
-          multiline
-          numberOfLines={4}
-          textAlignVertical="top"
-        />
+        <View style={styles.inputGroup}>
+          <Text style={styles.label}>Notes & Suivi</Text>
+          <TextInput
+            style={[styles.input, styles.textArea]}
+            placeholder="Contacts RH, retours d'entretiens..."
+            placeholderTextColor="#475569"
+            value={notes}
+            onChangeText={setNotes}
+            multiline={true}
+            numberOfLines={4}
+            textAlignVertical="top"
+          />
+        </View>
 
-        <TouchableOpacity
-          style={[styles.createButton, loading && styles.buttonDisabled]}
-          onPress={handleCreate}
-          disabled={loading}
-          activeOpacity={0.8}
-        >
-          {loading ? (
-            <ActivityIndicator color="#FFFFFF" size="small" />
-          ) : (
-            <Text style={styles.createButtonText}>Créer la fiche entreprise</Text>
-          )}
+        <TouchableOpacity style={styles.submitButton} onPress={handleSave} activeOpacity={0.85}>
+          <Text style={styles.submitButtonText}>Enregistrer</Text>
         </TouchableOpacity>
-      </KeyboardAwareCenteredScrollView>
-    </KeyboardAvoidingView>
 
-      {/* Barre d'action rapide pour fermer le clavier */}
-      {isKeyboardVisible && (
-        <View style={styles.keyboardAccessoryBar}>
-          <TouchableOpacity
-            style={styles.dismissKeyBtn}
-            onPress={() => Keyboard.dismiss()}
-            activeOpacity={0.7}
-          >
-            <Ionicons name="chevron-down" size={16} color={Colors.primary} />
-            <Text style={styles.dismissKeyText}>Fermer le clavier</Text>
-          </TouchableOpacity>
-        </View>
-      )}
-    </View>
+      </ScrollView>
+    </SafeAreaView>
   );
-};
+}
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: '#0B0F19',
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingTop: 16,
-    paddingBottom: 12,
+    paddingHorizontal: 20,
+    paddingVertical: 14,
     borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
+    borderBottomColor: '#1F2937',
   },
   backButton: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: Colors.cardBackground,
-    justifyContent: 'center',
-    alignItems: 'center',
+    backgroundColor: '#1E293B',
+    padding: 8,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#334155',
   },
   headerTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: Colors.text,
+    fontSize: 17,
+    fontWeight: '600',
+    color: '#F8FAFC',
   },
-  scrollContent: {
-    padding: 16,
+  formContainer: {
+    padding: 20,
     paddingBottom: 40,
   },
-  importBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: Colors.cardBackground,
-    borderWidth: 1,
-    borderColor: `${Colors.primary}40`,
-    borderRadius: 14,
-    padding: 14,
-    gap: 12,
-    marginBottom: 16,
+  inputGroup: {
+    marginBottom: 20,
   },
-  importIconCircle: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: `${Colors.primary}20`,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  importBannerTextContainer: {
-    flex: 1,
-  },
-  importBannerTitle: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: Colors.text,
-  },
-  importBannerSubtitle: {
-    fontSize: 11,
-    color: Colors.textSecondary,
-    marginTop: 2,
-  },
-  dividerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    marginVertical: 10,
-    marginBottom: 6,
-  },
-  dividerLine: {
-    flex: 1,
-    height: 1,
-    backgroundColor: Colors.border,
-  },
-  dividerText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: Colors.textMuted,
-    letterSpacing: 0.8,
-  },
-  fieldLabel: {
+  label: {
     fontSize: 13,
-    color: Colors.textSecondary,
-    marginBottom: 6,
-    marginTop: 12,
     fontWeight: '500',
+    color: '#94A3B8',
+    marginBottom: 8,
   },
   input: {
-    backgroundColor: Colors.cardBackground,
+    backgroundColor: '#111827',
     borderWidth: 1,
-    borderColor: Colors.border,
-    borderRadius: 10,
+    borderColor: '#1F2937',
+    borderRadius: 12,
     paddingHorizontal: 14,
-    paddingVertical: 10,
-    color: Colors.text,
+    paddingVertical: 12,
+    color: '#F8FAFC',
     fontSize: 14,
   },
-  statusChipsContainer: {
+  textArea: {
+    height: 110,
+    paddingTop: 12,
+  },
+  statusChipsRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 8,
-    marginTop: 2,
   },
   statusChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 12,
+    paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: 20,
-    backgroundColor: Colors.cardBackground,
+    backgroundColor: '#111827',
     borderWidth: 1,
-    borderColor: Colors.border,
-    gap: 6,
-  },
-  statusDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+    borderColor: '#1F2937',
   },
   statusChipText: {
-    fontSize: 12,
-    color: Colors.textSecondary,
-    fontWeight: '500',
+    fontSize: 13,
+    color: '#94A3B8',
   },
-  textArea: {
-    minHeight: 90,
-  },
-  createButton: {
-    backgroundColor: Colors.brandBlue,
-    borderRadius: 24,
-    paddingVertical: 14,
+  submitButton: {
+    backgroundColor: '#6366F1',
+    paddingVertical: 16,
+    borderRadius: 14,
     alignItems: 'center',
-    marginTop: 24,
-    shadowColor: Colors.brandBlue,
+    marginTop: 10,
+    shadowColor: '#6366F1',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
     elevation: 4,
   },
-  createButtonText: {
+  submitButtonText: {
     color: '#FFFFFF',
-    fontWeight: '700',
-    fontSize: 15,
-  },
-  buttonDisabled: {
-    opacity: 0.6,
-  },
-  keyboardAvoid: {
-    flex: 1,
-  },
-  keyboardAccessoryBar: {
-    backgroundColor: '#131B2E',
-    borderTopWidth: 1,
-    borderTopColor: Colors.border,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    alignItems: 'center',
-  },
-  dismissKeyBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 8,
-    backgroundColor: `${Colors.primary}18`,
-  },
-  dismissKeyText: {
-    fontSize: 13,
+    fontSize: 16,
     fontWeight: '600',
-    color: Colors.primary,
   },
 });
