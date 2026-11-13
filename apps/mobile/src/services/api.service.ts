@@ -13,8 +13,25 @@ import { AppConfig } from '../types/config';
 import { StorageService } from './storage.service';
 
 export const ApiService = {
+  // Détermination stricte de l'URL selon l'environnement
+  async getBaseUrl(): Promise<string> {
+    if (!__DEV__) {
+      // EN PRODUCTION (APK / EAS Build / GitHub Actions) : On force TOUJOURS Render
+      return 'https://altertrack.onrender.com';
+    }
+
+    // EN DÉVELOPPEMENT (Expo Go / Local) : On regarde si une URL locale a été configurée, sinon on prend le localhost par défaut
+    const savedUrl = await StorageService.getServerUrl();
+    if (savedUrl && !savedUrl.includes('onrender.com')) {
+      return savedUrl;
+    }
+
+    const defaultLocalUrl = Platform.OS === 'android' ? 'http://192.168.1.102:3000' : 'http://localhost:3000';
+    return defaultLocalUrl;
+  },
+
   async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
-    const baseUrl = await StorageService.getServerUrl();
+    const baseUrl = await this.getBaseUrl();
     const apiKey = await StorageService.getApiKey();
     const token = await StorageService.getAuthToken();
 
@@ -28,36 +45,17 @@ export const ApiService = {
       headers['Content-Type'] = 'application/json';
     }
 
-    const performFetch = async (targetBaseUrl: string) => {
-      const url = `${targetBaseUrl}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`;
-      return fetch(url, {
+    const url = `${baseUrl}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`;
+    console.log('📡 Tentative d appel API vers :', url)
+    
+    let response: Response;
+    try {
+      response = await fetch(url, {
         ...options,
         headers,
       });
-    };
-
-    let response: Response;
-    try {
-      response = await performFetch(baseUrl);
-    } catch (networkErr: any) {
-      // Si la requête échoue sur le réseau (ex: tunnel Cloudflare expiré ou coupure),
-      // on tente automatiquement l'autre canal (Wi-Fi local si on était sur tunnel, ou tunnel si on était sur Wi-Fi)
-      const isTunnel = baseUrl.includes('.trycloudflare.com');
-      const alternateUrl = isTunnel
-        ? StorageService.getLocalWifiUrl()
-        : StorageService.getTunnelUrl();
-
-      if (alternateUrl && alternateUrl !== baseUrl) {
-        try {
-          response = await performFetch(alternateUrl);
-          // Si l'alternative a réussi, on la mémorise automatiquement
-          await StorageService.setServerUrl(alternateUrl);
-        } catch {
-          throw networkErr;
-        }
-      } else {
-        throw networkErr;
-      }
+    } catch (networkErr) {
+      throw new Error(`Impossible de joindre le serveur à l'adresse : ${baseUrl}. Vérifie ta connexion.`);
     }
 
     if (!response.ok) {
@@ -250,13 +248,12 @@ export const ApiService = {
     mimeType: string,
     webFile?: unknown,
   ): Promise<T> {
-    const baseUrl = await StorageService.getServerUrl();
+    const baseUrl = await this.getBaseUrl();
     const apiKey = await StorageService.getApiKey();
     const token = await StorageService.getAuthToken();
     const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
     const url = `${baseUrl}${cleanEndpoint}`;
 
-    // 1. Sur Mobile (Android / iOS) : Privilégier le streaming natif OkHttp / NSURLSession
     if (Platform.OS !== 'web' && typeof FileSystem.uploadAsync === 'function') {
       try {
         const res = await FileSystem.uploadAsync(url, fileUri, {
@@ -292,7 +289,6 @@ export const ApiService = {
       }
     }
 
-    // 2. Fallback FormData (Web ou environnement où uploadAsync n'est pas disponible)
     const formData = new FormData();
     let fileAppended = false;
 
@@ -367,7 +363,7 @@ export const ApiService = {
   },
 
   async getCvDownloadUrl(): Promise<string> {
-    const baseUrl = await StorageService.getServerUrl();
+    const baseUrl = await this.getBaseUrl();
     const token = await StorageService.getAuthToken();
     const apiKey = await StorageService.getApiKey();
 
@@ -385,7 +381,7 @@ export const ApiService = {
   async getSpreadsheetExportUrl(
     format: 'xlsx' | 'csv' = 'xlsx',
   ): Promise<string> {
-    const baseUrl = await StorageService.getServerUrl();
+    const baseUrl = await this.getBaseUrl();
     const token = await StorageService.getAuthToken();
     const apiKey = await StorageService.getApiKey();
 

@@ -9,7 +9,7 @@ async function bootstrap() {
   const logger = new Logger('Bootstrap');
   const app = await NestFactory.create(AppModule, new ExpressAdapter());
 
-  // Sécurité des en-têtes HTTP (avec autorisation cross-origin et CSP pour la landing page)
+  // Sécurité des en-têtes HTTP
   app.use(
     helmet({
       crossOriginResourcePolicy: { policy: 'cross-origin' },
@@ -56,9 +56,10 @@ async function bootstrap() {
   // Gestion de l'arrêt gracieux
   app.enableShutdownHooks();
 
-  const port = configService.get<number>('port') || 3000;
+  // Récupération correcte du port pour Render et le développement local
+  const port = Number(process.env.PORT) || configService.get<number>('port') || 3000;
 
-  await app.listen(process.env.PORT || 3000, '0.0.0.0');
+  await app.listen(port, '0.0.0.0');
   logger.log(`Serveur AlterTrack API démarré sur le port ${port}`);
 }
 

@@ -50,28 +50,20 @@ export const StorageService = {
     try {
       const value = await AsyncStorage.getItem(SERVER_URL_KEY);
 
-      // Si le Wi-Fi local du PC répond (smartphone sur le même réseau Wi-Fi), on le privilégie directement
-      const wifiAvailable = await checkUrlReachable(DEFAULT_LOCAL_WIFI_URL, 500);
-      if (wifiAvailable) {
-        if (value !== DEFAULT_LOCAL_WIFI_URL) {
-          await AsyncStorage.setItem(SERVER_URL_KEY, DEFAULT_LOCAL_WIFI_URL);
-        }
-        return DEFAULT_LOCAL_WIFI_URL;
-      }
-
-      // Si le Wi-Fi ne répond pas (ex: en déplacement 4G/5G) :
-      const isInvalid = !value || value.includes('localhost') || value.includes('127.0.0.1') || value.includes('192.168.1.101');
-      const isOutdatedTunnel = value?.includes('.trycloudflare.com') && DEFAULT_TUNNEL_URL && value !== DEFAULT_TUNNEL_URL;
-
-      if (!isInvalid && !isOutdatedTunnel && value && !value.includes('192.168.1.')) {
+      // 1. Si l'utilisateur a explicitement enregistré une URL valide dans l'app, on la garde
+      if (value && !value.includes('localhost') && !value.includes('127.0.0.1')) {
         return value;
       }
 
-      const defaultUrl = DEFAULT_TUNNEL_URL || DEFAULT_LOCAL_WIFI_URL;
-      await AsyncStorage.setItem(SERVER_URL_KEY, defaultUrl);
-      return defaultUrl;
+      // 2. EN PRODUCTION : Utiliser directement ton URL Render par défaut !
+      // Remplace l'URL ci-dessous par la vraie URL de ton API sur Render :
+      const renderProductionUrl = 'https://altertrack-api.onrender.com'; 
+
+      await AsyncStorage.setItem(SERVER_URL_KEY, renderProductionUrl);
+      return renderProductionUrl;
+
     } catch {
-      return DEFAULT_TUNNEL_URL || DEFAULT_LOCAL_WIFI_URL;
+      return 'https://altertrack-api.onrender.com';
     }
   },
 

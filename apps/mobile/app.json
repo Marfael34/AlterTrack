@@ -10,10 +10,32 @@
     "updates": {
       "fallbackToCacheTimeout": 0
     },
-    "splash": {
-      "image": "./assets/splash-icon.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#0B0F19"
+    "plugins": [
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "AlterTrack utilise votre position pour calculer la distance des entreprises autour de vous."
+        }
+      ],
+      "expo-status-bar",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "enableProguardInReleaseBuilds": false,
+            "usesCleartextTraffic": true
+          }
+        }
+      ]
+    ],
+    "android": {
+      "package": "com.altertrack.app",
+      "versionCode": 1,
+      "adaptiveIcon": {
+        "backgroundColor": "#0B0F19",
+        "foregroundImage": "./assets/android-icon-foreground.png"
+      },
+      "predictiveBackGestureEnabled": false
     },
     "ios": {
       "supportsTablet": true,
@@ -23,34 +45,11 @@
         "NSLocationWhenInUseUsageDescription": "AlterTrack utilise votre position pour calculer la distance des entreprises autour de vous et afficher vos trajets pertinents."
       }
     },
-    "android": {
-      "usesCleartextTraffic": true,
-      "package": "com.altertrack.app",
-      "versionCode": 1,
-      "adaptiveIcon": {
-        "backgroundColor": "#0B0F19",
-        "foregroundImage": "./assets/android-icon-foreground.png"
-      },
-      "permissions": [
-        "ACCESS_COARSE_LOCATION",
-        "ACCESS_FINE_LOCATION",
-        "android.permission.ACCESS_COARSE_LOCATION",
-        "android.permission.ACCESS_FINE_LOCATION"
-      ],
-      "predictiveBackGestureEnabled": false
-    },
-    "plugins": [
-      [
-        "expo-location",
-        {
-          "locationWhenInUsePermission": "AlterTrack utilise votre position pour calculer la distance des entreprises autour de vous."
-        }
-      ],
-      "expo-status-bar"
-    ],
-    "web": {
-      "favicon": "./assets/favicon.png"
-    },
-    "owner": "marfael"
+    "owner": "marfael",
+    "extra": {
+      "eas": {
+        "projectId": "c6851702-e698-44f5-ab78-341994cd0ac4"
+      }
+    }
   }
 }
