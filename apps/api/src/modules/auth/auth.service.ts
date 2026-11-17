@@ -99,12 +99,16 @@ export class AuthService {
     });
 
     if (!user) {
-      throw new UnauthorizedException('Adresse e-mail ou mot de passe incorrect.');
+      throw new UnauthorizedException(
+        'Adresse e-mail ou mot de passe incorrect.',
+      );
     }
 
     const isMatch = await bcryptjs.compare(dto.password, user.password);
     if (!isMatch) {
-      throw new UnauthorizedException('Adresse e-mail ou mot de passe incorrect.');
+      throw new UnauthorizedException(
+        'Adresse e-mail ou mot de passe incorrect.',
+      );
     }
 
     const payload = { sub: user.id, email: user.email };
@@ -149,12 +153,16 @@ export class AuthService {
     if (dto.fullName) {
       updateData.fullName = dto.fullName.trim();
       if (user.cvFilePath) {
-        updateData.cvOriginalName = buildStandardCvFileName(updateData.fullName);
+        updateData.cvOriginalName = buildStandardCvFileName(
+          updateData.fullName,
+        );
       }
     }
 
     if (dto.gmailUser !== undefined) {
-      updateData.gmailUser = dto.gmailUser ? dto.gmailUser.toLowerCase().trim() : '';
+      updateData.gmailUser = dto.gmailUser
+        ? dto.gmailUser.toLowerCase().trim()
+        : '';
     }
 
     if (dto.gmailAppPassword !== undefined) {
@@ -174,7 +182,10 @@ export class AuthService {
           'Le mot de passe actuel est requis pour définir un nouveau mot de passe.',
         );
       }
-      const isMatch = await bcryptjs.compare(dto.currentPassword, user.password);
+      const isMatch = await bcryptjs.compare(
+        dto.currentPassword,
+        user.password,
+      );
       if (!isMatch) {
         throw new UnauthorizedException('Le mot de passe actuel est erroné.');
       }

@@ -2,7 +2,10 @@ import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
-async function geocodeQuery(q: string, type?: 'municipality'): Promise<{ latitude: number; longitude: number } | null> {
+async function geocodeQuery(
+  q: string,
+  type?: 'municipality',
+): Promise<{ latitude: number; longitude: number } | null> {
   if (!q || q.trim().length < 2) return null;
   try {
     const typeParam = type ? `&type=${type}` : '';
@@ -23,7 +26,10 @@ async function geocodeQuery(q: string, type?: 'municipality'): Promise<{ latitud
   return null;
 }
 
-async function resolveCoordinates(address?: string | null, city?: string | null) {
+async function resolveCoordinates(
+  address?: string | null,
+  city?: string | null,
+) {
   const cleanAddr = address?.trim() || '';
   const cleanCity = city?.trim() || '';
 
@@ -33,13 +39,17 @@ async function resolveCoordinates(address?: string | null, city?: string | null)
     const res = await geocodeQuery(combined);
     if (res) return { coords: res, queryUsed: combined };
     // Repli sur la commune seule
-    const cityRes = (await geocodeQuery(cleanCity, 'municipality')) || (await geocodeQuery(cleanCity));
+    const cityRes =
+      (await geocodeQuery(cleanCity, 'municipality')) ||
+      (await geocodeQuery(cleanCity));
     if (cityRes) return { coords: cityRes, queryUsed: cleanCity };
   }
 
   // 2. Si on a seulement la commune/ville
   if (cleanCity) {
-    const cityRes = (await geocodeQuery(cleanCity, 'municipality')) || (await geocodeQuery(cleanCity));
+    const cityRes =
+      (await geocodeQuery(cleanCity, 'municipality')) ||
+      (await geocodeQuery(cleanCity));
     if (cityRes) return { coords: cityRes, queryUsed: cleanCity };
   }
 
@@ -76,7 +86,9 @@ async function run() {
     }
   }
 
-  console.log(`Successfully updated coordinates for ${updatedCount}/${companies.length} companies.`);
+  console.log(
+    `Successfully updated coordinates for ${updatedCount}/${companies.length} companies.`,
+  );
 }
 
 run()

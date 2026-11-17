@@ -692,8 +692,15 @@ variables, leur rôle et si elles sont obligatoires. - Les variables
     déploiement.
 -   Documenter les procédures de retour arrière.
 -   Ne pas réécrire l'historique partagé sans coordination.
--   À chaque fin de grande étape, proposer systématiquement à l'utilisateur un commit selon le modèle :
-    `git add . && git commit -m "[commentaire]" && git push`
+-   **Système de versionnement des commits (SemVer) :**
+    Chaque commit de fin d'étape doit obligatoirement inclure le numéro de version incrémenté au format SemVer (`vX.Y.Z`) suivi du type conventionnel (`feat`, `fix`, `refactor`, `style`, `test`, `docs`, `chore`) et de la description :
+    `vX.Y.Z <type>: [description concise]`
+    *Règles d'incrémentation :*
+    - **PATCH** (`vX.Y.Z+1`) : corrections de bugs, ajustements ou améliorations fonctionnelles mineures (ex: `v1.1.10` -> `v1.1.11`).
+    - **MINOR** (`vX.Y+1.0`) : nouvelles fonctionnalités importantes sans rupture (ex: `v1.1.11` -> `v1.2.0`).
+    - **MAJOR** (`vX+1.0.0`) : refontes majeures ou ruptures d'architecture.
+-   À chaque fin de grande étape, proposer systématiquement à l'utilisateur la commande complète incluant le tag Git correspondant :
+    `git add . && git commit -m "vX.Y.Z <type>: [description]" && git tag vX.Y.Z && git push && git push --tags`
 -   À chaque fin de grande étape, produire ou mettre à jour une fiche de suivi d'étape (objectifs, réalisations techniques, validations/tests exécutés, décisions d'architecture et points suivants).
 
 ## 14. CI/CD et déploiement
@@ -783,6 +790,7 @@ règles suivantes :
     ce qui est seulement recommandé.
 17. Produire systématiquement une fiche de suivi par étape documentant les réalisations, les contrôles effectués et la suite du planning.
 18. Si une commande dépasse les 600s, demander à l'utilisateur de l'exécuter et attendre qu'il renvoie les résultats.
+19. Proposer systématiquement un commit incluant le tag et numéro de version SemVer incrémenté : `git add . && git commit -m "vX.Y.Z <type>: [description]" && git tag vX.Y.Z && git push && git push --tags`.
 
 ## 18. Checklist avant livraison
 

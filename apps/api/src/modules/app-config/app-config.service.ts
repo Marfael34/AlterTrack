@@ -267,7 +267,9 @@ export class AppConfigService {
     );
   }
 
-  async deleteCv(userId?: string): Promise<{ success: boolean; message: string }> {
+  async deleteCv(
+    userId?: string,
+  ): Promise<{ success: boolean; message: string }> {
     const uploadBoundary = this.uploadDir.endsWith(path.sep)
       ? this.uploadDir
       : `${this.uploadDir}${path.sep}`;
@@ -285,7 +287,9 @@ export class AppConfigService {
             fs.unlinkSync(resolved);
           }
         } catch (err) {
-          this.logger.warn(`Impossible de supprimer le fichier CV utilisateur: ${err}`);
+          this.logger.warn(
+            `Impossible de supprimer le fichier CV utilisateur: ${err}`,
+          );
         }
 
         await this.prisma.user.update({
@@ -306,7 +310,9 @@ export class AppConfigService {
           fs.unlinkSync(resolved);
         }
       } catch (err) {
-        this.logger.warn(`Impossible de supprimer le fichier CV global: ${err}`);
+        this.logger.warn(
+          `Impossible de supprimer le fichier CV global: ${err}`,
+        );
       }
 
       await this.prisma.appConfig.update({

@@ -202,33 +202,34 @@ export class SchedulerService {
     const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
     const eightDaysAgo = new Date(now.getTime() - 8 * 24 * 60 * 60 * 1000);
 
-    const [autoSendPending, j7Pending, j8Pending, j15Pending] = await Promise.all([
-      this.prisma.company.count({
-        where: {
-          status: Status.AUTO_SEND,
-        },
-      }),
-      this.prisma.company.count({
-        where: {
-          status: Status.WAITING_FOR_REPLY,
-          followUpSentAt: null,
-          firstMailSentAt: { lte: sevenDaysAgo },
-        },
-      }),
-      this.prisma.company.count({
-        where: {
-          status: Status.TO_FOLLOW_UP,
-          followUpSentAt: null,
-          firstMailSentAt: { lte: eightDaysAgo },
-        },
-      }),
-      this.prisma.company.count({
-        where: {
-          status: Status.WAITING_FOR_REPLY,
-          followUpSentAt: { not: null, lte: sevenDaysAgo },
-        },
-      }),
-    ]);
+    const [autoSendPending, j7Pending, j8Pending, j15Pending] =
+      await Promise.all([
+        this.prisma.company.count({
+          where: {
+            status: Status.AUTO_SEND,
+          },
+        }),
+        this.prisma.company.count({
+          where: {
+            status: Status.WAITING_FOR_REPLY,
+            followUpSentAt: null,
+            firstMailSentAt: { lte: sevenDaysAgo },
+          },
+        }),
+        this.prisma.company.count({
+          where: {
+            status: Status.TO_FOLLOW_UP,
+            followUpSentAt: null,
+            firstMailSentAt: { lte: eightDaysAgo },
+          },
+        }),
+        this.prisma.company.count({
+          where: {
+            status: Status.WAITING_FOR_REPLY,
+            followUpSentAt: { not: null, lte: sevenDaysAgo },
+          },
+        }),
+      ]);
 
     return {
       status: 'active',

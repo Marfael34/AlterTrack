@@ -21,7 +21,8 @@ import { JwtStrategy } from './jwt.strategy';
           configService.get<string>('apiKey') ||
           'altertrack_jwt_secure_session_key_2026',
         signOptions: {
-          expiresIn: (configService.get<string>('jwtExpiresIn') || '30d') as any,
+          expiresIn: (configService.get<string>('jwtExpiresIn') ||
+            '30d') as any,
           algorithm: 'HS256',
         },
       }),

@@ -14,7 +14,10 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import type { Response } from 'express';
 import { CurrentUser } from '../auth/current-user.decorator';
 import type { AuthenticatedUser } from '../auth/current-user.decorator';
-import { AppConfigService, buildStandardCvFileName } from './app-config.service';
+import {
+  AppConfigService,
+  buildStandardCvFileName,
+} from './app-config.service';
 import { UpdatePushTokenDto } from './dto/update-push-token.dto';
 import { UpdateTemplateDto } from './dto/update-template.dto';
 

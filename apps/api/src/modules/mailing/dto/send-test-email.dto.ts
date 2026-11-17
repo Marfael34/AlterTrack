@@ -27,4 +27,3 @@ export class SendTestEmailDto {
   @IsString()
   body?: string;
 }
-

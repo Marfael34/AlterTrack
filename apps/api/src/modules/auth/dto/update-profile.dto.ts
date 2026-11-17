@@ -3,7 +3,9 @@ import { IsEmail, IsOptional, IsString, MinLength } from 'class-validator';
 export class UpdateProfileDto {
   @IsOptional()
   @IsString()
-  @MinLength(2, { message: 'Le nom complet doit comporter au moins 2 caractères' })
+  @MinLength(2, {
+    message: 'Le nom complet doit comporter au moins 2 caractères',
+  })
   fullName?: string;
 
   @IsOptional()
