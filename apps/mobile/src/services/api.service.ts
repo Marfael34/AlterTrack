@@ -92,9 +92,13 @@ export const ApiService = {
     cities?: string[];
     sortBy?: string;
     sortOrder?: 'asc' | 'desc';
+    limit?: number;
+    offset?: number;
   }): Promise<{
     items: Company[];
     total: number;
+    limit: number;
+    offset: number;
   }> {
     const params = new URLSearchParams();
     if (query?.search) params.append('search', query.search);
@@ -110,6 +114,8 @@ export const ApiService = {
     }
     if (query?.sortBy) params.append('sortBy', query.sortBy);
     if (query?.sortOrder) params.append('sortOrder', query.sortOrder);
+    if (typeof query?.limit === 'number') params.append('limit', String(query.limit));
+    if (typeof query?.offset === 'number') params.append('offset', String(query.offset));
 
     const queryString = params.toString() ? `?${params.toString()}` : '';
     return this.request(`/companies${queryString}`);
