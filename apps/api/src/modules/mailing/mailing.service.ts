@@ -16,6 +16,7 @@ import { GeminiService } from '../gemini/gemini.service';
 import { PushNotificationService } from '../notifications/push-notification.service';
 import { EmailService } from './email.service';
 import { ImapService } from './imap.service';
+import { callFollowUpDueDate } from '../scheduler/follow-up.constants';
 
 const GENERIC_EMAIL_DOMAINS = new Set([
   'gmail.com',
@@ -172,9 +173,7 @@ export class MailingService {
         });
 
         const now = new Date();
-        const followUpTargetDate = new Date(
-          now.getTime() + 7 * 24 * 60 * 60 * 1000,
-        );
+        const followUpTargetDate = callFollowUpDueDate(now);
 
         await this.prisma.company.update({
           where: { id: company.id },
@@ -280,9 +279,7 @@ export class MailingService {
     });
 
     const now = new Date();
-    const followUpTargetDate = new Date(
-      now.getTime() + 7 * 24 * 60 * 60 * 1000,
-    );
+    const followUpTargetDate = callFollowUpDueDate(now);
 
     const updated = await this.prisma.company.update({
       where: { id: company.id },
@@ -375,6 +372,7 @@ export class MailingService {
       data: {
         status: Status.WAITING_FOR_REPLY,
         followUpSentAt: now,
+        followUpReadyAt: callFollowUpDueDate(now),
         lastMailId: sendResult.messageId,
       },
     });

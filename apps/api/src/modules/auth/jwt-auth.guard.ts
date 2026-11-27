@@ -61,6 +61,8 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
                 template: true,
                 cvFilePath: true,
                 cvOriginalName: true,
+                cvFileSize: true,
+                cvUploadedAt: true,
                 expoPushToken: true,
               },
             })) ||
@@ -74,6 +76,8 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
                 template: true,
                 cvFilePath: true,
                 cvOriginalName: true,
+                cvFileSize: true,
+                cvUploadedAt: true,
                 expoPushToken: true,
               },
             }));

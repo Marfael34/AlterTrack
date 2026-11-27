@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Linking,
@@ -14,9 +14,11 @@ import {
 } from 'react-native';
 import { Colors } from '../constants/colors';
 import { useAuth } from '../context/AuthContext';
+import { useCvImport } from '../hooks/useCvImport';
 import { AlertService as Alert } from '../services/alert.service';
 import { ApiService } from '../services/api.service';
 import { StorageService, formatStandardCvName } from '../services/storage.service';
+import type { CvUploadResult } from '../types/config';
 import {
   CenteredTextInput,
   KeyboardAwareCenteredScrollView,
@@ -54,7 +56,16 @@ export const EmailPreviewModal: React.FC<EmailPreviewModalProps> = ({
   const [sendingToCompany, setSendingToCompany] = useState(false);
   const [currentHasCv, setCurrentHasCv] = useState(hasCv);
   const [currentCvName, setCurrentCvName] = useState(cvOriginalName);
-  const [uploadingCvModal, setUploadingCvModal] = useState(false);
+  const handleCvImported = useCallback(
+    (result: CvUploadResult) => {
+      setCurrentHasCv(true);
+      setCurrentCvName(result.cvOriginalName);
+      onCvUploaded?.();
+    },
+    [onCvUploaded],
+  );
+  const { importCv: handleModalPickCv, importing: uploadingCvModal } =
+    useCvImport({ onImported: handleCvImported });
   const [testResult, setTestResult] = useState<{
     success: boolean;
     isSimulation: boolean;
@@ -95,71 +106,6 @@ export const EmailPreviewModal: React.FC<EmailPreviewModalProps> = ({
       );
     } finally {
       setLoading(false);
-    }
-  };
-
-  const handleModalPickCv = async () => {
-    try {
-      const DocumentPicker = await import('expo-document-picker');
-      const result = await DocumentPicker.getDocumentAsync({
-        type: ['application/pdf', 'application/x-pdf', '*/*'],
-        copyToCacheDirectory: true,
-      });
-
-      if (result.canceled || !result.assets || result.assets.length === 0) {
-        return;
-      }
-
-      const file = result.assets[0];
-      const rawName = file.name || 'CV.pdf';
-      const isPdfMime = file.mimeType
-        ? file.mimeType.toLowerCase().includes('pdf')
-        : false;
-      const isPdfExt = rawName.toLowerCase().endsWith('.pdf');
-
-      if (!isPdfMime && !isPdfExt) {
-        Alert.alert(
-          'Format non reconnu',
-          'Veuillez sélectionner un document au format PDF (.pdf).',
-        );
-        return;
-      }
-
-      // Format uniforme : nom_prenom_CV.pdf
-      const standardName = formatStandardCvName(user?.fullName);
-
-      setUploadingCvModal(true);
-
-      const updated = await ApiService.uploadCv(
-        file.uri,
-        standardName,
-        (file as unknown as { file?: unknown }).file,
-      );
-
-      const localInfo = {
-        fileName: updated.cvOriginalName || standardName,
-        fileSize: file.size,
-        fileUri: file.uri,
-        uploadedAt: new Date().toISOString(),
-        isSynced: true,
-      };
-
-      await StorageService.setLocalCv(localInfo);
-      setCurrentHasCv(true);
-      setCurrentCvName(localInfo.fileName);
-
-      if (onCvUploaded) {
-        onCvUploaded();
-      }
-
-      Alert.alert(
-        'CV stocké et joint ✅',
-        `Le fichier "${localInfo.fileName}" est stocké et sera joint automatiquement à cet e-mail.`,
-      );
-    } catch (err: any) {
-      Alert.alert('Erreur', err?.message || "Échec de l'import du CV");
-    } finally {
-      setUploadingCvModal(false);
     }
   };
 
@@ -300,7 +246,7 @@ export const EmailPreviewModal: React.FC<EmailPreviewModalProps> = ({
                 </Text>
               </View>
               <Text style={styles.headerSubtitle} numberOfLines={1}>
-                {nature === 'FOLLOW_UP' ? 'Relance J+15' : 'Premier contact'} • {companyName}
+                {nature === 'FOLLOW_UP' ? 'Relance' : 'Premier contact'} • {companyName}
               </Text>
             </View>
             <TouchableOpacity

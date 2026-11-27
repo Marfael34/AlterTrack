@@ -9,6 +9,8 @@ export interface AuthenticatedUser {
   template?: string | null;
   cvFilePath?: string | null;
   cvOriginalName?: string | null;
+  cvFileSize?: number | null;
+  cvUploadedAt?: Date | null;
   expoPushToken?: string | null;
 }
 

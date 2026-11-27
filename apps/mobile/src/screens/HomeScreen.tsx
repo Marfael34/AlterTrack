@@ -20,6 +20,7 @@ import { FiltersModal } from '../components/FiltersModal';
 import { ReferencePointModal } from '../components/ReferencePointModal';
 import { CityItem } from '../components/CityFilterBar';
 import { Colors } from '../constants/colors';
+import { CALL_FOLLOW_UP_DELAY_DAYS } from '../constants/followUp';
 import { useAuth } from '../context/AuthContext';
 import { AlertService as Alert } from '../services/alert.service';
 import { ApiService } from '../services/api.service';
@@ -789,7 +790,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         </TouchableOpacity>
       )}
 
-      {/* Bannière d'alerte prioritaire : Entreprises à appeler à J+15 */}
+      {/* Bannière d'alerte prioritaire : Entreprises à appeler */}
       {toCallCount > 0 && replyReceivedCount === 0 && (
         <TouchableOpacity
           style={styles.priorityBannerCall}
@@ -804,7 +805,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           </View>
           <View style={{ flex: 1 }}>
             <Text style={styles.priorityBannerTitleCall}>
-              {toCallCount} entreprise{toCallCount > 1 ? 's' : ''} à appeler (J+15)
+              {toCallCount} entreprise{toCallCount > 1 ? 's' : ''} à appeler (J+{CALL_FOLLOW_UP_DELAY_DAYS})
             </Text>
             <Text style={styles.priorityBannerSubtitle}>
               Relance téléphonique directe en 1 clic recommandée

@@ -1,9 +1,13 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
-import { Status } from '@prisma/client';
+import { Prisma, Status } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { MailingService } from '../mailing/mailing.service';
 import { PushNotificationService } from '../notifications/push-notification.service';
+import {
+  CALL_FOLLOW_UP_DELAY_DAYS,
+  callFollowUpThreshold,
+} from './follow-up.constants';
 
 @Injectable()
 export class SchedulerService {
@@ -16,8 +20,8 @@ export class SchedulerService {
   ) {}
 
   /**
-   * Cron quotidien à 09:00 (jours ouvrés / tous les jours)
-   * Exécute les transitions de la machine à états (J+7, J+8, J+15).
+   * Cron quotidien à 09:00.
+   * Exécute les transitions de la machine à états (envoi auto, passage à « À appeler »).
    * L'utilisation d'opérateurs <= garantit le rattrapage automatique si le serveur était éteint.
    */
   @Cron(CronExpression.EVERY_DAY_AT_9AM)
@@ -52,19 +56,41 @@ export class SchedulerService {
   }
 
   /**
-   * Exécute les 3 étapes de la machine à états séquentiellement :
-   * 1. Transition J+7 : WAITING_FOR_REPLY -> TO_FOLLOW_UP
-   * 2. Envoi auto J+8 : TO_FOLLOW_UP -> relance envoyée (WAITING_FOR_REPLY)
-   * 3. Transition J+15 : WAITING_FOR_REPLY (avec relance) -> TO_CALL
+   * Critère « À appeler » : premier mail envoyé, sans réponse, et dernier contact
+   * (premier mail ou relance manuelle) vieux d'au moins CALL_FOLLOW_UP_DELAY_DAYS jours.
+   *
+   * TO_FOLLOW_UP sans relance envoyée est inclus pour reprendre les entreprises
+   * laissées dans cet état par l'ancien cycle (relance e-mail automatique à J+8,
+   * supprimée) : elles sont recalculées avec le nouveau délai.
+   */
+  private buildCallDueWhere(now: Date): Prisma.CompanyWhereInput {
+    const threshold = callFollowUpThreshold(now);
+    return {
+      firstMailSentAt: { not: null, lte: threshold },
+      OR: [
+        {
+          status: Status.WAITING_FOR_REPLY,
+          OR: [
+            { followUpSentAt: null },
+            { followUpSentAt: { lte: threshold } },
+          ],
+        },
+        { status: Status.TO_FOLLOW_UP, followUpSentAt: null },
+      ],
+    };
+  }
+
+  /**
+   * Exécute les étapes de la machine à états séquentiellement :
+   * 0. Envoi automatique des candidatures au statut AUTO_SEND
+   * 1. Passage à « À appeler » après CALL_FOLLOW_UP_DELAY_DAYS jours sans réponse
    */
   async runStateMachineTransitions() {
     const now = new Date();
 
     const result = {
       autoSentBatchCount: 0,
-      transitionedToFollowUpJ7: 0,
-      followUpsSentJ8: 0,
-      transitionedToCallJ15: 0,
+      transitionedToCall: 0,
     };
 
     // -------------------------------------------------------------------------
@@ -91,87 +117,16 @@ export class SchedulerService {
     }
 
     // -------------------------------------------------------------------------
-    // 1. Transition J+7 : Premier contact envoyé depuis >= 7 jours sans relance
+    // 1. Passage à « À appeler » : dernier contact échu, toujours sans réponse
     // -------------------------------------------------------------------------
-    const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-
-    const companiesToFollowUp = await this.prisma.company.findMany({
-      where: {
-        status: Status.WAITING_FOR_REPLY,
-        followUpSentAt: null, // Pas encore relancé
-        firstMailSentAt: {
-          lte: sevenDaysAgo, // Envoyé il y a 7 jours ou plus (rattrapage si PC éteint)
-        },
-      },
-    });
-
-    if (companiesToFollowUp.length > 0) {
-      this.logger.log(
-        `J+7 : ${companiesToFollowUp.length} entreprise(s) passent au statut À relancer`,
-      );
-
-      for (const comp of companiesToFollowUp) {
-        await this.prisma.company.update({
-          where: { id: comp.id },
-          data: { status: Status.TO_FOLLOW_UP },
-        });
-        result.transitionedToFollowUpJ7++;
-      }
-    }
-
-    // -------------------------------------------------------------------------
-    // 2. Envoi J+8 : Entreprises au statut TO_FOLLOW_UP depuis >= 24h (ou J+8)
-    // -------------------------------------------------------------------------
-    const eightDaysAgo = new Date(now.getTime() - 8 * 24 * 60 * 60 * 1000);
-
-    const companiesReadyForRelance = await this.prisma.company.findMany({
-      where: {
-        status: Status.TO_FOLLOW_UP,
-        followUpSentAt: null,
-        firstMailSentAt: {
-          lte: eightDaysAgo, // Au moins 8 jours après le 1er envoi (tampon de 24h respecté)
-        },
-      },
-    });
-
-    if (companiesReadyForRelance.length > 0) {
-      this.logger.log(
-        `J+8 : Envoi automatique de la relance pour ${companiesReadyForRelance.length} entreprise(s)`,
-      );
-
-      for (const comp of companiesReadyForRelance) {
-        try {
-          await this.mailingService.sendFollowUp(comp.id);
-          result.followUpsSentJ8++;
-          this.logger.log(`Relance J+8 expédiée avec succès pour ${comp.name}`);
-        } catch (err) {
-          this.logger.error(
-            `Échec de la relance J+8 pour ${comp.name} : ${err instanceof Error ? err.message : String(err)}`,
-          );
-        }
-      }
-    }
-
-    // -------------------------------------------------------------------------
-    // 3. Transition J+15 : Relance envoyée depuis >= 7 jours sans réponse (+7j après J+8)
-    // -------------------------------------------------------------------------
-    const sevenDaysAfterFollowUp = new Date(
-      now.getTime() - 7 * 24 * 60 * 60 * 1000,
-    );
-
     const companiesToCall = await this.prisma.company.findMany({
-      where: {
-        status: Status.WAITING_FOR_REPLY,
-        followUpSentAt: {
-          not: null,
-          lte: sevenDaysAfterFollowUp, // 7 jours ou plus depuis la relance
-        },
-      },
+      where: this.buildCallDueWhere(now),
+      select: { id: true, name: true },
     });
 
     if (companiesToCall.length > 0) {
       this.logger.log(
-        `J+15 : ${companiesToCall.length} entreprise(s) passent au statut À appeler`,
+        `J+${CALL_FOLLOW_UP_DELAY_DAYS} : ${companiesToCall.length} entreprise(s) passent au statut À appeler`,
       );
 
       for (const comp of companiesToCall) {
@@ -182,16 +137,16 @@ export class SchedulerService {
 
         await this.pushService.sendPushNotification({
           title: 'Candidature à appeler',
-          body: `7 jours sans réponse après relance pour ${comp.name}. Un appel téléphonique est recommandé.`,
+          body: `${CALL_FOLLOW_UP_DELAY_DAYS} jours sans réponse pour ${comp.name}. Un appel téléphonique est recommandé.`,
           data: { companyId: comp.id, status: Status.TO_CALL },
         });
 
-        result.transitionedToCallJ15++;
+        result.transitionedToCall++;
       }
     }
 
     this.logger.log(
-      `--- Fin du cycle quotidien : AUTO_SEND=${result.autoSentBatchCount}, J+7=${result.transitionedToFollowUpJ7}, J+8=${result.followUpsSentJ8}, J+15=${result.transitionedToCallJ15} ---`,
+      `--- Fin du cycle quotidien : AUTO_SEND=${result.autoSentBatchCount}, À appeler (J+${CALL_FOLLOW_UP_DELAY_DAYS})=${result.transitionedToCall} ---`,
     );
 
     return result;
@@ -199,37 +154,17 @@ export class SchedulerService {
 
   async getSchedulerOverview() {
     const now = new Date();
-    const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-    const eightDaysAgo = new Date(now.getTime() - 8 * 24 * 60 * 60 * 1000);
 
-    const [autoSendPending, j7Pending, j8Pending, j15Pending] =
-      await Promise.all([
-        this.prisma.company.count({
-          where: {
-            status: Status.AUTO_SEND,
-          },
-        }),
-        this.prisma.company.count({
-          where: {
-            status: Status.WAITING_FOR_REPLY,
-            followUpSentAt: null,
-            firstMailSentAt: { lte: sevenDaysAgo },
-          },
-        }),
-        this.prisma.company.count({
-          where: {
-            status: Status.TO_FOLLOW_UP,
-            followUpSentAt: null,
-            firstMailSentAt: { lte: eightDaysAgo },
-          },
-        }),
-        this.prisma.company.count({
-          where: {
-            status: Status.WAITING_FOR_REPLY,
-            followUpSentAt: { not: null, lte: sevenDaysAgo },
-          },
-        }),
-      ]);
+    const [autoSendPending, toCallPending] = await Promise.all([
+      this.prisma.company.count({
+        where: {
+          status: Status.AUTO_SEND,
+        },
+      }),
+      this.prisma.company.count({
+        where: this.buildCallDueWhere(now),
+      }),
+    ]);
 
     return {
       status: 'active',
@@ -238,11 +173,10 @@ export class SchedulerService {
           'Tous les jours à 09:00 (CronExpression.EVERY_DAY_AT_9AM)',
         periodicImapCheck: 'Toutes les 10 minutes (*/10 * * * *)',
       },
+      callFollowUpDelayDays: CALL_FOLLOW_UP_DELAY_DAYS,
       readyForTransition: {
         autoSendPending,
-        j7ToFollowUp: j7Pending,
-        j8AutoRelance: j8Pending,
-        j15ToCall: j15Pending,
+        toCallPending,
       },
       currentTime: now.toISOString(),
     };
