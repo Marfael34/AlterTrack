@@ -48,6 +48,8 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
         template: true,
         cvFilePath: true,
         cvOriginalName: true,
+        cvFileSize: true,
+        cvUploadedAt: true,
         expoPushToken: true,
       },
     });

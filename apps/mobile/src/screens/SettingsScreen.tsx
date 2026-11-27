@@ -17,6 +17,7 @@ import {
 import { EmailPreviewModal } from '../components/EmailPreviewModal';
 import { ReferencePointModal } from '../components/ReferencePointModal';
 import { Colors } from '../constants/colors';
+import { CALL_FOLLOW_UP_DELAY_DAYS } from '../constants/followUp';
 import { useAuth } from '../context/AuthContext';
 import { AlertService as Alert } from '../services/alert.service';
 import { ApiService } from '../services/api.service';
@@ -890,7 +891,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
           </View>
           <Text style={styles.sectionDescription}>
             Recevez une alerte instantanée sur ce smartphone dès qu'un recruteur
-            répond ou qu'une relance téléphonique est requise (J+15).
+            répond ou qu'une relance téléphonique est requise (J+{CALL_FOLLOW_UP_DELAY_DAYS}).
           </Text>
 
           <View style={styles.cvCard}>

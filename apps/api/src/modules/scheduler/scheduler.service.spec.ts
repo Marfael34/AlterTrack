@@ -3,17 +3,19 @@ import { Prisma, Status } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { MailingService } from '../mailing/mailing.service';
 import { PushNotificationService } from '../notifications/push-notification.service';
+import { CALL_FOLLOW_UP_DELAY_DAYS } from './follow-up.constants';
 import { SchedulerService } from './scheduler.service';
 
 describe('SchedulerService', () => {
   let service: SchedulerService;
   let prisma: {
     company: {
-      findMany: jest.Mock;
+      findMany: jest.Mock<Promise<unknown>, [Prisma.CompanyFindManyArgs]>;
       update: jest.Mock<Promise<unknown>, [Prisma.CompanyUpdateArgs]>;
       count: jest.Mock;
     };
   };
+  let pushService: { sendPushNotification: jest.Mock };
   let mailingService: {
     sendFollowUp: jest.Mock;
     checkIncomingReplies: jest.Mock;
@@ -23,7 +25,9 @@ describe('SchedulerService', () => {
   beforeEach(async () => {
     prisma = {
       company: {
-        findMany: jest.fn().mockResolvedValue([]),
+        findMany: jest
+          .fn<Promise<unknown>, [Prisma.CompanyFindManyArgs]>()
+          .mockResolvedValue([]),
         update: jest
           .fn<Promise<unknown>, [Prisma.CompanyUpdateArgs]>()
           .mockResolvedValue({}),
@@ -45,15 +49,14 @@ describe('SchedulerService', () => {
       }),
     };
 
+    pushService = { sendPushNotification: jest.fn().mockResolvedValue(true) };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         SchedulerService,
         { provide: PrismaService, useValue: prisma },
         { provide: MailingService, useValue: mailingService },
-        {
-          provide: PushNotificationService,
-          useValue: { sendPushNotification: jest.fn().mockResolvedValue(true) },
-        },
+        { provide: PushNotificationService, useValue: pushService },
       ],
     }).compile();
 
@@ -74,9 +77,7 @@ describe('SchedulerService', () => {
 
       prisma.company.findMany
         .mockResolvedValueOnce([autoSendCompany]) // AUTO_SEND query
-        .mockResolvedValueOnce([]) // J+7 query
-        .mockResolvedValueOnce([]) // J+8 query
-        .mockResolvedValueOnce([]); // J+15 query
+        .mockResolvedValueOnce([]); // À appeler query
 
       const result = await service.runStateMachineTransitions();
 
@@ -84,71 +85,53 @@ describe('SchedulerService', () => {
       expect(mailingService.sendInitialBatch).toHaveBeenCalled();
     });
 
-    it('should transition J+7 companies from WAITING_FOR_REPLY to TO_FOLLOW_UP', async () => {
-      const j7Company = {
-        id: 'comp-j7',
-        name: 'Entreprise J7',
-        status: Status.WAITING_FOR_REPLY,
-        firstMailSentAt: new Date(Date.now() - 7.5 * 24 * 60 * 60 * 1000),
-        followUpSentAt: null,
-      };
+    it('should move companies to TO_CALL after the call follow-up delay and notify', async () => {
+      const dueCompany = { id: 'comp-due', name: 'Entreprise Échue' };
 
       prisma.company.findMany
         .mockResolvedValueOnce([]) // AUTO_SEND query
-        .mockResolvedValueOnce([j7Company]) // J+7 query
-        .mockResolvedValueOnce([]) // J+8 query
-        .mockResolvedValueOnce([]); // J+15 query
+        .mockResolvedValueOnce([dueCompany]); // À appeler query
 
       const result = await service.runStateMachineTransitions();
 
-      expect(result.transitionedToFollowUpJ7).toBe(1);
+      expect(result.transitionedToCall).toBe(1);
       const updateCall = prisma.company.update.mock.calls[0][0];
-      expect(updateCall.where.id).toBe('comp-j7');
-      expect(updateCall.data.status).toBe(Status.TO_FOLLOW_UP);
-    });
-
-    it('should trigger sendFollowUp for J+8 companies', async () => {
-      const j8Company = {
-        id: 'comp-j8',
-        name: 'Entreprise J8',
-        status: Status.TO_FOLLOW_UP,
-        firstMailSentAt: new Date(Date.now() - 8.5 * 24 * 60 * 60 * 1000),
-        followUpSentAt: null,
-      };
-
-      prisma.company.findMany
-        .mockResolvedValueOnce([]) // AUTO_SEND query
-        .mockResolvedValueOnce([]) // J+7 query
-        .mockResolvedValueOnce([j8Company]) // J+8 query
-        .mockResolvedValueOnce([]); // J+15 query
-
-      const result = await service.runStateMachineTransitions();
-
-      expect(result.followUpsSentJ8).toBe(1);
-      expect(mailingService.sendFollowUp).toHaveBeenCalledWith('comp-j8');
-    });
-
-    it('should transition J+15 companies to TO_CALL', async () => {
-      const j15Company = {
-        id: 'comp-j15',
-        name: 'Entreprise J15',
-        status: Status.WAITING_FOR_REPLY,
-        firstMailSentAt: new Date(Date.now() - 16 * 24 * 60 * 60 * 1000),
-        followUpSentAt: new Date(Date.now() - 7.5 * 24 * 60 * 60 * 1000),
-      };
-
-      prisma.company.findMany
-        .mockResolvedValueOnce([]) // AUTO_SEND query
-        .mockResolvedValueOnce([]) // J+7 query
-        .mockResolvedValueOnce([]) // J+8 query
-        .mockResolvedValueOnce([j15Company]); // J+15 query
-
-      const result = await service.runStateMachineTransitions();
-
-      expect(result.transitionedToCallJ15).toBe(1);
-      const updateCall = prisma.company.update.mock.calls[0][0];
-      expect(updateCall.where.id).toBe('comp-j15');
+      expect(updateCall.where.id).toBe('comp-due');
       expect(updateCall.data.status).toBe(Status.TO_CALL);
+      expect(pushService.sendPushNotification).toHaveBeenCalledWith(
+        expect.objectContaining({
+          body: expect.stringContaining(
+            `${CALL_FOLLOW_UP_DELAY_DAYS} jours sans réponse`,
+          ) as unknown,
+        }),
+      );
+    });
+
+    it('should no longer send automatic follow-up e-mails', async () => {
+      await service.runStateMachineTransitions();
+      expect(mailingService.sendFollowUp).not.toHaveBeenCalled();
+    });
+
+    it('should select companies whose last contact is older than the delay', async () => {
+      const before = Date.now();
+      await service.runStateMachineTransitions();
+
+      const where = prisma.company.findMany.mock.calls[1][0]
+        .where as Prisma.CompanyWhereInput;
+      const firstMail = where.firstMailSentAt as { lte: Date };
+      const expectedThreshold =
+        before - CALL_FOLLOW_UP_DELAY_DAYS * 24 * 60 * 60 * 1000;
+
+      expect(CALL_FOLLOW_UP_DELAY_DAYS).toBe(7);
+      expect(
+        Math.abs(firstMail.lte.getTime() - expectedThreshold),
+      ).toBeLessThan(5000);
+      expect(where.OR).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ status: Status.WAITING_FOR_REPLY }),
+          { status: Status.TO_FOLLOW_UP, followUpSentAt: null },
+        ]),
+      );
     });
   });
 

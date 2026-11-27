@@ -21,8 +21,10 @@ import {
 import { ReferencePointModal } from '../components/ReferencePointModal';
 import { Colors } from '../constants/colors';
 import { useAuth } from '../context/AuthContext';
+import { useCvImport } from '../hooks/useCvImport';
 import { AlertService as Alert } from '../services/alert.service';
 import { ApiService } from '../services/api.service';
+import { formatCvFileSize, formatCvUploadDate } from '../services/cv.service';
 import { LocationService, ReferencePoint } from '../services/location.service';
 import { StorageService, formatStandardCvName } from '../services/storage.service';
 import { CompanyStats } from '../types/company';
@@ -45,6 +47,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
   const [refreshing, setRefreshing] = useState(false);
   const [loadingCvUrl, setLoadingCvUrl] = useState(false);
   const [deletingCv, setDeletingCv] = useState(false);
+  const { importCv, importing: importingCv } = useCvImport();
 
   // Adresse fixe de référence
   const [refPoint, setRefPoint] = useState<ReferencePoint | null>(propRefPoint || null);
@@ -194,6 +197,15 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
   };
 
   const standardCvName = formatStandardCvName(user?.fullName);
+  const cvMetaLine = [
+    formatCvUploadDate(user?.cvUploadedAt)
+      ? `Importé le ${formatCvUploadDate(user?.cvUploadedAt)}`
+      : null,
+    formatCvFileSize(user?.cvFileSize),
+  ]
+    .filter(Boolean)
+    .join(' · ');
+  const cvBusy = loadingCvUrl || deletingCv || importingCv;
 
   const totalTracked = stats
     ? stats.AUTO_SEND +
@@ -345,8 +357,15 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
               <View style={{ flex: 1 }}>
                 <Text style={styles.cardTitle}>Curriculum Vitae (PDF)</Text>
                 <Text style={styles.cardSubtitle} numberOfLines={1}>
-                  {standardCvName}
+                  {user?.hasCv
+                    ? user.cvOriginalName || standardCvName
+                    : 'Aucun CV importé'}
                 </Text>
+                {user?.hasCv && cvMetaLine ? (
+                  <Text style={styles.cvMetaText} numberOfLines={1}>
+                    {cvMetaLine}
+                  </Text>
+                ) : null}
               </View>
             </View>
 
@@ -367,7 +386,9 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
                 <TouchableOpacity
                   style={styles.actionBtnOutline}
                   onPress={handleViewCv}
-                  disabled={loadingCvUrl || deletingCv}
+                  disabled={cvBusy}
+                  accessibilityRole="button"
+                  accessibilityLabel="Ouvrir mon CV"
                 >
                   {loadingCvUrl ? (
                     <ActivityIndicator size="small" color={Colors.brandCyan} />
@@ -380,9 +401,27 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
                 </TouchableOpacity>
 
                 <TouchableOpacity
+                  style={[styles.actionBtnSecondary, importingCv && { opacity: 0.6 }]}
+                  onPress={() => void importCv()}
+                  disabled={cvBusy}
+                  accessibilityRole="button"
+                  accessibilityLabel="Remplacer mon CV"
+                >
+                  {importingCv ? (
+                    <ActivityIndicator size="small" color={Colors.text} />
+                  ) : (
+                    <>
+                      <Ionicons name="swap-horizontal-outline" size={16} color={Colors.text} />
+                      <Text style={styles.actionBtnSecondaryText}>Remplacer</Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+
+                <TouchableOpacity
                   style={[styles.deleteCvBtn, deletingCv && { opacity: 0.6 }]}
                   onPress={handleDeleteCv}
-                  disabled={deletingCv || loadingCvUrl}
+                  disabled={cvBusy}
+                  accessibilityRole="button"
                   accessibilityLabel="Supprimer mon CV"
                 >
                   {deletingCv ? (
@@ -396,9 +435,25 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
                 </TouchableOpacity>
               </>
             ) : (
-              <Text style={styles.noCvHintText}>
-                Aucun CV enregistré sur le serveur.
-              </Text>
+              <>
+                <TouchableOpacity
+                  style={[styles.actionBtnPrimary, importingCv && { opacity: 0.6 }]}
+                  onPress={() => void importCv()}
+                  disabled={cvBusy}
+                  accessibilityRole="button"
+                  accessibilityLabel="Importer mon CV au format PDF"
+                >
+                  {importingCv ? (
+                    <ActivityIndicator size="small" color="#0B0F19" />
+                  ) : (
+                    <>
+                      <Ionicons name="cloud-upload-outline" size={16} color="#0B0F19" />
+                      <Text style={styles.actionBtnPrimaryText}>Importer mon CV</Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+                <Text style={styles.noCvHintText}>PDF, 10 Mo maximum</Text>
+              </>
             )}
           </View>
         </View>
@@ -877,9 +932,15 @@ const styles = StyleSheet.create({
   },
   cardActionsRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     alignItems: 'center',
     gap: 10,
     marginTop: 4,
+  },
+  cvMetaText: {
+    fontSize: 11,
+    color: Colors.textMuted,
+    marginTop: 2,
   },
   actionBtnOutline: {
     flexDirection: 'row',

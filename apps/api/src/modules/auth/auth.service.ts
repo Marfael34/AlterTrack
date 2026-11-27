@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as bcryptjs from 'bcryptjs';
+import * as fs from 'fs';
 import { PrismaService } from '../../prisma/prisma.service';
 import { buildStandardCvFileName } from '../app-config/app-config.service';
 import { LoginDto } from './dto/login.dto';
@@ -29,10 +30,15 @@ export class AuthService {
     template?: string | null;
     cvFilePath?: string | null;
     cvOriginalName?: string | null;
+    cvFileSize?: number | null;
+    cvUploadedAt?: Date | null;
     expoPushToken?: string | null;
     createdAt?: Date;
     updatedAt?: Date;
   }) {
+    // Le chemin en base ne suffit pas : le fichier a pu disparaître du disque
+    // (redéploiement d'un hébergeur sans disque persistant).
+    const hasCv = Boolean(user.cvFilePath && fs.existsSync(user.cvFilePath));
     return {
       id: user.id,
       email: user.email,
@@ -40,8 +46,10 @@ export class AuthService {
       gmailUser: user.gmailUser || null,
       hasGmailConfigured: Boolean(user.gmailUser && user.gmailAppPassword),
       template: user.template || null,
-      hasCv: Boolean(user.cvFilePath),
-      cvOriginalName: user.cvOriginalName || null,
+      hasCv,
+      cvOriginalName: hasCv ? user.cvOriginalName || null : null,
+      cvFileSize: hasCv ? (user.cvFileSize ?? null) : null,
+      cvUploadedAt: hasCv ? (user.cvUploadedAt ?? null) : null,
       expoPushToken: user.expoPushToken || null,
       createdAt: user.createdAt,
       updatedAt: user.updatedAt,

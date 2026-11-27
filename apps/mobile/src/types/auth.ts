@@ -8,6 +8,8 @@ export interface UserProfile {
   template: string | null;
   hasCv: boolean;
   cvOriginalName: string | null;
+  cvFileSize?: number | null;
+  cvUploadedAt?: string | null;
   expoPushToken: string | null;
   createdAt: string;
   updatedAt: string;

@@ -92,6 +92,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   const logout = async () => {
     await StorageService.removeAuthToken();
     await StorageService.removeAuthUser();
+    await StorageService.removeLocalCv();
     setToken(null);
     setUser(null);
   };

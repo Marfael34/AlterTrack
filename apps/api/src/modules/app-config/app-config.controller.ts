@@ -8,6 +8,7 @@ import {
   Post,
   Res,
   UploadedFile,
+  UseFilters,
   UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
@@ -17,7 +18,10 @@ import type { AuthenticatedUser } from '../auth/current-user.decorator';
 import {
   AppConfigService,
   buildStandardCvFileName,
+  CV_MAX_SIZE_BYTES,
+  CV_UNSUPPORTED_FORMAT_MESSAGE,
 } from './app-config.service';
+import { CvUploadExceptionFilter } from './cv-upload-exception.filter';
 import { UpdatePushTokenDto } from './dto/update-push-token.dto';
 import { UpdateTemplateDto } from './dto/update-template.dto';
 
@@ -28,18 +32,27 @@ export class AppConfigController {
   @Get()
   async getConfig(@CurrentUser() user?: AuthenticatedUser) {
     const config = await this.appConfigService.getOrCreateConfig();
-    const hasCv = Boolean(user?.cvFilePath || config.cvFilePath);
-    const cvOriginalName =
-      user?.cvOriginalName ||
-      (user?.cvFilePath ? buildStandardCvFileName(user.fullName) : null) ||
-      config.cvOriginalName ||
-      null;
+    // Un chemin en base ne suffit pas : le fichier peut avoir disparu du disque
+    // (redéploiement d'un hébergeur sans disque persistant).
+    const userHasCv = Boolean(
+      this.appConfigService.resolveStoredFile(user?.cvFilePath),
+    );
+    const hasCv =
+      userHasCv ||
+      Boolean(this.appConfigService.resolveStoredFile(config.cvFilePath));
+    const cvOriginalName = !hasCv
+      ? null
+      : userHasCv
+        ? user?.cvOriginalName || buildStandardCvFileName(user?.fullName)
+        : config.cvOriginalName || null;
 
     return {
       id: config.id,
       template: user?.template || config.template,
       hasCv,
       cvOriginalName,
+      cvFileSize: userHasCv ? (user?.cvFileSize ?? null) : null,
+      cvUploadedAt: userHasCv ? (user?.cvUploadedAt ?? null) : null,
       expoPushToken: user?.expoPushToken || config.expoPushToken,
       updatedAt: config.updatedAt,
     };
@@ -56,10 +69,12 @@ export class AppConfigController {
   }
 
   @Post('cv')
+  @UseFilters(CvUploadExceptionFilter)
   @UseInterceptors(
     FileInterceptor('file', {
       limits: {
-        fileSize: 10 * 1024 * 1024, // 10 Mo max
+        fileSize: CV_MAX_SIZE_BYTES,
+        files: 1,
       },
       fileFilter: (req, file, callback) => {
         const name = (file.originalname || '').toLowerCase();
@@ -80,21 +95,22 @@ export class AppConfigController {
         }
 
         return callback(
-          new BadRequestException('Seuls les fichiers PDF sont acceptés'),
+          new BadRequestException(CV_UNSUPPORTED_FORMAT_MESSAGE),
           false,
         );
       },
     }),
   )
   async uploadCv(
-    @UploadedFile() file: Express.Multer.File,
+    @UploadedFile() file: Express.Multer.File | undefined,
     @CurrentUser() user?: AuthenticatedUser,
   ) {
-    const updated = await this.appConfigService.saveCv(file, user?.id);
+    const saved = await this.appConfigService.saveCv(file, user?.id);
     return {
-      id: updated.id,
       hasCv: true,
-      cvOriginalName: updated.cvOriginalName,
+      cvOriginalName: saved.cvOriginalName,
+      cvFileSize: saved.cvFileSize,
+      cvUploadedAt: saved.cvUploadedAt,
       message: 'CV enregistré et synchronisé avec succès.',
     };
   }

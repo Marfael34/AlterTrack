@@ -2,6 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import React from 'react';
 import { Linking, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Colors } from '../constants/colors';
+import { CALL_FOLLOW_UP_DELAY_DAYS } from '../constants/followUp';
 import { Company } from '../types/company';
 import { StatusBadge } from './StatusBadge';
 import { LocationService } from '../services/location.service';
@@ -144,7 +145,7 @@ export const CompanyCard: React.FC<CompanyCardProps> = ({
             <View style={styles.urgentCallBadge}>
               <Ionicons name="call" size={12} color={Colors.status.TO_CALL} />
               <Text style={styles.urgentCallText} numberOfLines={1}>
-                J+15 sans réponse • Appel direct
+                J+{CALL_FOLLOW_UP_DELAY_DAYS} sans réponse • Appel direct
               </Text>
               <Ionicons name="chevron-forward" size={12} color={Colors.status.TO_CALL} />
             </View>

@@ -1,14 +1,31 @@
 import {
   BadRequestException,
   Injectable,
+  InternalServerErrorException,
   Logger,
   NotFoundException,
+  PayloadTooLargeException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { randomBytes } from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
 import { PrismaService } from '../../prisma/prisma.service';
+
+export const CV_MAX_SIZE_BYTES = 10 * 1024 * 1024;
+export const CV_TOO_LARGE_MESSAGE = 'Le fichier dépasse 10 Mo.';
+export const CV_UNSUPPORTED_FORMAT_MESSAGE =
+  'Format non pris en charge. Importez un fichier PDF.';
+
+const PDF_MAGIC_BYTES = '%PDF-';
+
+export function isPdfBuffer(buffer: Buffer): boolean {
+  return (
+    buffer.length >= PDF_MAGIC_BYTES.length &&
+    buffer.subarray(0, PDF_MAGIC_BYTES.length).toString('ascii') ===
+      PDF_MAGIC_BYTES
+  );
+}
 
 const DEFAULT_MAIL_TEMPLATE = `Bonjour,
 
@@ -115,111 +132,153 @@ export class AppConfigService {
     });
   }
 
-  async saveCv(file: Express.Multer.File, userId?: string) {
+  /**
+   * Retourne le chemin absolu d'un fichier s'il existe et se trouve bien dans
+   * le répertoire d'upload (protection contre la traversée de répertoires).
+   */
+  resolveStoredFile(filePath?: string | null): string | null {
+    if (!filePath) return null;
+    const resolved = path.resolve(filePath);
+    const uploadBoundary = this.uploadDir.endsWith(path.sep)
+      ? this.uploadDir
+      : `${this.uploadDir}${path.sep}`;
+    if (!resolved.startsWith(uploadBoundary)) return null;
+    return fs.existsSync(resolved) ? resolved : null;
+  }
+
+  private removeStoredFile(filePath?: string | null) {
+    const resolved = this.resolveStoredFile(filePath);
+    if (!resolved) return;
+    try {
+      fs.unlinkSync(resolved);
+    } catch (err) {
+      this.logger.warn(`Impossible de supprimer l'ancien CV : ${String(err)}`);
+    }
+  }
+
+  /**
+   * Le CV global (miroir utilisé par les envois sans utilisateur) peut pointer
+   * vers le fichier d'un compte : on ne le supprime que s'il n'est plus référencé.
+   */
+  private async removeGlobalFileIfUnreferenced(filePath?: string | null) {
+    if (!filePath) return;
+    const references = await this.prisma.user.count({
+      where: { cvFilePath: filePath },
+    });
+    if (references === 0) {
+      this.removeStoredFile(filePath);
+    }
+  }
+
+  async saveCv(file: Express.Multer.File | undefined, userId?: string) {
     if (!file || !file.buffer || file.buffer.length === 0) {
-      throw new BadRequestException('Aucun fichier fourni ou fichier vide');
+      throw new BadRequestException('Aucun fichier fourni ou fichier vide.');
     }
 
-    const name = (file.originalname || '').toLowerCase();
-    const mime = (file.mimetype || '').toLowerCase();
+    if (file.buffer.length > CV_MAX_SIZE_BYTES) {
+      throw new PayloadTooLargeException(CV_TOO_LARGE_MESSAGE);
+    }
 
-    // Vérification des magic bytes PDF (%PDF-)
-    const hasPdfMagic =
-      file.buffer.length >= 4 &&
-      file.buffer.subarray(0, 4).toString('ascii') === '%PDF';
-
-    const isPdfExt = name.endsWith('.pdf');
-    const isPdfMime =
-      mime.includes('pdf') ||
-      mime === 'application/octet-stream' ||
-      mime === 'binary/octet-stream';
-
-    if (!hasPdfMagic && !isPdfExt) {
-      throw new BadRequestException('Seuls les fichiers PDF sont acceptés');
+    // Le contenu fait foi : le nom et le type MIME envoyés par le téléphone
+    // ne sont pas fiables (Android omet souvent l'extension ou le MIME).
+    if (!isPdfBuffer(file.buffer)) {
+      throw new BadRequestException(CV_UNSUPPORTED_FORMAT_MESSAGE);
     }
 
     const config = await this.getOrCreateConfig();
-
-    // Suppression sécurisée de l'ancien CV s'il existe
-    if (config.cvFilePath) {
-      try {
-        const oldResolved = path.resolve(config.cvFilePath);
-        const uploadBoundary = this.uploadDir.endsWith(path.sep)
-          ? this.uploadDir
-          : `${this.uploadDir}${path.sep}`;
-
-        if (
-          oldResolved.startsWith(uploadBoundary) &&
-          fs.existsSync(oldResolved)
-        ) {
-          fs.unlinkSync(oldResolved);
-        }
-      } catch (err) {
-        this.logger.warn(`Impossible de supprimer l'ancien CV: ${err}`);
-      }
-    }
-
+    let previousUserPath: string | null = null;
     let userFullName: string | null = null;
     if (userId) {
       const u = await this.prisma.user.findUnique({
         where: { id: userId },
-        select: { fullName: true },
+        select: { fullName: true, cvFilePath: true },
       });
       userFullName = u?.fullName || null;
+      previousUserPath = u?.cvFilePath || null;
     }
 
-    // Génération du nom de fichier uniforme : nom_prenom_CV.pdf
     const standardName = buildStandardCvFileName(userFullName);
     const safeFilename = `cv_${userId || 'global'}_${Date.now()}_${randomBytes(8).toString('hex')}.pdf`;
     const targetPath = path.join(this.uploadDir, safeFilename);
+    const tempPath = `${targetPath}.part`;
+    const uploadedAt = new Date();
+    const fileSize = file.buffer.length;
 
-    // Écriture du fichier sur le disque
-    fs.writeFileSync(targetPath, file.buffer);
-
-    const updatedConfig = await this.prisma.appConfig.update({
-      where: { id: config.id },
-      data: {
-        cvFilePath: targetPath,
-        cvOriginalName: standardName,
-      },
-    });
-
-    if (userId) {
-      await this.prisma.user.update({
-        where: { id: userId },
-        data: {
-          cvFilePath: targetPath,
-          cvOriginalName: standardName,
-        },
-      });
-      this.logger.log(
-        `CV PDF enregistré avec succès pour l'utilisateur ${userId} (${standardName}).`,
+    // Écriture dans un fichier temporaire puis renommage : un envoi interrompu
+    // ne laisse jamais de PDF tronqué à la place du CV actif.
+    try {
+      fs.writeFileSync(tempPath, file.buffer);
+      fs.renameSync(tempPath, targetPath);
+    } catch (err) {
+      this.removeStoredFile(tempPath);
+      this.logger.error(
+        `Échec d'écriture du CV sur le disque : ${String(err)}`,
       );
-    } else {
-      this.logger.log(
-        `CV PDF enregistré avec succès au niveau global (${standardName}).`,
+      throw new InternalServerErrorException(
+        "L'enregistrement du CV a échoué. Veuillez réessayer.",
       );
     }
 
-    return updatedConfig;
+    try {
+      await this.prisma.$transaction([
+        this.prisma.appConfig.update({
+          where: { id: config.id },
+          data: { cvFilePath: targetPath, cvOriginalName: standardName },
+        }),
+        ...(userId
+          ? [
+              this.prisma.user.update({
+                where: { id: userId },
+                data: {
+                  cvFilePath: targetPath,
+                  cvOriginalName: standardName,
+                  cvFileSize: fileSize,
+                  cvUploadedAt: uploadedAt,
+                },
+              }),
+            ]
+          : []),
+      ]);
+    } catch (err) {
+      // La base n'a pas été mise à jour : l'ancien CV reste actif et intact.
+      this.removeStoredFile(targetPath);
+      this.logger.error(
+        `Échec d'enregistrement du CV en base : ${String(err)}`,
+      );
+      throw new InternalServerErrorException(
+        "L'enregistrement du CV a échoué. Veuillez réessayer.",
+      );
+    }
+
+    // L'ancien fichier n'est supprimé qu'une fois le nouveau CV bien enregistré.
+    if (previousUserPath && previousUserPath !== targetPath) {
+      this.removeStoredFile(previousUserPath);
+    }
+    if (
+      config.cvFilePath &&
+      config.cvFilePath !== targetPath &&
+      config.cvFilePath !== previousUserPath
+    ) {
+      await this.removeGlobalFileIfUnreferenced(config.cvFilePath);
+    }
+
+    this.logger.log(
+      `CV PDF enregistré pour ${userId ? `l'utilisateur ${userId}` : 'la configuration globale'} (${standardName}).`,
+    );
+
+    return {
+      cvOriginalName: standardName,
+      cvFileSize: fileSize,
+      cvUploadedAt: uploadedAt,
+    };
   }
 
   async getCvFilePath(): Promise<string> {
     const config = await this.getOrCreateConfig();
+    const resolved = this.resolveStoredFile(config.cvFilePath);
 
-    if (!config.cvFilePath || !fs.existsSync(config.cvFilePath)) {
+    if (!resolved) {
       throw new NotFoundException('Aucun CV PDF enregistré sur le serveur');
-    }
-
-    const resolved = path.resolve(config.cvFilePath);
-    const uploadBoundary = this.uploadDir.endsWith(path.sep)
-      ? this.uploadDir
-      : `${this.uploadDir}${path.sep}`;
-
-    if (!resolved.startsWith(uploadBoundary)) {
-      throw new BadRequestException(
-        'Chemin de fichier hors du répertoire autorisé',
-      );
     }
 
     return resolved;
@@ -229,37 +288,29 @@ export class AppConfigService {
     filePath: string;
     originalName: string;
   }> {
-    const uploadBoundary = this.uploadDir.endsWith(path.sep)
-      ? this.uploadDir
-      : `${this.uploadDir}${path.sep}`;
-
     if (userId) {
       const user = await this.prisma.user.findUnique({
         where: { id: userId },
         select: { cvFilePath: true, cvOriginalName: true, fullName: true },
       });
 
-      if (user?.cvFilePath && fs.existsSync(user.cvFilePath)) {
-        const resolved = path.resolve(user.cvFilePath);
-        if (resolved.startsWith(uploadBoundary)) {
-          return {
-            filePath: resolved,
-            originalName:
-              user.cvOriginalName || buildStandardCvFileName(user.fullName),
-          };
-        }
+      const resolved = this.resolveStoredFile(user?.cvFilePath);
+      if (user && resolved) {
+        return {
+          filePath: resolved,
+          originalName:
+            user.cvOriginalName || buildStandardCvFileName(user.fullName),
+        };
       }
     }
 
     const config = await this.getOrCreateConfig();
-    if (config.cvFilePath && fs.existsSync(config.cvFilePath)) {
-      const resolved = path.resolve(config.cvFilePath);
-      if (resolved.startsWith(uploadBoundary)) {
-        return {
-          filePath: resolved,
-          originalName: config.cvOriginalName || 'CV.pdf',
-        };
-      }
+    const resolved = this.resolveStoredFile(config.cvFilePath);
+    if (resolved) {
+      return {
+        filePath: resolved,
+        originalName: config.cvOriginalName || 'CV.pdf',
+      };
     }
 
     throw new NotFoundException(
@@ -270,9 +321,7 @@ export class AppConfigService {
   async deleteCv(
     userId?: string,
   ): Promise<{ success: boolean; message: string }> {
-    const uploadBoundary = this.uploadDir.endsWith(path.sep)
-      ? this.uploadDir
-      : `${this.uploadDir}${path.sep}`;
+    let deletedUserPath: string | null = null;
 
     if (userId) {
       const user = await this.prisma.user.findUnique({
@@ -281,40 +330,29 @@ export class AppConfigService {
       });
 
       if (user?.cvFilePath) {
-        try {
-          const resolved = path.resolve(user.cvFilePath);
-          if (resolved.startsWith(uploadBoundary) && fs.existsSync(resolved)) {
-            fs.unlinkSync(resolved);
-          }
-        } catch (err) {
-          this.logger.warn(
-            `Impossible de supprimer le fichier CV utilisateur: ${err}`,
-          );
-        }
-
+        deletedUserPath = user.cvFilePath;
+        this.removeStoredFile(user.cvFilePath);
         await this.prisma.user.update({
           where: { id: userId },
           data: {
             cvFilePath: null,
             cvOriginalName: null,
+            cvFileSize: null,
+            cvUploadedAt: null,
           },
         });
       }
     }
 
+    // Le miroir global n'est effacé que s'il correspond au CV supprimé
+    // (ou si la requête n'est pas liée à un compte), pour ne pas retirer
+    // le CV d'un autre utilisateur.
     const config = await this.getOrCreateConfig();
-    if (config.cvFilePath) {
-      try {
-        const resolved = path.resolve(config.cvFilePath);
-        if (resolved.startsWith(uploadBoundary) && fs.existsSync(resolved)) {
-          fs.unlinkSync(resolved);
-        }
-      } catch (err) {
-        this.logger.warn(
-          `Impossible de supprimer le fichier CV global: ${err}`,
-        );
-      }
-
+    if (
+      config.cvFilePath &&
+      (!userId || config.cvFilePath === deletedUserPath)
+    ) {
+      await this.removeGlobalFileIfUnreferenced(config.cvFilePath);
       await this.prisma.appConfig.update({
         where: { id: config.id },
         data: {

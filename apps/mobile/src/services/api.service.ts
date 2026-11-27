@@ -9,7 +9,7 @@ import {
   UserProfile,
 } from '../types/auth';
 import { Company, CompanyActivity, CompanyStats, Status } from '../types/company';
-import { AppConfig } from '../types/config';
+import { AppConfig, CvUploadResult } from '../types/config';
 import { StorageService } from './storage.service';
 
 export interface AppReleaseInfo {
@@ -390,11 +390,11 @@ export const ApiService = {
     fileUri: string,
     fileName: string,
     webFile?: unknown,
-  ): Promise<AppConfig> {
+  ): Promise<CvUploadResult> {
     const safeName = fileName.toLowerCase().endsWith('.pdf')
       ? fileName
       : `${fileName}.pdf`;
-    return this.uploadFile<AppConfig>(
+    return this.uploadFile<CvUploadResult>(
       '/config/cv',
       fileUri,
       safeName,

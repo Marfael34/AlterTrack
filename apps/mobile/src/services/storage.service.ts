@@ -159,31 +159,11 @@ export const StorageService = {
     await AsyncStorage.removeItem('altertrack_auth_user');
   },
 
-  async getLocalCv(): Promise<LocalCvInfo | null> {
-    try {
-      const raw = await AsyncStorage.getItem('altertrack_local_cv');
-      return raw ? JSON.parse(raw) : null;
-    } catch {
-      return null;
-    }
-  },
-
-  async setLocalCv(cv: LocalCvInfo): Promise<void> {
-    await AsyncStorage.setItem('altertrack_local_cv', JSON.stringify(cv));
-  },
-
+  /** Efface l'ancien cache local du CV (versions ≤ 1.3.1), le serveur fait autorité. */
   async removeLocalCv(): Promise<void> {
     await AsyncStorage.removeItem('altertrack_local_cv');
   },
 };
-
-export interface LocalCvInfo {
-  fileName: string;
-  fileSize?: number;
-  fileUri?: string;
-  uploadedAt: string;
-  isSynced: boolean;
-}
 
 export function formatStandardCvName(fullName?: string | null): string {
   if (!fullName || !fullName.trim()) {
