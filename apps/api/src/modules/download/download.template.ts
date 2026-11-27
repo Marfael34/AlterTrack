@@ -128,6 +128,7 @@ export function renderDownloadPage(config: DownloadPageConfig): string {
       display: flex;
       justify-content: space-between;
       align-items: center;
+      gap: 16px;
     }
 
     .brand {
@@ -183,6 +184,7 @@ export function renderDownloadPage(config: DownloadPageConfig): string {
     }
 
     .header-link {
+      white-space: nowrap;
       color: var(--text-muted);
       text-decoration: none;
       font-size: 14px;
@@ -494,7 +496,8 @@ export function renderDownloadPage(config: DownloadPageConfig): string {
 
     .steps-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      /* 3 colonnes dès la tablette, 1 seule sur téléphone (min() évite tout débordement) */
+      grid-template-columns: repeat(auto-fit, minmax(min(100%, 210px), 1fr));
       gap: 24px;
       margin-bottom: 60px;
     }
@@ -545,7 +548,7 @@ export function renderDownloadPage(config: DownloadPageConfig): string {
     /* Feature Grid */
     .features-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(min(100%, 250px), 1fr));
       gap: 20px;
       margin-bottom: 80px;
     }
@@ -613,22 +616,124 @@ export function renderDownloadPage(config: DownloadPageConfig): string {
       color: var(--text-main);
     }
 
-    /* Mobile adjustments */
+    /* Tablette */
+    @media (max-width: 900px) {
+      .hero {
+        padding: 56px 0 40px;
+      }
+      .section-title-wrap {
+        margin: 56px 0 32px;
+      }
+    }
+
+    /* Téléphone */
     @media (max-width: 640px) {
+      .container {
+        padding: 0 16px;
+      }
+      header {
+        padding: 14px 0;
+      }
+      .brand {
+        gap: 10px;
+      }
+      .brand-icon {
+        width: 36px;
+        height: 36px;
+        border-radius: 10px;
+      }
+      .brand-name {
+        font-size: 19px;
+      }
+      /* Les mêmes liens sont dans le pied de page */
+      .header-links {
+        display: none;
+      }
+      .hero {
+        padding: 36px 0 28px;
+      }
+      .pill-badge {
+        font-size: 12px;
+        padding: 6px 12px;
+        margin-bottom: 18px;
+        max-width: 100%;
+      }
+      .hero-subtitle {
+        margin-bottom: 28px;
+      }
       .download-card {
         padding: 28px 20px;
+        border-radius: 20px;
       }
+      /* Infos de l'APK sur 2 colonnes pour raccourcir la carte */
       .card-top {
-        flex-direction: column;
-        align-items: flex-start;
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 14px 12px;
+        margin-bottom: 22px;
       }
+      .meta-value {
+        font-size: 15px;
+      }
+      .os-badge {
+        justify-self: start;
+        align-self: center;
+      }
+      /* Sur téléphone, le bouton suffit : le QR code sert à passer de l'ordinateur au téléphone */
       .qr-section {
-        flex-direction: column;
-        align-items: flex-start;
+        display: none;
       }
       .btn-download-primary {
         padding: 16px 20px;
         font-size: 16px;
+        gap: 10px;
+      }
+      .btn-download-primary svg {
+        width: 22px;
+        height: 22px;
+      }
+      .release-notes {
+        padding: 14px;
+      }
+      .section-title-wrap {
+        margin: 44px 0 24px;
+      }
+      .steps-grid {
+        gap: 16px;
+        margin-bottom: 40px;
+      }
+      .step-card {
+        padding: 22px 20px;
+      }
+      .features-grid {
+        gap: 14px;
+        margin-bottom: 48px;
+      }
+      footer {
+        padding: 28px 0;
+      }
+      .toast {
+        width: max-content;
+        max-width: calc(100% - 32px);
+      }
+    }
+
+    /* Petits téléphones */
+    @media (max-width: 380px) {
+      .brand-tag {
+        display: none;
+      }
+      .card-top {
+        gap: 10px;
+      }
+    }
+
+    /* Pas d'effet de survol « qui saute » sur écran tactile */
+    @media (hover: none) {
+      .step-card:hover,
+      .feature-card:hover,
+      .btn-download-primary:hover {
+        transform: none;
       }
     }
   </style>

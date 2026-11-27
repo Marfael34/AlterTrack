@@ -119,8 +119,15 @@ export class DownloadService {
     } catch (err: unknown) {
       const reason = err instanceof Error ? err.message : String(err);
       this.logger.warn(
-        `Impossible de lire la dernière release GitHub : ${reason}`,
+        `API GitHub indisponible (${reason}), lecture de la release par redirection`,
       );
+      // Secours sans API (pas de limite de 60 requêtes/h par IP partagée sur Render)
+      const fromRedirect = await this.getLatestReleaseFromRedirect(repo);
+      if (fromRedirect) {
+        this.releaseCache = { value: fromRedirect, fetchedAt: now };
+        return fromRedirect;
+      }
+      this.logger.warn('Impossible de déterminer la dernière release GitHub');
       // En cas d'échec, on garde l'ancienne valeur et on réessaie dans 1 min
       const previous = this.releaseCache?.value ?? null;
       this.releaseCache = {
@@ -128,6 +135,71 @@ export class DownloadService {
         fetchedAt: now - this.releaseCacheTtlMs + 60 * 1000,
       };
       return previous;
+    }
+  }
+
+  /**
+   * Secours : github.com/<repo>/releases/latest redirige vers /releases/tag/<tag>.
+   * Le nom de l'APK suit la convention du workflow : AlterTrack-<tag>.apk.
+   * Une requête HEAD (redirections suivies) confirme qu'il existe et donne sa taille.
+   */
+  private async getLatestReleaseFromRedirect(
+    repo: string,
+  ): Promise<GithubReleaseInfo | null> {
+    try {
+      const res = await fetch(`https://github.com/${repo}/releases/latest`, {
+        method: 'HEAD',
+        redirect: 'manual',
+        headers: { 'User-Agent': 'AlterTrack-API' },
+        signal: AbortSignal.timeout(5000),
+      });
+      const location = res.headers.get('location') || '';
+      const match = location.match(/\/releases\/tag\/([^/?#]+)/);
+      if (!match) {
+        throw new Error(`redirection inattendue (${res.status})`);
+      }
+      const tag = decodeURIComponent(match[1]);
+      const releaseUrl = `https://github.com/${repo}/releases/tag/${match[1]}`;
+      const apkName = `AlterTrack-${tag}.apk`;
+      const apkUrl = `https://github.com/${repo}/releases/download/${match[1]}/${apkName}`;
+
+      let apkExists = false;
+      let apkSizeBytes: number | undefined;
+      let publishedAt: string | undefined;
+      try {
+        const head = await fetch(apkUrl, {
+          method: 'HEAD',
+          headers: { 'User-Agent': 'AlterTrack-API' },
+          signal: AbortSignal.timeout(5000),
+        });
+        apkExists = head.ok;
+        const length = Number(head.headers.get('content-length'));
+        if (head.ok && length > 0) apkSizeBytes = length;
+        // Date d'envoi du fichier APK = date de publication de la release
+        const lastModified = head.headers.get('last-modified');
+        if (head.ok && lastModified && !isNaN(Date.parse(lastModified))) {
+          publishedAt = new Date(lastModified).toISOString();
+        }
+      } catch {
+        // Taille inconnue : on garde le lien vers la page de la release
+      }
+
+      return {
+        version: tag.replace(/^v/i, ''),
+        publishedAt: publishedAt || new Date().toISOString(),
+        releaseUrl,
+        releaseNotes: '',
+        // Si l'APK n'a pas le nom attendu, on renvoie vers la page de la release (jamais un 404)
+        apkUrl: apkExists ? apkUrl : releaseUrl,
+        apkName: apkExists ? apkName : undefined,
+        apkSizeBytes,
+      };
+    } catch (err: unknown) {
+      const reason = err instanceof Error ? err.message : String(err);
+      this.logger.warn(
+        `Lecture de la release par redirection impossible : ${reason}`,
+      );
+      return null;
     }
   }
 
