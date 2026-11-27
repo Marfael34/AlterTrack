@@ -104,6 +104,85 @@ describe('DownloadService', () => {
     expect(html).toContain('Nouveautés de la version 1.2.3');
   });
 
+  it('should read the latest release from the redirect when the GitHub API fails', async () => {
+    const apkUrl =
+      'https://github.com/Marfael34/AlterTrack/releases/download/v1.3.0/AlterTrack-v1.3.0.apk';
+    jest.spyOn(globalThis, 'fetch').mockImplementation((input) => {
+      const url =
+        typeof input === 'string'
+          ? input
+          : input instanceof URL
+            ? input.href
+            : input.url;
+      if (url.startsWith('https://api.github.com')) {
+        return Promise.resolve({ ok: false, status: 403 } as Response);
+      }
+      if (url.endsWith('/releases/latest')) {
+        return Promise.resolve({
+          ok: false,
+          status: 302,
+          headers: new Headers({
+            location:
+              'https://github.com/Marfael34/AlterTrack/releases/tag/v1.3.0',
+          }),
+        } as Response);
+      }
+      if (url === apkUrl) {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          headers: new Headers({
+            'content-length': '81232397',
+            'last-modified': 'Fri, 27 Nov 2026 10:41:18 GMT',
+          }),
+        } as Response);
+      }
+      return Promise.reject(new Error(`URL inattendue : ${url}`));
+    });
+
+    const info = await service.getResolvedApkInfo();
+    expect(info.version).toBe('1.3.0');
+    expect(info.externalUrl).toBe(apkUrl);
+    expect(info.filename).toBe('AlterTrack-v1.3.0.apk');
+    expect(info.size).toBe('77.5 Mo');
+    expect(info.publishedAt).toBe('2026-11-27T10:41:18.000Z');
+  });
+
+  it('should link to the release page instead of a 404 when the APK name is unexpected', async () => {
+    jest.spyOn(globalThis, 'fetch').mockImplementation((input) => {
+      const url =
+        typeof input === 'string'
+          ? input
+          : input instanceof URL
+            ? input.href
+            : input.url;
+      if (url.startsWith('https://api.github.com')) {
+        return Promise.resolve({ ok: false, status: 403 } as Response);
+      }
+      if (url.endsWith('/releases/latest')) {
+        return Promise.resolve({
+          ok: false,
+          status: 302,
+          headers: new Headers({
+            location:
+              'https://github.com/Marfael34/AlterTrack/releases/tag/v1.2.2',
+          }),
+        } as Response);
+      }
+      return Promise.resolve({
+        ok: false,
+        status: 404,
+        headers: new Headers(),
+      } as Response);
+    });
+
+    const info = await service.getResolvedApkInfo();
+    expect(info.version).toBe('1.2.2');
+    expect(info.externalUrl).toBe(
+      'https://github.com/Marfael34/AlterTrack/releases/tag/v1.2.2',
+    );
+  });
+
   it('should fall back to local info when GitHub is unreachable', async () => {
     jest
       .spyOn(globalThis, 'fetch')
