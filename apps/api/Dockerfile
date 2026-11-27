@@ -45,8 +45,19 @@ COPY --from=builder --chown=node:node /app/dist ./dist
 COPY --chown=node:node <<'EOF' /app/entrypoint.sh
 #!/bin/sh
 set -e
+# Sans DIRECT_URL (Docker Compose local), les migrations passent par DATABASE_URL.
+export DIRECT_URL="${DIRECT_URL:-$DATABASE_URL}"
 echo "Application des migrations Prisma sur PostgreSQL..."
-npx prisma migrate deploy || true
+attempt=1
+until npx prisma migrate deploy; do
+  if [ "$attempt" -ge 3 ]; then
+    echo "Échec des migrations Prisma après $attempt tentatives : arrêt sans démarrer l'API." >&2
+    exit 1
+  fi
+  attempt=$((attempt + 1))
+  echo "Migration échouée, nouvelle tentative ($attempt/3) dans 10 s..."
+  sleep 10
+done
 echo "Démarrage de l'API AlterTrack..."
 exec node dist/main.js
 EOF
