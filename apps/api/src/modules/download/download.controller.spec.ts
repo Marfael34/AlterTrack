@@ -31,11 +31,11 @@ describe('DownloadController', () => {
         {
           provide: DownloadService,
           useValue: {
-            getLandingHtml: jest.fn().mockReturnValue('<html>Landing</html>'),
+            getLandingHtml: jest.fn().mockResolvedValue('<html>Landing</html>'),
             getNotFoundHtml: jest
               .fn()
               .mockReturnValue('<html>Not Found</html>'),
-            getApkInfo: jest.fn().mockReturnValue({
+            getResolvedApkInfo: jest.fn().mockResolvedValue({
               exists: true,
               filename: 'altertrack-v1.0.0.apk',
               version: '1.0.0',
@@ -57,11 +57,11 @@ describe('DownloadController', () => {
     expect(controller).toBeDefined();
   });
 
-  it('should serve home page with text/html header', () => {
+  it('should serve home page with text/html header', async () => {
     const req = mockRequest();
     const res = mockResponse();
 
-    controller.getHomePage(req, res);
+    await controller.getHomePage(req, res);
 
     expect(res.setHeader).toHaveBeenCalledWith(
       'Content-Type',
@@ -70,11 +70,11 @@ describe('DownloadController', () => {
     expect(res.send).toHaveBeenCalledWith('<html>Landing</html>');
   });
 
-  it('should serve download page via /download', () => {
+  it('should serve download page via /download', async () => {
     const req = mockRequest();
     const res = mockResponse();
 
-    controller.getDownloadPage(req, res);
+    await controller.getDownloadPage(req, res);
 
     expect(res.setHeader).toHaveBeenCalledWith(
       'Content-Type',
@@ -83,10 +83,10 @@ describe('DownloadController', () => {
     expect(res.send).toHaveBeenCalledWith('<html>Landing</html>');
   });
 
-  it('should return APK binary when available', () => {
+  it('should return APK binary when available', async () => {
     const res = mockResponse();
 
-    controller.downloadApk(res);
+    await controller.downloadApk(res);
 
     expect(res.setHeader).toHaveBeenCalledWith(
       'Content-Type',
@@ -99,8 +99,8 @@ describe('DownloadController', () => {
     expect(res.sendFile).toHaveBeenCalled();
   });
 
-  it('should redirect if external APK URL is configured', () => {
-    jest.spyOn(service, 'getApkInfo').mockReturnValue({
+  it('should redirect if external APK URL is configured', async () => {
+    jest.spyOn(service, 'getResolvedApkInfo').mockResolvedValue({
       exists: true,
       isExternal: true,
       externalUrl: 'https://cdn.altertrack.app/altertrack.apk',
@@ -112,7 +112,7 @@ describe('DownloadController', () => {
     });
 
     const res = mockResponse();
-    controller.downloadApk(res);
+    await controller.downloadApk(res);
 
     expect(res.redirect).toHaveBeenCalledWith(
       302,
@@ -120,8 +120,8 @@ describe('DownloadController', () => {
     );
   });
 
-  it('should return JSON metadata on /api/apk-info', () => {
-    const info = controller.getApkInfo();
+  it('should return JSON metadata on /api/apk-info', async () => {
+    const info = await controller.getApkInfo();
     expect(info).toBeDefined();
     expect(info.available).toBe(true);
     expect(info.version).toBe('1.0.0');

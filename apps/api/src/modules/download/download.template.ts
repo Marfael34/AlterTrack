@@ -5,10 +5,51 @@ export interface DownloadPageConfig {
   releaseDate: string;
   apkDownloadUrl: string;
   apiUrl: string;
+  releaseUrl?: string;
+  releaseNotes?: string;
+}
+
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+/** Bloc « Nouveautés » : notes de la release GitHub + lien vers l'historique. */
+function renderReleaseNotes(
+  version: string,
+  releaseDate: string,
+  releaseUrl?: string,
+  releaseNotes?: string,
+): string {
+  if (!releaseUrl && !releaseNotes) {
+    return '';
+  }
+  const notes = releaseNotes
+    ? `<div class="release-notes-body">${escapeHtml(releaseNotes)}</div>`
+    : '';
+  const link = releaseUrl
+    ? `<a class="release-notes-link" href="${escapeHtml(releaseUrl)}" target="_blank" rel="noopener">Voir le détail et les versions précédentes</a>`
+    : '';
+  return `
+        <div class="release-notes" id="release-notes">
+          <div class="release-notes-title">Nouveautés de la version ${escapeHtml(version)} · publiée le ${escapeHtml(releaseDate)}</div>
+          ${notes}
+          ${link}
+        </div>`;
 }
 
 export function renderDownloadPage(config: DownloadPageConfig): string {
   const { appName, version, fileSize, releaseDate, apkDownloadUrl } = config;
+  const releaseNotesHtml = renderReleaseNotes(
+    version,
+    releaseDate,
+    config.releaseUrl,
+    config.releaseNotes,
+  );
 
   return `<!DOCTYPE html>
 <html lang="fr">
@@ -205,6 +246,35 @@ export function renderDownloadPage(config: DownloadPageConfig): string {
     }
 
     /* Download Card Main */
+    .release-notes {
+      margin-top: 20px;
+      padding: 16px 18px;
+      border-radius: 14px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      background: rgba(3, 7, 18, 0.6);
+      text-align: left;
+    }
+    .release-notes-title {
+      font-weight: 600;
+      color: var(--text-main);
+      margin-bottom: 8px;
+    }
+    .release-notes-body {
+      color: var(--text-muted);
+      font-size: 14px;
+      line-height: 1.6;
+      white-space: pre-line;
+      margin-bottom: 10px;
+    }
+    .release-notes-link {
+      color: #38BDF8;
+      font-size: 14px;
+      text-decoration: none;
+    }
+    .release-notes-link:hover {
+      text-decoration: underline;
+    }
+
     .download-card {
       max-width: 720px;
       margin: 0 auto;
@@ -586,7 +656,7 @@ export function renderDownloadPage(config: DownloadPageConfig): string {
   <main class="container">
     <section class="hero">
       <div class="pill-badge">
-        <span>🚀 Version ${version} disponible pour Android</span>
+        <span>🚀 Version ${version} disponible pour Android · ${releaseDate}</span>
       </div>
       <h1 class="hero-title">Le copilote intelligent de votre <span>Alternance</span></h1>
       <p class="hero-subtitle">
@@ -636,6 +706,7 @@ export function renderDownloadPage(config: DownloadPageConfig): string {
             </button>
           </div>
         </div>
+${releaseNotesHtml}
       </article>
     </section>
 
@@ -650,7 +721,7 @@ export function renderDownloadPage(config: DownloadPageConfig): string {
         <div class="step-card">
           <div class="step-number">1</div>
           <h3>Téléchargez le fichier</h3>
-          <p>Appuyez sur le bouton bleu ci-dessus ou scannez le QR code. Le fichier <strong>altertrack-v${version}.apk</strong> se télécharge dans votre dossier Téléchargements.</p>
+          <p>Appuyez sur le bouton bleu ci-dessus ou scannez le QR code. Le fichier <strong>AlterTrack-v${version}.apk</strong> se télécharge dans votre dossier Téléchargements.</p>
         </div>
 
         <div class="step-card">

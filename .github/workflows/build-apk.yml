@@ -30,6 +30,22 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # La version de l'APK suit le tag (v1.2.3 -> version 1.2.3, versionCode 10203).
+      # L'app la compare à la dernière release pour afficher « Nouvelle version disponible ».
+      - name: Set app version from tag
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          node -e "
+            const fs = require('fs');
+            const file = 'apps/mobile/app.json';
+            const cfg = JSON.parse(fs.readFileSync(file, 'utf8'));
+            const [maj, min, pat] = process.argv[1].split('-')[0].split('.').map((n) => parseInt(n, 10) || 0);
+            cfg.expo.version = process.argv[1];
+            cfg.expo.android.versionCode = maj * 10000 + min * 100 + pat;
+            fs.writeFileSync(file, JSON.stringify(cfg, null, 2) + '\n');
+            console.log('Version', cfg.expo.version, 'versionCode', cfg.expo.android.versionCode);
+          " "$VERSION"
+
       - name: Build Android APK (Expo / Gradle)
         env:
           EXPO_PUBLIC_API_URL: https://altertrack.onrender.com
@@ -42,10 +58,16 @@ jobs:
           chmod +x gradlew
           ./gradlew assembleRelease --stacktrace
 
+      # Nom du fichier téléchargé par les utilisateurs : AlterTrack-v1.3.0.apk
+      - name: Rename APK with version
+        run: |
+          mv apps/mobile/android/app/build/outputs/apk/release/app-release.apk \
+             "apps/mobile/android/app/build/outputs/apk/release/AlterTrack-${GITHUB_REF_NAME}.apk"
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: apps/mobile/android/app/build/outputs/apk/release/app-release.apk
+          files: apps/mobile/android/app/build/outputs/apk/release/AlterTrack-${{ github.ref_name }}.apk
           tag_name: ${{ github.ref_name }}
           name: AlterTrack ${{ github.ref_name }}
         env:

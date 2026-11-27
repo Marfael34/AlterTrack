@@ -3,6 +3,7 @@ import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, Platform, StyleSheet, View } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { MainTabBar, MainTabType } from './src/components/MainTabBar';
+import { UpdateBanner } from './src/components/UpdateBanner';
 import { Colors } from './src/constants/colors';
 import { AlertProvider } from './src/context/AlertContext';
 import { AuthProvider, useAuth } from './src/context/AuthContext';
@@ -90,6 +91,9 @@ function AppContent() {
     <View style={styles.root}>
       <SafeAreaView style={styles.container}>
         <StatusBar style="light" />
+
+        {/* Bandeau « Nouvelle version disponible » (APK Android uniquement) */}
+        <UpdateBanner />
 
         {/* Écran principal : Candidatures (Liste ou Carte) */}
         {(currentScreen === 'HOME' || currentScreen === 'MAP') && (

@@ -968,7 +968,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
             style={styles.footerLogo}
             resizeMode="contain"
           />
-          <Text style={styles.footerVersion}>AlterTrack v{appVersion} — Auto-hébergé</Text>
+          <Text style={styles.footerVersion}>AlterTrack v{appVersion}</Text>
         </View>
       </KeyboardAwareCenteredScrollView>
 

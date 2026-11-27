@@ -12,6 +12,16 @@ import { Company, CompanyActivity, CompanyStats, Status } from '../types/company
 import { AppConfig } from '../types/config';
 import { StorageService } from './storage.service';
 
+export interface AppReleaseInfo {
+  available: boolean;
+  version: string;
+  downloadUrl: string;
+  releaseUrl: string | null;
+  releaseNotes: string;
+  publishedAt: string | null;
+  size: string;
+}
+
 export const ApiService = {
   // Détermination stricte de l'URL selon l'environnement
   async getBaseUrl(): Promise<string> {
@@ -120,6 +130,11 @@ export const ApiService = {
 
   async getCities(): Promise<Array<{ city: string; count: number }>> {
     return this.request('/companies/cities');
+  },
+
+  /** Dernière version de l'APK publiée (release GitHub), route publique. */
+  async getLatestAppRelease(): Promise<AppReleaseInfo> {
+    return this.request('/api/apk-info');
   },
 
   async getCompanyStats(): Promise<CompanyStats> {
@@ -257,6 +272,9 @@ export const ApiService = {
     const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
     const url = `${baseUrl}${cleanEndpoint}`;
 
+    // Cause de l'échec de l'envoi natif, ajoutée au message si le secours échoue aussi
+    let nativeErrorDetail = '';
+
     if (Platform.OS !== 'web' && typeof FileSystem.uploadAsync === 'function') {
       try {
         const res = await FileSystem.uploadAsync(url, fileUri, {
@@ -288,6 +306,8 @@ export const ApiService = {
         if (nativeErr instanceof Error && nativeErr.message.startsWith('Erreur HTTP')) {
           throw nativeErr;
         }
+        nativeErrorDetail =
+          nativeErr instanceof Error ? nativeErr.message : String(nativeErr);
         console.warn('Native uploadAsync failed, falling back to multi-strategy FormData:', nativeErr);
       }
     }
@@ -300,6 +320,21 @@ export const ApiService = {
       (typeof File !== 'undefined' && webFile instanceof File)
     ) {
       formData.append('file', webFile as Blob, fileName);
+      fileAppended = true;
+    }
+
+    // Sur Android/iOS : format natif { uri, name, type }, lu directement depuis le fichier
+    // par la couche réseau de React Native. Un Blob dans un FormData échoue sur Android
+    // (« Network request failed »), et uploadAsync ne peut pas lire le cache du
+    // DocumentPicker dans Expo Go (« isn't readable »).
+    if (!fileAppended && Platform.OS !== 'web') {
+      const cleanUri =
+        Platform.OS === 'ios' ? fileUri.replace('file://', '') : fileUri;
+      formData.append('file', {
+        uri: cleanUri,
+        name: fileName,
+        type: mimeType || 'application/pdf',
+      } as unknown as Blob);
       fileAppended = true;
     }
 
@@ -336,10 +371,19 @@ export const ApiService = {
       } as unknown as Blob);
     }
 
-    return this.request(endpoint, {
-      method: 'POST',
-      body: formData,
-    });
+    try {
+      return await this.request<T>(endpoint, {
+        method: 'POST',
+        body: formData,
+      });
+    } catch (fallbackErr) {
+      if (nativeErrorDetail && fallbackErr instanceof Error) {
+        throw new Error(
+          `${fallbackErr.message}\n\nDétail de l'envoi natif : ${nativeErrorDetail}`,
+        );
+      }
+      throw fallbackErr;
+    }
   },
 
   async uploadCv(

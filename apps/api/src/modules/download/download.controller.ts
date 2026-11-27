@@ -13,9 +13,9 @@ export class DownloadController {
    */
   @Public()
   @Get()
-  getHomePage(@Req() req: Request, @Res() res: Response) {
+  async getHomePage(@Req() req: Request, @Res() res: Response) {
     const origin = `${req.protocol}://${req.get('host')}`;
-    const html = this.downloadService.getLandingHtml(origin);
+    const html = await this.downloadService.getLandingHtml(origin);
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
     return res.send(html);
   }
@@ -25,9 +25,9 @@ export class DownloadController {
    */
   @Public()
   @Get('download')
-  getDownloadPage(@Req() req: Request, @Res() res: Response) {
+  async getDownloadPage(@Req() req: Request, @Res() res: Response) {
     const origin = `${req.protocol}://${req.get('host')}`;
-    const html = this.downloadService.getLandingHtml(origin);
+    const html = await this.downloadService.getLandingHtml(origin);
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
     return res.send(html);
   }
@@ -37,8 +37,8 @@ export class DownloadController {
    */
   @Public()
   @Get('download/apk')
-  downloadApk(@Res() res: Response) {
-    const info = this.downloadService.getApkInfo();
+  async downloadApk(@Res() res: Response) {
+    const info = await this.downloadService.getResolvedApkInfo();
 
     // Si une URL de build distant (EAS ou GitHub Release) est configurée
     if (info.isExternal && info.externalUrl) {
@@ -68,8 +68,8 @@ export class DownloadController {
    */
   @Public()
   @Get('api/apk-info')
-  getApkInfo() {
-    const info = this.downloadService.getApkInfo();
+  async getApkInfo() {
+    const info = await this.downloadService.getResolvedApkInfo();
     return {
       available: info.exists,
       version: info.version,
@@ -79,6 +79,9 @@ export class DownloadController {
       releaseDate: info.releaseDate,
       downloadUrl: info.externalUrl || '/download/apk',
       isExternal: Boolean(info.isExternal),
+      releaseUrl: info.releaseUrl || null,
+      releaseNotes: info.releaseNotes || '',
+      publishedAt: info.publishedAt || null,
     };
   }
 }
