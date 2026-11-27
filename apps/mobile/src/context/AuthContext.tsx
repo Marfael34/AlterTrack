@@ -50,7 +50,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
           await StorageService.setAuthUser(freshUser);
         } catch (err: any) {
           // Si le token est invalide ou expiré (401), déconnecter proprement
-          if (err?.message?.includes('401') || err?.message?.toLowerCase().includes('unauthorized')) {
+          if (
+            err?.status === 401 ||
+            err?.message?.includes('401') ||
+            err?.message?.toLowerCase().includes('unauthorized')
+          ) {
             await StorageService.removeAuthToken();
             await StorageService.removeAuthUser();
             setToken(null);
