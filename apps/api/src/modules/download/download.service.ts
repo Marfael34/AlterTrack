@@ -14,6 +14,27 @@ export interface ApkInfo {
   size: string;
   sizeBytes: number;
   releaseDate: string;
+  releaseUrl?: string;
+  releaseNotes?: string;
+  publishedAt?: string;
+}
+
+export interface GithubReleaseInfo {
+  version: string;
+  publishedAt: string;
+  releaseUrl: string;
+  releaseNotes: string;
+  apkUrl?: string;
+  apkName?: string;
+  apkSizeBytes?: number;
+}
+
+interface GithubReleaseResponse {
+  tag_name?: string;
+  published_at?: string;
+  html_url?: string;
+  body?: string | null;
+  assets?: { name: string; size: number; browser_download_url: string }[];
 }
 
 @Injectable()
@@ -21,8 +42,124 @@ export class DownloadService {
   private readonly logger = new Logger(DownloadService.name);
   private readonly defaultVersion = '1.0.0';
   private readonly defaultFilename = 'altertrack-v1.0.0.apk';
+  private readonly defaultGithubRepo = 'Marfael34/AlterTrack';
+  private readonly releaseCacheTtlMs = 10 * 60 * 1000;
+  private releaseCache: {
+    value: GithubReleaseInfo | null;
+    fetchedAt: number;
+  } | null = null;
 
   constructor(private readonly configService: ConfigService) {}
+
+  private formatDateFr(date: Date): string {
+    return date.toLocaleDateString('fr-FR', {
+      day: '2-digit',
+      month: 'long',
+      year: 'numeric',
+    });
+  }
+
+  private formatSize(bytes: number): string {
+    return `${(bytes / (1024 * 1024)).toFixed(1)} Mo`;
+  }
+
+  /**
+   * Récupère la dernière release GitHub publiée (mise en cache 10 min).
+   * Chaque tag v* pousse une release avec l'APK (workflow build-apk.yml) :
+   * c'est donc la source de vérité pour la version disponible.
+   */
+  async getLatestRelease(): Promise<GithubReleaseInfo | null> {
+    const now = Date.now();
+    if (
+      this.releaseCache &&
+      now - this.releaseCache.fetchedAt < this.releaseCacheTtlMs
+    ) {
+      return this.releaseCache.value;
+    }
+
+    const repo =
+      this.configService.get<string>('GITHUB_REPO') ||
+      process.env.GITHUB_REPO ||
+      this.defaultGithubRepo;
+    const token =
+      this.configService.get<string>('GITHUB_TOKEN') ||
+      process.env.GITHUB_TOKEN;
+
+    try {
+      const res = await fetch(
+        `https://api.github.com/repos/${repo}/releases/latest`,
+        {
+          headers: {
+            Accept: 'application/vnd.github+json',
+            'User-Agent': 'AlterTrack-API',
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+          signal: AbortSignal.timeout(5000),
+        },
+      );
+      if (!res.ok) {
+        throw new Error(`GitHub a répondu ${res.status}`);
+      }
+      const data = (await res.json()) as GithubReleaseResponse;
+      if (!data.tag_name) {
+        throw new Error('Release sans tag');
+      }
+      const apk = data.assets?.find((a) => a.name.endsWith('.apk'));
+      const value: GithubReleaseInfo = {
+        version: data.tag_name.replace(/^v/i, ''),
+        publishedAt: data.published_at || new Date().toISOString(),
+        releaseUrl: data.html_url || `https://github.com/${repo}/releases`,
+        releaseNotes: (data.body || '').trim(),
+        apkUrl: apk?.browser_download_url,
+        apkName: apk?.name,
+        apkSizeBytes: apk?.size,
+      };
+      this.releaseCache = { value, fetchedAt: now };
+      return value;
+    } catch (err: unknown) {
+      const reason = err instanceof Error ? err.message : String(err);
+      this.logger.warn(
+        `Impossible de lire la dernière release GitHub : ${reason}`,
+      );
+      // En cas d'échec, on garde l'ancienne valeur et on réessaie dans 1 min
+      const previous = this.releaseCache?.value ?? null;
+      this.releaseCache = {
+        value: previous,
+        fetchedAt: now - this.releaseCacheTtlMs + 60 * 1000,
+      };
+      return previous;
+    }
+  }
+
+  /**
+   * Infos APK enrichies avec la dernière release GitHub (version, date, taille, lien).
+   * Retombe sur getApkInfo() si GitHub est injoignable.
+   */
+  async getResolvedApkInfo(): Promise<ApkInfo> {
+    const base = this.getApkInfo();
+    const release = await this.getLatestRelease();
+    if (!release) {
+      return base;
+    }
+
+    const hasApkAsset = Boolean(release.apkUrl);
+    return {
+      ...base,
+      exists: base.exists || hasApkAsset,
+      isExternal: hasApkAsset ? true : base.isExternal,
+      externalUrl: release.apkUrl || base.externalUrl,
+      filename: release.apkName || `AlterTrack-v${release.version}.apk`,
+      version: release.version,
+      size: release.apkSizeBytes
+        ? this.formatSize(release.apkSizeBytes)
+        : base.size,
+      sizeBytes: release.apkSizeBytes || base.sizeBytes,
+      releaseDate: this.formatDateFr(new Date(release.publishedAt)),
+      releaseUrl: release.releaseUrl,
+      releaseNotes: release.releaseNotes,
+      publishedAt: release.publishedAt,
+    };
+  }
 
   /**
    * Analyse et résout les métadonnées et le chemin de l'APK
@@ -121,8 +258,8 @@ export class DownloadService {
   /**
    * Génère le HTML de la landing page de téléchargement
    */
-  getLandingHtml(origin?: string): string {
-    const info = this.getApkInfo();
+  async getLandingHtml(origin?: string): Promise<string> {
+    const info = await this.getResolvedApkInfo();
     const downloadUrl = info.externalUrl || '/download/apk';
 
     return renderDownloadPage({
@@ -132,6 +269,8 @@ export class DownloadService {
       releaseDate: info.releaseDate,
       apkDownloadUrl: downloadUrl,
       apiUrl: '/health',
+      releaseUrl: info.releaseUrl,
+      releaseNotes: info.releaseNotes,
     });
   }
 
