@@ -136,10 +136,7 @@ export class CompaniesController {
   }
 
   @Get(':id')
-  findOne(
-    @Param('id') id: string,
-    @CurrentUser() user?: AuthenticatedUser,
-  ) {
+  findOne(@Param('id') id: string, @CurrentUser() user?: AuthenticatedUser) {
     return this.companiesService.findOne(id, user?.id);
   }
 
@@ -158,7 +155,11 @@ export class CompaniesController {
     @Body() updateStatusDto: UpdateCompanyStatusDto,
     @CurrentUser() user?: AuthenticatedUser,
   ) {
-    return this.companiesService.updateStatus(id, updateStatusDto.status, user?.id);
+    return this.companiesService.updateStatus(
+      id,
+      updateStatusDto.status,
+      user?.id,
+    );
   }
 
   @Delete('batch')
@@ -172,10 +173,7 @@ export class CompaniesController {
 
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
-  remove(
-    @Param('id') id: string,
-    @CurrentUser() user?: AuthenticatedUser,
-  ) {
+  remove(@Param('id') id: string, @CurrentUser() user?: AuthenticatedUser) {
     return this.companiesService.remove(id, user?.id);
   }
 

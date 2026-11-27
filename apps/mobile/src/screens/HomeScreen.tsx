@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import * as DocumentPicker from 'expo-document-picker';
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -54,6 +54,9 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   const [stats, setStats] = useState<CompanyStats | undefined>(undefined);
   const [cities, setCities] = useState<CityItem[]>([]);
   const [totalCount, setTotalCount] = useState<number>(0);
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const PAGE_SIZE = 25;
+  const flatListRef = useRef<FlatList<Company>>(null);
   const { user } = useAuth();
 
   // Initialisation instantanée depuis la mémoire pour préserver les filtres lors des navigations
@@ -138,6 +141,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   // Sauvegarde automatique dès qu'un filtre, le tri, la recherche ou le mode de vue change
   useEffect(() => {
     if (!isFilterLoaded) return;
+    setCurrentPage(1);
     FilterStorageService.saveFilters({
       selectedStatuses,
       selectedCities,
@@ -234,7 +238,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
     (selectedCities.length > 0 ? selectedCities.length : 0) +
     (sortBy !== 'updatedAt' ? 1 : 0);
 
-  const displayedCompanies = React.useMemo(() => {
+  const allSortedCompanies = React.useMemo(() => {
     if (sortBy !== 'distance' || !refPoint) {
       return companies;
     }
@@ -244,6 +248,16 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
       return sortOrder === 'asc' ? distA - distB : distB - distA;
     });
   }, [companies, sortBy, sortOrder, distancesMap, refPoint]);
+
+  const totalPages = Math.max(1, Math.ceil(allSortedCompanies.length / PAGE_SIZE));
+
+  // Ajuster currentPage si hors bornes
+  const safeCurrentPage = Math.min(Math.max(1, currentPage), totalPages);
+
+  const displayedCompanies = React.useMemo(() => {
+    const startIndex = (safeCurrentPage - 1) * PAGE_SIZE;
+    return allSortedCompanies.slice(startIndex, startIndex + PAGE_SIZE);
+  }, [allSortedCompanies, safeCurrentPage, PAGE_SIZE]);
 
   const loadData = useCallback(async () => {
     try {
@@ -259,6 +273,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             search: searchQuery.trim() || undefined,
             sortBy: backendSortBy,
             sortOrder,
+            limit: 500,
+            offset: 0,
           }),
           ApiService.getCompanyStats(),
           ApiService.getCities(),
@@ -276,6 +292,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
               search: searchQuery.trim() || undefined,
               sortBy: backendSortBy,
               sortOrder,
+              limit: 500,
+              offset: 0,
             }),
             ApiService.getCompanyStats(),
             ApiService.getCities(),
@@ -569,7 +587,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
     return (
       <View style={styles.container}>
         <CompanyMapView
-          companies={displayedCompanies}
+          companies={allSortedCompanies}
           totalCount={totalCount}
           stats={stats}
           selectedStatuses={selectedStatuses}
@@ -1050,9 +1068,18 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           ) : (
             companies.length > 0 && (
               <View style={styles.listHeaderBar}>
-                <Text style={styles.listHeaderCount}>
-                  {companies.length} fiche{companies.length > 1 ? 's' : ''}
-                </Text>
+                <View style={styles.listHeaderCountContainer}>
+                  <Text style={styles.listHeaderCount}>
+                    {totalPages > 1
+                      ? `Page ${safeCurrentPage}/${totalPages} · ${displayedCompanies.length} sur ${allSortedCompanies.length} fiche${allSortedCompanies.length > 1 ? 's' : ''}`
+                      : `${allSortedCompanies.length} fiche${allSortedCompanies.length > 1 ? 's' : ''}`}
+                  </Text>
+                  {totalCount > allSortedCompanies.length && (
+                    <Text style={styles.listHeaderSubCount}>
+                      ({totalCount} au total en base)
+                    </Text>
+                  )}
+                </View>
                 <TouchableOpacity
                   style={styles.selectModeTriggerBtn}
                   onPress={handleToggleSelectionMode}
@@ -1073,6 +1100,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             </View>
           ) : (
             <FlatList
+              ref={flatListRef}
               data={displayedCompanies}
               keyExtractor={(item) => item.id}
               renderItem={({ item }) => (
@@ -1093,6 +1121,82 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                   onRefresh={onRefresh}
                   tintColor={Colors.primary}
                 />
+              }
+              ListFooterComponent={
+                totalPages > 1 ? (
+                  <View style={styles.paginationContainer}>
+                    <View style={styles.paginationControls}>
+                      <TouchableOpacity
+                        style={[
+                          styles.paginationBtn,
+                          safeCurrentPage <= 1 && styles.paginationBtnDisabled,
+                        ]}
+                        onPress={() => {
+                          if (safeCurrentPage > 1) {
+                            setCurrentPage(safeCurrentPage - 1);
+                            flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
+                          }
+                        }}
+                        disabled={safeCurrentPage <= 1}
+                        activeOpacity={0.7}
+                        accessibilityLabel="Page précédente"
+                      >
+                        <Ionicons
+                          name="chevron-back"
+                          size={18}
+                          color={safeCurrentPage <= 1 ? Colors.textMuted : Colors.text}
+                        />
+                        <Text
+                          style={[
+                            styles.paginationBtnText,
+                            safeCurrentPage <= 1 && styles.paginationBtnTextDisabled,
+                          ]}
+                        >
+                          Précédent
+                        </Text>
+                      </TouchableOpacity>
+
+                      <View style={styles.paginationInfo}>
+                        <Text style={styles.paginationInfoText}>
+                          Page <Text style={styles.paginationInfoTextBold}>{safeCurrentPage}</Text> / {totalPages}
+                        </Text>
+                        <Text style={styles.paginationSubInfoText}>
+                          ({allSortedCompanies.length} fiches)
+                        </Text>
+                      </View>
+
+                      <TouchableOpacity
+                        style={[
+                          styles.paginationBtn,
+                          safeCurrentPage >= totalPages && styles.paginationBtnDisabled,
+                        ]}
+                        onPress={() => {
+                          if (safeCurrentPage < totalPages) {
+                            setCurrentPage(safeCurrentPage + 1);
+                            flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
+                          }
+                        }}
+                        disabled={safeCurrentPage >= totalPages}
+                        activeOpacity={0.7}
+                        accessibilityLabel="Page suivante"
+                      >
+                        <Text
+                          style={[
+                            styles.paginationBtnText,
+                            safeCurrentPage >= totalPages && styles.paginationBtnTextDisabled,
+                          ]}
+                        >
+                          Suivant
+                        </Text>
+                        <Ionicons
+                          name="chevron-forward"
+                          size={18}
+                          color={safeCurrentPage >= totalPages ? Colors.textMuted : Colors.text}
+                        />
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                ) : undefined
               }
               ListEmptyComponent={
                 <View style={styles.emptyContainer}>
@@ -1544,10 +1648,20 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 6,
   },
+  listHeaderCountContainer: {
+    flex: 1,
+    marginRight: 8,
+  },
   listHeaderCount: {
     color: Colors.textSecondary,
     fontSize: 13,
     fontWeight: '600',
+  },
+  listHeaderSubCount: {
+    color: Colors.textMuted,
+    fontSize: 11,
+    fontWeight: '500',
+    marginTop: 1,
   },
   selectModeTriggerBtn: {
     flexDirection: 'row',
@@ -1759,5 +1873,63 @@ const styles = StyleSheet.create({
     color: Colors.textSecondary,
     fontSize: 12,
     fontWeight: '600',
+  },
+  paginationContainer: {
+    paddingVertical: 18,
+    paddingHorizontal: 8,
+    marginTop: 8,
+    marginBottom: 20,
+    backgroundColor: Colors.cardBackground,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  paginationControls: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  paginationBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: `${Colors.primary}20`,
+    borderWidth: 1,
+    borderColor: `${Colors.primary}45`,
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+    borderRadius: 10,
+  },
+  paginationBtnDisabled: {
+    backgroundColor: 'transparent',
+    borderColor: Colors.border,
+    opacity: 0.5,
+  },
+  paginationBtnText: {
+    color: Colors.primary,
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  paginationBtnTextDisabled: {
+    color: Colors.textMuted,
+  },
+  paginationInfo: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  paginationInfoText: {
+    color: Colors.text,
+    fontSize: 13,
+    fontWeight: '500',
+  },
+  paginationInfoTextBold: {
+    color: Colors.primary,
+    fontWeight: '800',
+    fontSize: 14,
+  },
+  paginationSubInfoText: {
+    color: Colors.textSecondary,
+    fontSize: 11,
+    marginTop: 2,
   },
 });

@@ -7,7 +7,10 @@ import {
 import { Status } from '@prisma/client';
 import * as fs from 'fs';
 import { PrismaService } from '../../prisma/prisma.service';
-import { AppConfigService, buildStandardCvFileName } from '../app-config/app-config.service';
+import {
+  AppConfigService,
+  buildStandardCvFileName,
+} from '../app-config/app-config.service';
 import { EmailNature } from '../gemini/dto/generate-email.dto';
 import { GeminiService } from '../gemini/gemini.service';
 import { PushNotificationService } from '../notifications/push-notification.service';
@@ -561,4 +564,3 @@ export class MailingService {
     };
   }
 }
-

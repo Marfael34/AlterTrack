@@ -32,7 +32,9 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
 
   async validate(payload: JwtPayload) {
     if (!payload?.sub) {
-      throw new UnauthorizedException('Token JWT invalide : identifiant manquant');
+      throw new UnauthorizedException(
+        'Token JWT invalide : identifiant manquant',
+      );
     }
 
     const user = await this.prisma.user.findUnique({
@@ -51,7 +53,9 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     });
 
     if (!user) {
-      throw new UnauthorizedException('Utilisateur introuvable ou compte désactivé');
+      throw new UnauthorizedException(
+        'Utilisateur introuvable ou compte désactivé',
+      );
     }
 
     return user;

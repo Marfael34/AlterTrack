@@ -16,7 +16,11 @@ async function bootstrap() {
       contentSecurityPolicy: {
         directives: {
           defaultSrc: ["'self'"],
-          styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
+          styleSrc: [
+            "'self'",
+            "'unsafe-inline'",
+            'https://fonts.googleapis.com',
+          ],
           fontSrc: ["'self'", 'https://fonts.gstatic.com'],
           imgSrc: ["'self'", 'data:', 'https://api.qrserver.com'],
           scriptSrc: ["'self'", "'unsafe-inline'"],
@@ -57,7 +61,8 @@ async function bootstrap() {
   app.enableShutdownHooks();
 
   // Récupération correcte du port pour Render et le développement local
-  const port = Number(process.env.PORT) || configService.get<number>('port') || 3000;
+  const port =
+    Number(process.env.PORT) || configService.get<number>('port') || 3000;
 
   await app.listen(port, '0.0.0.0');
   logger.log(`Serveur AlterTrack API démarré sur le port ${port}`);

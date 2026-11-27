@@ -4,7 +4,7 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
-import { Prisma, Status } from '@prisma/client';
+import { Company, Prisma, Status } from '@prisma/client';
 import * as XLSX from 'xlsx';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateActivityDto } from './dto/create-activity.dto';
@@ -15,7 +15,10 @@ import { UpdateCompanyDto } from './dto/update-company.dto';
 
 @Injectable()
 export class CompaniesService {
-  private static readonly cityCache = new Map<string, { latitude: number; longitude: number }>();
+  private static readonly cityCache = new Map<
+    string,
+    { latitude: number; longitude: number }
+  >();
 
   constructor(private readonly prisma: PrismaService) {}
 
@@ -29,20 +32,31 @@ export class CompaniesService {
     try {
       const typeParam = type ? `&type=${type}` : '';
       const proxParam =
-        typeof lat === 'number' && typeof lon === 'number' ? `&lat=${lat}&lon=${lon}` : '';
+        typeof lat === 'number' && typeof lon === 'number'
+          ? `&lat=${lat}&lon=${lon}`
+          : '';
       const url = `https://api-adresse.data.gouv.fr/search/?q=${encodeURIComponent(queryText.trim())}${typeParam}${proxParam}&limit=1`;
       const res = await fetch(url);
       if (!res.ok) return null;
       const data = (await res.json()) as {
         features?: Array<{
-          properties?: { score?: number; type?: string; city?: string; name?: string };
+          properties?: {
+            score?: number;
+            type?: string;
+            city?: string;
+            name?: string;
+          };
           geometry: { coordinates: [number, number] };
         }>;
       };
       if (data.features && data.features.length > 0) {
         const feat = data.features[0];
         const [featLon, featLat] = feat.geometry.coordinates;
-        return { latitude: featLat, longitude: featLon, score: feat.properties?.score };
+        return {
+          latitude: featLat,
+          longitude: featLon,
+          score: feat.properties?.score,
+        };
       }
     } catch {
       // Ignorer silencieusement si API inaccessible
@@ -53,7 +67,10 @@ export class CompaniesService {
   /**
    * Géocode en combinant l'adresse ET la ville / commune avec validation stricte
    */
-  async geocodeAddress(address?: string | null, city?: string | null): Promise<{ latitude: number; longitude: number } | null> {
+  async geocodeAddress(
+    address?: string | null,
+    city?: string | null,
+  ): Promise<{ latitude: number; longitude: number } | null> {
     const cleanAddr = address?.trim() || '';
     let cleanCity = city?.trim() || '';
 
@@ -66,7 +83,7 @@ export class CompaniesService {
     }
 
     // Si plusieurs villes sont mentionnées (ex: "Lyon / Paris" ou "Toulouse, Montpellier"), prendre la première
-    const parsedCity = cleanCity ? cleanCity.split(/[\/,]/)[0].trim() : '';
+    const parsedCity = cleanCity ? cleanCity.split(/[/,]/)[0].trim() : '';
 
     // Résoudre d'abord les coordonnées de la commune avec mise en cache et type=municipality obligatoire
     let cityCoords: { latitude: number; longitude: number } | null = null;
@@ -110,7 +127,8 @@ export class CompaniesService {
     // 2. Si on a seulement l'adresse
     if (cleanAddr) {
       const addrRes = await this.geocodeQuery(cleanAddr);
-      if (addrRes) return { latitude: addrRes.latitude, longitude: addrRes.longitude };
+      if (addrRes)
+        return { latitude: addrRes.latitude, longitude: addrRes.longitude };
     }
 
     // 3. Si on a seulement la ville/commune
@@ -125,7 +143,10 @@ export class CompaniesService {
     let lat = createDto.latitude;
     let lon = createDto.longitude;
 
-    if ((lat === undefined || lon === undefined) && (createDto.address || createDto.city)) {
+    if (
+      (lat === undefined || lon === undefined) &&
+      (createDto.address || createDto.city)
+    ) {
       const geo = await this.geocodeAddress(createDto.address, createDto.city);
       if (geo) {
         lat = geo.latitude;
@@ -209,7 +230,13 @@ export class CompaniesService {
       }
     }
 
-    const allowedSortFields = ['updatedAt', 'name', 'city', 'createdAt', 'status'];
+    const allowedSortFields = [
+      'updatedAt',
+      'name',
+      'city',
+      'createdAt',
+      'status',
+    ];
     const sortField =
       query.sortBy && allowedSortFields.includes(query.sortBy)
         ? query.sortBy
@@ -257,8 +284,10 @@ export class CompaniesService {
     let lat: number | null | undefined = updateDto.latitude;
     let lon: number | null | undefined = updateDto.longitude;
 
-    const finalAddress = updateDto.address !== undefined ? updateDto.address : existing.address;
-    const finalCity = updateDto.city !== undefined ? updateDto.city : existing.city;
+    const finalAddress =
+      updateDto.address !== undefined ? updateDto.address : existing.address;
+    const finalCity =
+      updateDto.city !== undefined ? updateDto.city : existing.city;
 
     if (
       lat === undefined &&
@@ -288,7 +317,7 @@ export class CompaniesService {
       id,
       'NOTE',
       'Mise à jour des informations',
-      'Coordonnées ou notes de l\'entreprise modifiées',
+      "Coordonnées ou notes de l'entreprise modifiées",
     );
 
     return updated;
@@ -383,7 +412,9 @@ export class CompaniesService {
     return stats;
   }
 
-  async getCities(userId?: string): Promise<Array<{ city: string; count: number }>> {
+  async getCities(
+    userId?: string,
+  ): Promise<Array<{ city: string; count: number }>> {
     const records = await this.prisma.company.findMany({
       where: {
         city: { not: null },
@@ -409,14 +440,191 @@ export class CompaniesService {
 
   private readonly logger = new Logger(CompaniesService.name);
 
+  private safeString(val: unknown): string {
+    if (val === null || val === undefined) return '';
+    if (typeof val === 'string') return val;
+    if (typeof val === 'number' || typeof val === 'boolean') return String(val);
+    return '';
+  }
+
+  normalizeStr(val: unknown): string {
+    return this.safeString(val)
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .trim();
+  }
+
+  parseCoordinate(val: unknown): number | null {
+    if (val === null || val === undefined || val === '') return null;
+    if (typeof val === 'number') {
+      return isNaN(val) ? null : val;
+    }
+    const str = this.safeString(val).replace(',', '.').trim();
+    if (!str) return null;
+    const num = parseFloat(str);
+    return isNaN(num) ? null : num;
+  }
+
+  parseDate(val: unknown): Date | null {
+    if (val === null || val === undefined || val === '') return null;
+    if (val instanceof Date) {
+      return isNaN(val.getTime()) ? null : val;
+    }
+    const str = this.safeString(val).trim();
+    if (!str) return null;
+
+    // Numéro de série Excel (ex: 45363 ou 45363.4166666667)
+    if (
+      typeof val === 'number' ||
+      (/^\d+(\.\d+)?$/.test(str) && Number(str) > 10000 && Number(str) < 100000)
+    ) {
+      const num = Number(str);
+      const date = new Date(Math.round((num - 25569) * 86400 * 1000));
+      return isNaN(date.getTime()) ? null : date;
+    }
+
+    // Format français DD/MM/YYYY HH:mm ou DD/MM/YYYY HH:mm:ss ou DD/MM/YYYY
+    const frMatch = str.match(
+      /^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:[ T](\d{1,2}):(\d{1,2})(?::(\d{1,2}))?)?$/,
+    );
+    if (frMatch) {
+      const day = parseInt(frMatch[1], 10);
+      const month = parseInt(frMatch[2], 10) - 1;
+      const year = parseInt(frMatch[3], 10);
+      const hour = frMatch[4] ? parseInt(frMatch[4], 10) : 0;
+      const minute = frMatch[5] ? parseInt(frMatch[5], 10) : 0;
+      const second = frMatch[6] ? parseInt(frMatch[6], 10) : 0;
+      const d = new Date(year, month, day, hour, minute, second);
+      return isNaN(d.getTime()) ? null : d;
+    }
+
+    // Format ISO ou standard Date JS
+    const parsed = new Date(str);
+    if (!isNaN(parsed.getTime())) {
+      return parsed;
+    }
+
+    return null;
+  }
+
+  desanitize(val: unknown): string {
+    if (val === null || val === undefined) return '';
+    const str = this.safeString(val).trim();
+    if (str.startsWith("'") && /^[=+\-@\t\r]/.test(str.slice(1))) {
+      return str.slice(1);
+    }
+    return str;
+  }
+
+  parseStatus(raw: string): Status {
+    const s = this.normalizeStr(raw);
+    if (!s) return Status.AUTO_SEND;
+    if (s.includes('auto') || s === 'auto_send') {
+      return Status.AUTO_SEND;
+    }
+    if (
+      s.includes('manuel') ||
+      s.includes('a envoyer') ||
+      s.includes('to_send') ||
+      s.includes('to send') ||
+      s === 'nouveau' ||
+      s === 'brouillon'
+    ) {
+      return Status.TO_SEND;
+    }
+    if (
+      s.includes('attente') ||
+      s.includes('waiting') ||
+      s.includes('envoye') ||
+      s.includes('sent')
+    ) {
+      return Status.WAITING_FOR_REPLY;
+    }
+    if (s.includes('relanc') || s.includes('follow')) {
+      return Status.TO_FOLLOW_UP;
+    }
+    if (s.includes('appel') || s.includes('call')) {
+      return Status.TO_CALL;
+    }
+    if (s.includes('repon') || s.includes('reply')) {
+      return Status.REPLY_RECEIVED;
+    }
+    if (s.includes('refus') || s.includes('rejet')) {
+      return Status.REFUSED;
+    }
+    if (
+      s.includes('accept') ||
+      s.includes('positif') ||
+      s.includes('entretien')
+    ) {
+      return Status.ACCEPTED;
+    }
+    return Status.AUTO_SEND;
+  }
+
+  async restoreActivitiesFromText(companyId: string, text: string) {
+    if (!text || !text.trim()) return;
+    const lines = text
+      .split('\n')
+      .map((l) => l.trim())
+      .filter(Boolean);
+    for (const line of lines) {
+      const match = line.match(/^\[(.*?)\]\s*([^:]+?)(?:\s*:\s*(.*))?$/);
+      let actDate = new Date();
+      let actTitle = line;
+      let actDesc: string | null = null;
+      if (match) {
+        const parsedD = this.parseDate(match[1]);
+        if (parsedD) actDate = parsedD;
+        actTitle = match[2].trim();
+        actDesc = match[3] ? match[3].trim() : null;
+      }
+      const existing = await this.prisma.companyActivity.findFirst({
+        where: {
+          companyId,
+          title: actTitle,
+          performedAt: actDate,
+        },
+      });
+      if (!existing) {
+        await this.prisma.companyActivity.create({
+          data: {
+            companyId,
+            type: 'IMPORT',
+            title: actTitle,
+            description: actDesc,
+            performedAt: actDate,
+          },
+        });
+      }
+    }
+  }
+
   async importFromSpreadsheet(fileBuffer: Buffer, userId?: string) {
     if (!fileBuffer || fileBuffer.length === 0) {
       throw new BadRequestException('Le fichier reçu est vide (0 octet)');
     }
 
+    // Supprimer le BOM UTF-8 (0xEF, 0xBB, 0xBF) s'il est présent au début du fichier
+    let cleanBuffer = fileBuffer;
+    if (
+      cleanBuffer.length >= 3 &&
+      cleanBuffer[0] === 0xef &&
+      cleanBuffer[1] === 0xbb &&
+      cleanBuffer[2] === 0xbf
+    ) {
+      cleanBuffer = cleanBuffer.subarray(3);
+    }
+
     let workbook: XLSX.WorkBook;
     try {
-      workbook = XLSX.read(fileBuffer, { type: 'buffer', cellFormula: true });
+      workbook = XLSX.read(cleanBuffer, {
+        type: 'buffer',
+        cellFormula: true,
+        raw: true,
+        codepage: 65001,
+      });
     } catch (err) {
       this.logger.error(`Erreur lecture XLSX: ${String(err)}`);
       throw new BadRequestException(
@@ -443,18 +651,19 @@ export class CompaniesService {
       status: Status;
     }> = [];
     const seenEmailsInBatch = new Set<string>();
-    let skippedCount = 0;
+    const skippedCount = 0;
     let totalDetectedRows = 0;
 
-    const normalizeStr = (val: unknown): string =>
-      String(val ?? '')
-        .toLowerCase()
-        .normalize('NFD')
-        .replace(/[\u0300-\u036f]/g, '')
-        .trim();
+    const normalizeStr = (val: unknown): string => this.normalizeStr(val);
 
     // Parcourir toutes les feuilles du classeur pour ne rien rater
     for (const sheetName of workbook.SheetNames) {
+      const normSheet = normalizeStr(sheetName);
+      // Ignorer la feuille dédiée aux activités qui sera traitée après
+      if (normSheet === 'activites' || normSheet === 'activities') {
+        continue;
+      }
+
       const worksheet = workbook.Sheets[sheetName];
       if (!worksheet) continue;
 
@@ -489,14 +698,25 @@ export class CompaniesService {
       let bestHeaderIdx = -1;
       let bestScore = -1;
       let bestColMap = {
+        id: -1,
         name: -1,
         email: -1,
+        phone: -1,
         address: -1,
         city: -1,
         postalCode: -1,
-        phone: -1,
-        notes: -1,
         status: -1,
+        latitude: -1,
+        longitude: -1,
+        notes: -1,
+        firstMailSentAt: -1,
+        followUpReadyAt: -1,
+        followUpSentAt: -1,
+        lastMailId: -1,
+        createdAt: -1,
+        updatedAt: -1,
+        activitiesCount: -1,
+        activities: -1,
       };
 
       for (let i = 0; i < Math.min(nonEmptyRows.length, 25); i++) {
@@ -511,14 +731,25 @@ export class CompaniesService {
         // Pénalité pour les bannières / titres sur 1 seule cellule
         let score = filledCells.length >= 2 ? 3 : -15;
         const tempMap = {
+          id: -1,
           name: -1,
           email: -1,
+          phone: -1,
           address: -1,
           city: -1,
           postalCode: -1,
-          phone: -1,
-          notes: -1,
           status: -1,
+          latitude: -1,
+          longitude: -1,
+          notes: -1,
+          firstMailSentAt: -1,
+          followUpReadyAt: -1,
+          followUpSentAt: -1,
+          lastMailId: -1,
+          createdAt: -1,
+          updatedAt: -1,
+          activitiesCount: -1,
+          activities: -1,
         };
 
         row.forEach((cell, colIdx) => {
@@ -526,6 +757,12 @@ export class CompaniesService {
           if (!norm) return;
 
           if (
+            tempMap.id === -1 &&
+            (norm === 'id' || norm === 'identifiant' || norm === 'uuid')
+          ) {
+            tempMap.id = colIdx;
+            score += 10;
+          } else if (
             tempMap.name === -1 &&
             (norm === 'nom' ||
               norm === 'name' ||
@@ -555,16 +792,33 @@ export class CompaniesService {
               norm.includes('mel') ||
               norm.includes('mail') ||
               norm.includes('e-mail') ||
-              norm.includes('adresse electronique'))
+              norm.includes('adresse electronique')) &&
+            !norm.includes('premier') &&
+            !norm.includes('dernier') &&
+            !norm.includes('envoi')
           ) {
             tempMap.email = colIdx;
             score += 10;
+          } else if (
+            tempMap.phone === -1 &&
+            (norm.includes('tel') ||
+              norm.includes('phone') ||
+              norm.includes('mobile') ||
+              norm.includes('portable') ||
+              norm.includes('fixe') ||
+              norm.includes('standard') ||
+              norm.includes('contact tel'))
+          ) {
+            tempMap.phone = colIdx;
+            score += 5;
           } else if (
             tempMap.address === -1 &&
             (norm.includes('adresse') ||
               norm === 'rue' ||
               norm.includes('voie') ||
-              norm.includes('numero'))
+              norm.includes('numero')) &&
+            !norm.includes('electronique') &&
+            !norm.includes('mail')
           ) {
             tempMap.address = colIdx;
             score += 9;
@@ -600,23 +854,11 @@ export class CompaniesService {
             tempMap.postalCode = colIdx;
             score += 6;
           } else if (
-            tempMap.phone === -1 &&
-            (norm.includes('tel') ||
-              norm.includes('phone') ||
-              norm.includes('mobile') ||
-              norm.includes('portable') ||
-              norm.includes('fixe') ||
-              norm.includes('standard') ||
-              norm.includes('contact tel'))
-          ) {
-            tempMap.phone = colIdx;
-            score += 5;
-          } else if (
             tempMap.status === -1 &&
             (norm.includes('statut') ||
               norm.includes('status') ||
+              norm.includes('code statut') ||
               norm.includes('etat') ||
-              norm.includes('etape') ||
               norm.includes('phase') ||
               norm.includes('avancement') ||
               norm.includes('suivi'))
@@ -624,13 +866,101 @@ export class CompaniesService {
             tempMap.status = colIdx;
             score += 5;
           } else if (
+            tempMap.latitude === -1 &&
+            (norm === 'latitude' || norm === 'lat')
+          ) {
+            tempMap.latitude = colIdx;
+            score += 5;
+          } else if (
+            tempMap.longitude === -1 &&
+            (norm === 'longitude' ||
+              norm === 'lon' ||
+              norm === 'lng' ||
+              norm === 'long')
+          ) {
+            tempMap.longitude = colIdx;
+            score += 5;
+          } else if (
+            tempMap.firstMailSentAt === -1 &&
+            (norm.includes('firstmail') ||
+              (norm.includes('premier') &&
+                (norm.includes('mail') || norm.includes('envoi'))))
+          ) {
+            tempMap.firstMailSentAt = colIdx;
+            score += 5;
+          } else if (
+            tempMap.followUpReadyAt === -1 &&
+            (norm.includes('followupready') ||
+              (norm.includes('relance') &&
+                (norm.includes('prevu') ||
+                  norm.includes('prévu') ||
+                  norm.includes('ready'))))
+          ) {
+            tempMap.followUpReadyAt = colIdx;
+            score += 5;
+          } else if (
+            tempMap.followUpSentAt === -1 &&
+            (norm.includes('followupsent') ||
+              (norm.includes('relance') &&
+                (norm.includes('envoy') ||
+                  norm.includes('envoyé') ||
+                  norm.includes('sent'))))
+          ) {
+            tempMap.followUpSentAt = colIdx;
+            score += 5;
+          } else if (
+            tempMap.lastMailId === -1 &&
+            (norm.includes('lastmail') ||
+              (norm.includes('dernier') &&
+                (norm.includes('id') || norm.includes('mail'))))
+          ) {
+            tempMap.lastMailId = colIdx;
+            score += 5;
+          } else if (
+            tempMap.createdAt === -1 &&
+            (norm.includes('createdat') ||
+              norm.includes('date de creation') ||
+              norm.includes("date d'ajout") ||
+              norm.includes('date d’ajout') ||
+              norm.includes('date creation'))
+          ) {
+            tempMap.createdAt = colIdx;
+            score += 5;
+          } else if (
+            tempMap.updatedAt === -1 &&
+            (norm.includes('updatedat') ||
+              norm.includes('mise a jour') ||
+              norm.includes('mise à jour') ||
+              norm.includes('date de mise a jour') ||
+              norm.includes('date modification'))
+          ) {
+            tempMap.updatedAt = colIdx;
+            score += 5;
+          } else if (
+            tempMap.activitiesCount === -1 &&
+            norm.includes('nombre') &&
+            norm.includes('activit')
+          ) {
+            tempMap.activitiesCount = colIdx;
+            score += 3;
+          } else if (
+            tempMap.activities === -1 &&
+            (norm.includes('activit') || norm.includes('historique')) &&
+            !norm.includes('nombre')
+          ) {
+            tempMap.activities = colIdx;
+            score += 5;
+          } else if (
             tempMap.notes === -1 &&
             (norm.includes('note') ||
               norm.includes('comm') ||
               norm.includes('remarqu') ||
-              norm.includes('desc') ||
               norm.includes('detail') ||
-              norm.includes('info'))
+              norm.includes('info')) &&
+            !norm.includes('activit') &&
+            !norm.includes('premier') &&
+            !norm.includes('relance') &&
+            !norm.includes('dernier')
           ) {
             tempMap.notes = colIdx;
             score += 5;
@@ -665,13 +995,17 @@ export class CompaniesService {
       const dataStart = bestHeaderIdx !== -1 ? bestHeaderIdx + 1 : 0;
       this.logger.log(
         `Feuille "${sheetName}" : Ligne d'en-tête retenue = ${bestHeaderIdx} (score: ${bestScore}), colonnes: ` +
-          `nom=${bestColMap.name}, email=${bestColMap.email}, ville=${bestColMap.city}, cp=${bestColMap.postalCode}, tel=${bestColMap.phone}, notes=${bestColMap.notes}, statut=${bestColMap.status}`,
+          `nom=${bestColMap.name}, email=${bestColMap.email}, ville=${bestColMap.city}, cp=${bestColMap.postalCode}, tel=${bestColMap.phone}, statut=${bestColMap.status}, lat=${bestColMap.latitude}, lon=${bestColMap.longitude}, notes=${bestColMap.notes}`,
       );
 
       // Si le nom ou l'email n'a pas été détecté dans l'en-tête, heuristique par contenu
       if (bestColMap.name === -1) {
         for (let c = 0; c < 10; c++) {
-          if (c !== bestColMap.email && c !== bestColMap.phone && c !== bestColMap.city) {
+          if (
+            c !== bestColMap.email &&
+            c !== bestColMap.phone &&
+            c !== bestColMap.city
+          ) {
             bestColMap.name = c;
             break;
           }
@@ -730,6 +1064,30 @@ export class CompaniesService {
         }
       }
 
+      const isKnownCol = (colIdx: number) => {
+        return (
+          colIdx === bestColMap.id ||
+          colIdx === bestColMap.name ||
+          colIdx === bestColMap.email ||
+          colIdx === bestColMap.phone ||
+          colIdx === bestColMap.address ||
+          colIdx === bestColMap.city ||
+          colIdx === bestColMap.postalCode ||
+          colIdx === bestColMap.latitude ||
+          colIdx === bestColMap.longitude ||
+          colIdx === bestColMap.status ||
+          colIdx === bestColMap.notes ||
+          colIdx === bestColMap.firstMailSentAt ||
+          colIdx === bestColMap.followUpReadyAt ||
+          colIdx === bestColMap.followUpSentAt ||
+          colIdx === bestColMap.lastMailId ||
+          colIdx === bestColMap.createdAt ||
+          colIdx === bestColMap.updatedAt ||
+          colIdx === bestColMap.activities ||
+          colIdx === bestColMap.activitiesCount
+        );
+      };
+
       // 2. Extraction et validation des lignes de données
       for (let i = dataStart; i < nonEmptyRows.length; i++) {
         const row = nonEmptyRows[i];
@@ -741,30 +1099,79 @@ export class CompaniesService {
         const originalRowIdx = nonEmptyRowIndices[i] ?? i;
         const rowNum = originalRowIdx + 1;
 
+        const rawId =
+          bestColMap.id !== -1
+            ? this.desanitize(row[bestColMap.id]).trim()
+            : '';
         let rawName =
           bestColMap.name !== -1
-            ? String(row[bestColMap.name] ?? '').trim()
+            ? this.desanitize(row[bestColMap.name]).trim()
             : '';
         let rawEmail = '';
-        let rawAddress =
+        const rawAddress =
           bestColMap.address !== -1
-            ? String(row[bestColMap.address] ?? '').trim()
+            ? this.desanitize(row[bestColMap.address]).trim()
             : '';
         let rawCity =
           bestColMap.city !== -1
-            ? String(row[bestColMap.city] ?? '').trim()
+            ? this.desanitize(row[bestColMap.city]).trim()
             : '';
         const rawCp =
           bestColMap.postalCode !== -1
-            ? String(row[bestColMap.postalCode] ?? '').trim()
+            ? this.desanitize(row[bestColMap.postalCode]).trim()
             : '';
-        const rawPhone =
+        let rawPhone =
           bestColMap.phone !== -1
-            ? String(row[bestColMap.phone] ?? '').trim()
+            ? this.desanitize(row[bestColMap.phone]).trim()
             : '';
+        // Si le numéro a perdu son 0 initial suite au typage numérique Excel/CSV (9 chiffres au lieu de 10)
+        if (/^[1-9]\d{8}$/.test(rawPhone)) {
+          rawPhone = `0${rawPhone}`;
+        }
         const rawStatus =
           bestColMap.status !== -1
-            ? String(row[bestColMap.status] ?? '').trim()
+            ? this.desanitize(row[bestColMap.status]).trim()
+            : '';
+
+        const parsedLat =
+          bestColMap.latitude !== -1
+            ? this.parseCoordinate(row[bestColMap.latitude])
+            : null;
+        const parsedLon =
+          bestColMap.longitude !== -1
+            ? this.parseCoordinate(row[bestColMap.longitude])
+            : null;
+
+        const parsedFirstMailSentAt =
+          bestColMap.firstMailSentAt !== -1
+            ? this.parseDate(row[bestColMap.firstMailSentAt])
+            : null;
+        const parsedFollowUpReadyAt =
+          bestColMap.followUpReadyAt !== -1
+            ? this.parseDate(row[bestColMap.followUpReadyAt])
+            : null;
+        const parsedFollowUpSentAt =
+          bestColMap.followUpSentAt !== -1
+            ? this.parseDate(row[bestColMap.followUpSentAt])
+            : null;
+        const rawLastMailId =
+          bestColMap.lastMailId !== -1
+            ? this.desanitize(row[bestColMap.lastMailId]).trim()
+            : '';
+
+        const parsedCreatedAt =
+          bestColMap.createdAt !== -1
+            ? this.parseDate(row[bestColMap.createdAt])
+            : null;
+
+        const rawActivities =
+          bestColMap.activities !== -1
+            ? this.desanitize(row[bestColMap.activities]).trim()
+            : '';
+
+        const rawNotes =
+          bestColMap.notes !== -1
+            ? this.desanitize(row[bestColMap.notes]).trim()
             : '';
 
         // Si la ville et le code postal sont dans 2 colonnes séparées, les combiner
@@ -811,19 +1218,14 @@ export class CompaniesService {
           }
         }
 
-        // Récupérer TOUTES les autres données du tableur dans les notes pour ne RIEN perdre
+        // Colonnes personnalisées non reconnues à préserver dans les notes
         const extraDataList: string[] = [];
         row.forEach((cellVal, colIdx) => {
-          if (
-            colIdx === bestColMap.name ||
-            colIdx === bestColMap.email ||
-            colIdx === bestColMap.phone ||
-            colIdx === bestColMap.status
-          ) {
+          if (isKnownCol(colIdx)) {
             return;
           }
 
-          const valStr = String(cellVal ?? '').trim();
+          const valStr = this.desanitize(cellVal).trim();
           if (!valStr) return;
 
           // Si la valeur est déjà la ville ou le CP extrait, ne pas la répéter dans les notes
@@ -855,7 +1257,12 @@ export class CompaniesService {
           }
         });
 
-        let rawNotes = extraDataList.join('\n');
+        let finalNotes = rawNotes;
+        if (extraDataList.length > 0) {
+          finalNotes = finalNotes
+            ? `${finalNotes}\n${extraDataList.join('\n')}`
+            : extraDataList.join('\n');
+        }
 
         // Recherche de l'e-mail dans la colonne désignée (texte ou lien hypertexte Excel)
         if (bestColMap.email !== -1) {
@@ -865,8 +1272,7 @@ export class CompaniesService {
             c: bestColMap.email,
           });
           const cellObj = worksheet[cellAddr] as
-            | { l?: { Target?: string } }
-            | undefined;
+            { l?: { Target?: string } } | undefined;
 
           // 1. Lien hypertexte mailto: ?
           if (cellObj?.l?.Target) {
@@ -895,8 +1301,7 @@ export class CompaniesService {
               c: colIdx,
             });
             const cellObj = worksheet[cellAddr] as
-              | { l?: { Target?: string } }
-              | undefined;
+              { l?: { Target?: string } } | undefined;
             if (cellObj?.l?.Target) {
               const linkMatch = cellObj.l.Target.match(EMAIL_EXTRACT_REGEX);
               if (linkMatch) rawEmail = linkMatch[0].toLowerCase();
@@ -944,12 +1349,12 @@ export class CompaniesService {
             headerColName.includes('mel');
 
           if (colVal && !isExplicitEmailCol) {
-            rawNotes = rawNotes
-              ? `${rawNotes}\n[Contact: ${colVal}]`
+            finalNotes = finalNotes
+              ? `${finalNotes}\n[Contact: ${colVal}]`
               : `[Contact: ${colVal}]`;
           } else if (colVal && isExplicitEmailCol) {
-            rawNotes = rawNotes
-              ? `${rawNotes}\n[Email brut: ${colVal}]`
+            finalNotes = finalNotes
+              ? `${finalNotes}\n[Email brut: ${colVal}]`
               : `[Email brut: ${colVal}]`;
           }
 
@@ -962,103 +1367,20 @@ export class CompaniesService {
               .replace(/[^a-z0-9]/g, '')
               .slice(0, 15) || 'entreprise';
           rawEmail = `${slug}.${rowNum}@sans-email.altertrack`;
-          rawNotes = rawNotes
-            ? `${rawNotes}\n[Email à renseigner]`
+          finalNotes = finalNotes
+            ? `${finalNotes}\n[Email à renseigner]`
             : '[Email à renseigner]';
         }
 
-        // Prise en charge intégrale des doublons :
-        // Si une fiche existe déjà avec exactement le même nom ET le même email dans la base, la mettre à jour
-        const rowKey = `${rawName}:::${rawEmail}`;
-        let isUpdated = false;
+        const parsedStatus = this.parseStatus(rawStatus);
 
-        if (!seenEmailsInBatch.has(rowKey)) {
-          const existing = await this.prisma.company.findFirst({
-            where: { name: rawName, email: rawEmail },
-          });
-
-          if (existing) {
-            const updated = await this.prisma.company.update({
-              where: { id: existing.id },
-              data: {
-                address: rawAddress || existing.address || null,
-                city: rawCity || existing.city || null,
-                phone: rawPhone || existing.phone || null,
-                notes: rawNotes || existing.notes || null,
-                ...(userId ? { userId } : {}),
-              },
-            });
-            imported.push({
-              id: updated.id,
-              name: updated.name,
-              email: updated.email,
-              city: updated.city,
-              status: updated.status,
-            });
-            seenEmailsInBatch.add(rowKey);
-            isUpdated = true;
-          }
-        }
-
-        if (isUpdated) {
-          continue;
-        }
-
-        seenEmailsInBatch.add(rowKey);
-
-        // Résolution intelligente du statut
-        let parsedStatus: Status = Status.AUTO_SEND;
-        if (rawStatus) {
-          const s = normalizeStr(rawStatus);
-          if (
-            s.includes('auto') ||
-            s.includes('auto_send') ||
-            s.includes('envoi auto')
-          ) {
-            parsedStatus = Status.AUTO_SEND;
-          } else if (
-            s.includes('manuel') ||
-            s.includes('a envoyer') ||
-            s.includes('to_send') ||
-            s.includes('to send') ||
-            s === 'nouveau' ||
-            s === 'brouillon'
-          ) {
-            parsedStatus = Status.TO_SEND;
-          } else if (
-            s.includes('attente') ||
-            s.includes('waiting') ||
-            s.includes('envoye') ||
-            s.includes('sent')
-          ) {
-            parsedStatus = Status.WAITING_FOR_REPLY;
-          } else if (s.includes('relanc') || s.includes('follow')) {
-            parsedStatus = Status.TO_FOLLOW_UP;
-          } else if (s.includes('appel') || s.includes('call')) {
-            parsedStatus = Status.TO_CALL;
-          } else if (s.includes('repon') || s.includes('reply')) {
-            parsedStatus = Status.REPLY_RECEIVED;
-          } else if (s.includes('refus') || s.includes('rejet')) {
-            parsedStatus = Status.REFUSED;
-          } else if (
-            s.includes('accept') ||
-            s.includes('positif') ||
-            s.includes('entretien')
-          ) {
-            parsedStatus = Status.ACCEPTED;
-          }
-        } else if (
-          rawEmail.endsWith('@sans-email.altertrack') &&
-          rawPhone.length > 0
+        // Géocodage automatique à l'import combinant adresse ET commune/ville si pas de coordonnées
+        let importLat = parsedLat;
+        let importLon = parsedLon;
+        if (
+          (importLat === null || importLon === null) &&
+          (rawAddress || rawCity)
         ) {
-          // Si l'entreprise n'a pas d'email mais a un numéro de téléphone, suggérer "À appeler"
-          parsedStatus = Status.TO_CALL;
-        }
-
-        // Géocodage automatique à l'import combinant adresse ET commune/ville
-        let importLat: number | null = null;
-        let importLon: number | null = null;
-        if (rawAddress || rawCity) {
           const geo = await this.geocodeAddress(rawAddress, rawCity);
           if (geo) {
             importLat = geo.latitude;
@@ -1066,9 +1388,106 @@ export class CompaniesService {
           }
         }
 
+        // Détection fiche existante : par ID (si présent) ou par Nom + Email
+        const rowKey = rawId ? `id:${rawId}` : `${rawName}:::${rawEmail}`;
+        let existing: Company | null = null;
+
+        if (!seenEmailsInBatch.has(rowKey)) {
+          if (rawId) {
+            existing = await this.prisma.company.findFirst({
+              where: { id: rawId, ...(userId ? { userId } : {}) },
+            });
+          }
+          if (!existing) {
+            existing = await this.prisma.company.findFirst({
+              where: {
+                name: rawName,
+                email: rawEmail,
+                ...(userId ? { userId } : {}),
+              },
+            });
+          }
+        }
+
+        if (existing) {
+          const updated = await this.prisma.company.update({
+            where: { id: existing.id },
+            data: {
+              name: rawName,
+              email: rawEmail,
+              address: rawAddress !== '' ? rawAddress : existing.address,
+              city: rawCity !== '' ? rawCity : existing.city,
+              phone: rawPhone !== '' ? rawPhone : existing.phone,
+              status: rawStatus ? parsedStatus : existing.status,
+              latitude: importLat !== null ? importLat : existing.latitude,
+              longitude: importLon !== null ? importLon : existing.longitude,
+              notes: finalNotes !== '' ? finalNotes : existing.notes,
+              firstMailSentAt:
+                parsedFirstMailSentAt !== null
+                  ? parsedFirstMailSentAt
+                  : existing.firstMailSentAt,
+              followUpReadyAt:
+                parsedFollowUpReadyAt !== null
+                  ? parsedFollowUpReadyAt
+                  : existing.followUpReadyAt,
+              followUpSentAt:
+                parsedFollowUpSentAt !== null
+                  ? parsedFollowUpSentAt
+                  : existing.followUpSentAt,
+              lastMailId:
+                rawLastMailId !== '' ? rawLastMailId : existing.lastMailId,
+              ...(userId ? { userId } : {}),
+            },
+          });
+
+          if (rawActivities) {
+            await this.restoreActivitiesFromText(updated.id, rawActivities);
+          }
+
+          imported.push({
+            id: updated.id,
+            name: updated.name,
+            email: updated.email,
+            city: updated.city,
+            status: updated.status,
+          });
+          seenEmailsInBatch.add(rowKey);
+          continue;
+        }
+
+        seenEmailsInBatch.add(rowKey);
+
+        // Si pas de statut explicite et email fallback avec tel, suggérer "À appeler"
+        let statusToCreate = parsedStatus;
+        if (!rawStatus) {
+          if (
+            rawEmail.endsWith('@sans-email.altertrack') &&
+            rawPhone.length > 0
+          ) {
+            statusToCreate = Status.TO_CALL;
+          } else {
+            statusToCreate = Status.AUTO_SEND;
+          }
+        }
+
+        const isUuid =
+          /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+            rawId,
+          );
+        let idToUse: string | undefined = undefined;
+        if (isUuid) {
+          const idExists = await this.prisma.company.findUnique({
+            where: { id: rawId },
+          });
+          if (!idExists) {
+            idToUse = rawId;
+          }
+        }
+
         // Enregistrement en base de données
         const created = await this.prisma.company.create({
           data: {
+            ...(idToUse ? { id: idToUse } : {}),
             name: rawName,
             email: rawEmail,
             address: rawAddress || null,
@@ -1076,18 +1495,27 @@ export class CompaniesService {
             latitude: importLat,
             longitude: importLon,
             phone: rawPhone || null,
-            notes: rawNotes || null,
-            status: parsedStatus,
+            notes: finalNotes || null,
+            status: statusToCreate,
+            firstMailSentAt: parsedFirstMailSentAt,
+            followUpReadyAt: parsedFollowUpReadyAt,
+            followUpSentAt: parsedFollowUpSentAt,
+            lastMailId: rawLastMailId || null,
+            ...(parsedCreatedAt ? { createdAt: parsedCreatedAt } : {}),
             userId: userId || null,
           },
         });
 
-        await this.recordActivity(
-          created.id,
-          'CREATION',
-          'Importation de la fiche',
-          `Entreprise importée avec le statut : ${created.status}`,
-        );
+        if (rawActivities) {
+          await this.restoreActivitiesFromText(created.id, rawActivities);
+        } else {
+          await this.recordActivity(
+            created.id,
+            'CREATION',
+            'Importation de la fiche',
+            `Entreprise importée avec le statut : ${created.status}`,
+          );
+        }
 
         imported.push({
           id: created.id,
@@ -1096,6 +1524,67 @@ export class CompaniesService {
           city: created.city,
           status: created.status,
         });
+      }
+    }
+
+    // 3. Traiter la feuille Activités si présente dans le classeur
+    const actSheetName = workbook.SheetNames.find((s) => {
+      const norm = normalizeStr(s);
+      return norm === 'activites' || norm === 'activities';
+    });
+
+    if (actSheetName) {
+      const actSheet = workbook.Sheets[actSheetName];
+      if (actSheet) {
+        const rawActRows = XLSX.utils.sheet_to_json<Record<string, unknown>>(
+          actSheet,
+          { defval: '' },
+        );
+        for (const actRow of rawActRows) {
+          const companyId = this.safeString(
+            actRow['ID Entreprise'] ?? actRow['companyId'] ?? '',
+          ).trim();
+          const actTitle = this.safeString(
+            actRow['Titre'] ?? actRow['title'] ?? '',
+          ).trim();
+          const actDesc =
+            this.safeString(
+              actRow['Description'] ?? actRow['description'] ?? '',
+            ).trim() || null;
+          const actType =
+            this.safeString(
+              actRow['Type'] ?? actRow['type'] ?? 'CUSTOM',
+            ).trim() || 'CUSTOM';
+          const dateVal =
+            actRow['Date de réalisation'] ?? actRow['performedAt'] ?? '';
+          const actDate = this.parseDate(dateVal) || new Date();
+
+          if (companyId && actTitle) {
+            const targetComp = await this.prisma.company.findFirst({
+              where: { id: companyId, ...(userId ? { userId } : {}) },
+            });
+            if (targetComp) {
+              const existingAct = await this.prisma.companyActivity.findFirst({
+                where: {
+                  companyId: targetComp.id,
+                  title: actTitle,
+                  performedAt: actDate,
+                },
+              });
+              if (!existingAct) {
+                await this.prisma.companyActivity.create({
+                  data: {
+                    companyId: targetComp.id,
+                    type: actType,
+                    title: actTitle,
+                    description: actDesc,
+                    performedAt: actDate,
+                  },
+                });
+              }
+            }
+          }
+        }
       }
     }
 
@@ -1255,11 +1744,7 @@ export class CompaniesService {
     });
   }
 
-  async deleteActivity(
-    companyId: string,
-    activityId: string,
-    userId?: string,
-  ) {
+  async deleteActivity(companyId: string, activityId: string, userId?: string) {
     await this.findOne(companyId, userId);
 
     const activity = await this.prisma.companyActivity.findFirst({
@@ -1293,17 +1778,6 @@ export class CompaniesService {
       orderBy: { createdAt: 'desc' },
     });
 
-    const STATUS_MAP: Record<string, string> = {
-      AUTO_SEND: 'Envoi automatique',
-      TO_SEND: 'À envoyer (manuel)',
-      WAITING_FOR_REPLY: 'En attente',
-      TO_FOLLOW_UP: 'À relancer',
-      TO_CALL: 'À appeler',
-      REPLY_RECEIVED: 'Réponse reçue',
-      REFUSED: 'Refusé',
-      ACCEPTED: 'Accepté',
-    };
-
     const formatDate = (d: Date | null | undefined): string => {
       if (!d) return '';
       const date = new Date(d);
@@ -1315,7 +1789,7 @@ export class CompaniesService {
     // Assainissement anti-injection de formules CSV/Excel (CWE-1236)
     const sanitize = (val: unknown): string => {
       if (val === null || val === undefined) return '';
-      const str = String(val).trim();
+      const str = this.safeString(val).trim();
       if (/^[=+\-@\t\r]/.test(str)) {
         return `'${str}`;
       }
@@ -1334,22 +1808,22 @@ export class CompaniesService {
         .join('\n');
 
       return {
+        ID: sanitize(c.id),
         'Nom de l’entreprise': sanitize(c.name),
-        'Statut': sanitize(STATUS_MAP[c.status] || c.status),
-        'Code Statut': sanitize(c.status),
-        'Email': sanitize(c.email),
-        'Téléphone': sanitize(c.phone || ''),
-        'Adresse': sanitize(c.address || ''),
-        'Ville': sanitize(c.city || ''),
-        'Latitude': typeof c.latitude === 'number' ? c.latitude : '',
-        'Longitude': typeof c.longitude === 'number' ? c.longitude : '',
+        Email: sanitize(c.email),
+        Téléphone: sanitize(c.phone || ''),
+        Adresse: sanitize(c.address || ''),
+        Ville: sanitize(c.city || ''),
+        Statut: sanitize(c.status),
+        Latitude: typeof c.latitude === 'number' ? c.latitude : '',
+        Longitude: typeof c.longitude === 'number' ? c.longitude : '',
+        Notes: sanitize(c.notes || ''),
         'Premier e-mail envoyé le': formatDate(c.firstMailSentAt),
         'Relance prévue le': formatDate(c.followUpReadyAt),
         'Relance envoyée le': formatDate(c.followUpSentAt),
-        'Date d’ajout': formatDate(c.createdAt),
+        'Dernier ID e-mail': sanitize(c.lastMailId || ''),
+        'Date de création': formatDate(c.createdAt),
         'Dernière mise à jour': formatDate(c.updatedAt),
-        'Notes & Commentaires': sanitize(c.notes || ''),
-        'Nombre d’activités': c.activities ? c.activities.length : 0,
         'Historique des activités': sanitize(activitiesText),
       };
     });
@@ -1362,7 +1836,7 @@ export class CompaniesService {
       const colWidths = headers.map((key) => {
         let maxLen = key.length;
         for (const row of rows) {
-          const val = String((row as any)[key] ?? '');
+          const val = this.safeString((row as Record<string, unknown>)[key]);
           const firstLine = val.split('\n')[0];
           if (firstLine.length > maxLen) maxLen = firstLine.length;
         }
@@ -1377,6 +1851,28 @@ export class CompaniesService {
     const cleanFormat = (format || 'xlsx').toLowerCase().trim();
     const dateStamp = new Date().toISOString().slice(0, 10);
 
+    // Ajouter la feuille Activités si export Excel .xlsx
+    if (cleanFormat !== 'csv') {
+      const actRows: Array<Record<string, unknown>> = [];
+      for (const c of companies) {
+        for (const act of c.activities || []) {
+          actRows.push({
+            'ID Activité': sanitize(act.id),
+            'ID Entreprise': sanitize(c.id),
+            'Nom de l’entreprise': sanitize(c.name),
+            Type: sanitize(act.type),
+            Titre: sanitize(act.title),
+            Description: sanitize(act.description || ''),
+            'Date de réalisation': formatDate(act.performedAt),
+          });
+        }
+      }
+      if (actRows.length > 0) {
+        const actWorksheet = XLSX.utils.json_to_sheet(actRows);
+        XLSX.utils.book_append_sheet(workbook, actWorksheet, 'Activités');
+      }
+    }
+
     if (cleanFormat === 'csv') {
       const csvContent = XLSX.utils.sheet_to_csv(worksheet, { FS: ';' });
       // Ajout du BOM UTF-8 (\uFEFF) pour compatibilité Excel FR native
@@ -1389,9 +1885,14 @@ export class CompaniesService {
       };
     }
 
-    const xlsxBuffer = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });
+    const xlsxBuffer: Buffer = XLSX.write(workbook, {
+      type: 'buffer',
+      bookType: 'xlsx',
+    }) as Buffer;
     return {
-      buffer: Buffer.isBuffer(xlsxBuffer) ? xlsxBuffer : Buffer.from(xlsxBuffer),
+      buffer: Buffer.isBuffer(xlsxBuffer)
+        ? xlsxBuffer
+        : Buffer.from(xlsxBuffer),
       contentType:
         'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
       filename: `altertrack_entreprises_${dateStamp}.xlsx`,
@@ -1399,4 +1900,3 @@ export class CompaniesService {
     };
   }
 }
-

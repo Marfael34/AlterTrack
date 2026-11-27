@@ -76,7 +76,10 @@ export class DownloadService {
           const stats = fs.statSync(candidate);
           let sizeFormatted = `${(stats.size / (1024 * 1024)).toFixed(1)} Mo`;
           if (stats.size < 1024 * 1024) {
-            sizeFormatted = stats.size > 10240 ? `${(stats.size / 1024).toFixed(0)} Ko` : '42.5 Mo';
+            sizeFormatted =
+              stats.size > 10240
+                ? `${(stats.size / 1024).toFixed(0)} Ko`
+                : '42.5 Mo';
           }
           const releaseDateFormatted = stats.mtime.toLocaleDateString('fr-FR', {
             day: '2-digit',
@@ -94,7 +97,9 @@ export class DownloadService {
             releaseDate: releaseDateFormatted,
           };
         } catch (err: any) {
-          this.logger.warn(`Impossible de lire les infos de l'APK sur ${candidate}: ${err.message}`);
+          this.logger.warn(
+            `Impossible de lire les infos de l'APK sur ${candidate}: ${err.message}`,
+          );
         }
       }
     }

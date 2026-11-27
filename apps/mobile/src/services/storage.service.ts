@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
+import Constants from 'expo-constants';
 import tunnelConfig from '../constants/tunnelUrl.json';
 
 const SERVER_URL_KEY = 'altertrack_server_url';
@@ -11,7 +12,32 @@ const PROD_API_URL = process.env.EXPO_PUBLIC_API_URL?.trim().replace(/\/+$/, '')
 const DEFAULT_TUNNEL_URL = tunnelConfig?.url || '';
 const DEFAULT_LOCAL_WIFI_URL = 'http://192.168.1.27:3000';
 const DEFAULT_WEB_URL = PROD_API_URL || 'http://localhost:3000';
-const DEFAULT_API_KEY = 'altertrack_dev_secret_key_2026_super_safe';
+const RENDER_PRODUCTION_URL = 'https://altertrack.onrender.com';
+// La clé API par défaut vient du .env (EXPO_PUBLIC_API_KEY), comme côté serveur (API_KEY)
+const DEFAULT_API_KEY =
+  process.env.EXPO_PUBLIC_API_KEY?.trim() || 'altertrack_dev_secret_key_2026_super_safe';
+
+/**
+ * En développement : déduit l'IP du PC à partir de l'adresse du serveur Metro (Expo Go),
+ * puis cible l'API sur le port 3000 de cette même machine.
+ */
+function getDevHostApiUrl(): string | null {
+  const hostUri = Constants.expoConfig?.hostUri; // ex: "192.168.1.26:8081"
+  const host = hostUri?.split(':')[0];
+  if (!host || !/^\d{1,3}(\.\d{1,3}){3}$/.test(host)) {
+    return null; // mode --tunnel (*.exp.direct) : pas d'IP exploitable
+  }
+  return `http://${host}:3000`;
+}
+
+function isUsableDevUrl(url: string | null): url is string {
+  return (
+    !!url &&
+    !url.includes('localhost') &&
+    !url.includes('127.0.0.1') &&
+    !url.includes('onrender.com')
+  );
+}
 
 async function checkUrlReachable(url: string, timeoutMs: number = 600): Promise<boolean> {
   try {
@@ -50,20 +76,22 @@ export const StorageService = {
     try {
       const value = await AsyncStorage.getItem(SERVER_URL_KEY);
 
-      // 1. Si l'utilisateur a explicitement enregistré une URL valide dans l'app, on la garde
+      // EN DÉVELOPPEMENT (Expo Go) : priorité au .env, puis à l'URL saisie dans l'app,
+      // puis à l'IP du PC déduite de Metro. On n'écrase jamais le stockage avec Render.
+      if (__DEV__) {
+        if (PROD_API_URL) return PROD_API_URL;
+        if (isUsableDevUrl(value)) return value;
+        return getDevHostApiUrl() || DEFAULT_TUNNEL_URL || DEFAULT_LOCAL_WIFI_URL;
+      }
+
+      // EN PRODUCTION : URL enregistrée par l'utilisateur, sinon Render
       if (value && !value.includes('localhost') && !value.includes('127.0.0.1')) {
         return value;
       }
-
-      // 2. EN PRODUCTION : Utiliser directement ton URL Render par défaut !
-      // Remplace l'URL ci-dessous par la vraie URL de ton API sur Render :
-      const renderProductionUrl = 'https://altertrack-api.onrender.com'; 
-
-      await AsyncStorage.setItem(SERVER_URL_KEY, renderProductionUrl);
-      return renderProductionUrl;
-
+      await AsyncStorage.setItem(SERVER_URL_KEY, RENDER_PRODUCTION_URL);
+      return RENDER_PRODUCTION_URL;
     } catch {
-      return 'https://altertrack-api.onrender.com';
+      return __DEV__ ? PROD_API_URL || getDevHostApiUrl() || DEFAULT_LOCAL_WIFI_URL : RENDER_PRODUCTION_URL;
     }
   },
 

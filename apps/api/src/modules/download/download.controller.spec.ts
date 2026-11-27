@@ -32,7 +32,9 @@ describe('DownloadController', () => {
           provide: DownloadService,
           useValue: {
             getLandingHtml: jest.fn().mockReturnValue('<html>Landing</html>'),
-            getNotFoundHtml: jest.fn().mockReturnValue('<html>Not Found</html>'),
+            getNotFoundHtml: jest
+              .fn()
+              .mockReturnValue('<html>Not Found</html>'),
             getApkInfo: jest.fn().mockReturnValue({
               exists: true,
               filename: 'altertrack-v1.0.0.apk',
@@ -61,7 +63,10 @@ describe('DownloadController', () => {
 
     controller.getHomePage(req, res);
 
-    expect(res.setHeader).toHaveBeenCalledWith('Content-Type', 'text/html; charset=utf-8');
+    expect(res.setHeader).toHaveBeenCalledWith(
+      'Content-Type',
+      'text/html; charset=utf-8',
+    );
     expect(res.send).toHaveBeenCalledWith('<html>Landing</html>');
   });
 
@@ -71,7 +76,10 @@ describe('DownloadController', () => {
 
     controller.getDownloadPage(req, res);
 
-    expect(res.setHeader).toHaveBeenCalledWith('Content-Type', 'text/html; charset=utf-8');
+    expect(res.setHeader).toHaveBeenCalledWith(
+      'Content-Type',
+      'text/html; charset=utf-8',
+    );
     expect(res.send).toHaveBeenCalledWith('<html>Landing</html>');
   });
 
@@ -80,8 +88,14 @@ describe('DownloadController', () => {
 
     controller.downloadApk(res);
 
-    expect(res.setHeader).toHaveBeenCalledWith('Content-Type', 'application/vnd.android.package-archive');
-    expect(res.setHeader).toHaveBeenCalledWith('Content-Disposition', 'attachment; filename="altertrack-v1.0.0.apk"');
+    expect(res.setHeader).toHaveBeenCalledWith(
+      'Content-Type',
+      'application/vnd.android.package-archive',
+    );
+    expect(res.setHeader).toHaveBeenCalledWith(
+      'Content-Disposition',
+      'attachment; filename="altertrack-v1.0.0.apk"',
+    );
     expect(res.sendFile).toHaveBeenCalled();
   });
 
@@ -100,7 +114,10 @@ describe('DownloadController', () => {
     const res = mockResponse();
     controller.downloadApk(res);
 
-    expect(res.redirect).toHaveBeenCalledWith(302, 'https://cdn.altertrack.app/altertrack.apk');
+    expect(res.redirect).toHaveBeenCalledWith(
+      302,
+      'https://cdn.altertrack.app/altertrack.apk',
+    );
   });
 
   it('should return JSON metadata on /api/apk-info', () => {

@@ -20,14 +20,8 @@ export const ApiService = {
       return 'https://altertrack.onrender.com';
     }
 
-    // EN DÉVELOPPEMENT (Expo Go / Local) : On regarde si une URL locale a été configurée, sinon on prend le localhost par défaut
-    const savedUrl = await StorageService.getServerUrl();
-    if (savedUrl && !savedUrl.includes('onrender.com')) {
-      return savedUrl;
-    }
-
-    const defaultLocalUrl = Platform.OS === 'android' ? 'http://192.168.1.102:3000' : 'http://localhost:3000';
-    return defaultLocalUrl;
+    // EN DÉVELOPPEMENT (Expo Go / Local) : résolution centralisée (.env > URL saisie > IP de Metro)
+    return StorageService.getServerUrl();
   },
 
   async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
@@ -70,7 +64,10 @@ export const ApiService = {
       } catch {
         // Fallback status text
       }
-      throw new Error(errorMessage);
+      // On conserve le code HTTP pour que l'app puisse réagir (ex : 401 => déconnexion)
+      const httpError = new Error(errorMessage) as Error & { status?: number };
+      httpError.status = response.status;
+      throw httpError;
     }
 
     if (response.status === 204) {
@@ -92,9 +89,13 @@ export const ApiService = {
     cities?: string[];
     sortBy?: string;
     sortOrder?: 'asc' | 'desc';
+    limit?: number;
+    offset?: number;
   }): Promise<{
     items: Company[];
     total: number;
+    limit: number;
+    offset: number;
   }> {
     const params = new URLSearchParams();
     if (query?.search) params.append('search', query.search);
@@ -110,6 +111,8 @@ export const ApiService = {
     }
     if (query?.sortBy) params.append('sortBy', query.sortBy);
     if (query?.sortOrder) params.append('sortOrder', query.sortOrder);
+    if (typeof query?.limit === 'number') params.append('limit', String(query.limit));
+    if (typeof query?.offset === 'number') params.append('offset', String(query.offset));
 
     const queryString = params.toString() ? `?${params.toString()}` : '';
     return this.request(`/companies${queryString}`);

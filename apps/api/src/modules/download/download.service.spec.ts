@@ -40,21 +40,24 @@ describe('DownloadService', () => {
 
   it('should handle external download url when configured', () => {
     jest.spyOn(configService, 'get').mockImplementation((key: string) => {
-      if (key === 'APK_DOWNLOAD_URL') return 'https://github.com/Marfael34/AlterTrack/releases/download/v1.0.0/altertrack.apk';
+      if (key === 'APK_DOWNLOAD_URL')
+        return 'https://github.com/Marfael34/AlterTrack/releases/download/v1.0.0/altertrack.apk';
       return null;
     });
 
     const info = service.getApkInfo();
     expect(info.isExternal).toBe(true);
-    expect(info.externalUrl).toBe('https://github.com/Marfael34/AlterTrack/releases/download/v1.0.0/altertrack.apk');
+    expect(info.externalUrl).toBe(
+      'https://github.com/Marfael34/AlterTrack/releases/download/v1.0.0/altertrack.apk',
+    );
   });
 
   it('should generate valid landing page html with doctype and title', () => {
     const html = service.getLandingHtml('https://altertrack.app');
     expect(html).toContain('<!DOCTYPE html>');
     expect(html).toContain('AlterTrack');
-    expect(html).toContain('Télécharger l\'APK');
-    expect(html).toContain('Guide d\'installation');
+    expect(html).toContain("Télécharger l'APK");
+    expect(html).toContain("Guide d'installation");
   });
 
   it('should generate friendly not found html', () => {
