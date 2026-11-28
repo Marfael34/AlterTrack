@@ -39,6 +39,7 @@ describe('CompaniesService', () => {
           .fn()
           .mockResolvedValue([{ status: Status.TO_SEND, _count: { id: 1 } }]),
       },
+      $queryRaw: jest.fn().mockResolvedValue([]),
       companyActivity: {
         create: jest.fn().mockResolvedValue({ id: 'act-1' }),
         findMany: jest.fn().mockResolvedValue([]),
@@ -133,6 +134,41 @@ describe('CompaniesService', () => {
           }),
         }),
       );
+    });
+  });
+
+  describe('findAll — derniers événements', () => {
+    it('charge les événements de toute la page en une seule requête', async () => {
+      const recent = {
+        id: 'act-9',
+        companyId: mockCompany.id,
+        type: 'CALL',
+        title: 'Appel RH',
+        performedAt: new Date('2026-11-25T10:00:00Z'),
+      };
+      prisma.$queryRaw.mockResolvedValueOnce([recent]);
+
+      const result = await service.findAll({ limit: 50, offset: 0 });
+
+      expect(prisma.$queryRaw).toHaveBeenCalledTimes(1);
+      expect(result.items[0].recentActivities).toEqual([
+        {
+          id: 'act-9',
+          type: 'CALL',
+          title: 'Appel RH',
+          performedAt: recent.performedAt,
+        },
+      ]);
+    });
+
+    it("n'interroge pas l'historique quand la liste est vide", async () => {
+      prisma.company.findMany.mockResolvedValueOnce([]);
+      prisma.company.count.mockResolvedValueOnce(0);
+
+      const result = await service.findAll({ limit: 50, offset: 0 });
+
+      expect(prisma.$queryRaw).not.toHaveBeenCalled();
+      expect(result.items).toEqual([]);
     });
   });
 

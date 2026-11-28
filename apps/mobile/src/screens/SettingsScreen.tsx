@@ -19,6 +19,7 @@ import { ReferencePointModal } from '../components/ReferencePointModal';
 import { Colors } from '../constants/colors';
 import { CALL_FOLLOW_UP_DELAY_DAYS } from '../constants/followUp';
 import { useAuth } from '../context/AuthContext';
+import { useDiscardChangesGuard } from '../hooks/useDiscardChangesGuard';
 import { AlertService as Alert } from '../services/alert.service';
 import { ApiService } from '../services/api.service';
 import { LocationService, ReferencePoint } from '../services/location.service';
@@ -53,9 +54,9 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
   const [serverUrl, setServerUrl] = useState('');
   const [apiKey, setApiKey] = useState('');
   const [template, setTemplate] = useState('');
+  const [savedTemplate, setSavedTemplate] = useState('');
   const [hasCv, setHasCv] = useState(Boolean(user?.hasCv));
   const [pushToken, setPushToken] = useState<string | null>(null);
-  const [tunnelUrl, setTunnelUrl] = useState<string>('');
 
   const [loadingConfig, setLoadingConfig] = useState(true);
   const [savingTemplate, setSavingTemplate] = useState(false);
@@ -97,6 +98,14 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
   useEffect(() => {
     void loadInitialSettings();
   }, []);
+
+  // Seuls les champs enregistrables comptent (pas ceux de l'e-mail de test).
+  const isProfileDirty =
+    profileFullName.trim() !== (user?.fullName || '') ||
+    profileGmailUser.trim() !== (user?.gmailUser || user?.email || '') ||
+    profileGmailAppPassword.trim() !== '';
+  const isTemplateDirty = template.trim() !== savedTemplate.trim();
+  useDiscardChangesGuard(isProfileDirty || isTemplateDirty);
 
   const handleSaveProfile = async () => {
     setSavingProfile(true);
@@ -193,7 +202,6 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
       if (savedTestEmail) {
         setTestEmail(savedTestEmail);
       }
-      setTunnelUrl(StorageService.getTunnelUrl());
 
       // Charge la configuration distante et les statistiques si le serveur est joignable
       try {
@@ -202,6 +210,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
           ApiService.getCompanyStats().catch(() => null),
         ]);
         setTemplate(config.template);
+        setSavedTemplate(config.template);
         setHasCv(config.hasCv);
         if (companyStats) {
           setStats(companyStats);
@@ -250,6 +259,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
         ApiService.getCompanyStats().catch(() => null),
       ]);
       setTemplate(config.template);
+      setSavedTemplate(config.template);
       setHasCv(config.hasCv);
       setPushToken(config.expoPushToken || null);
       if (companyStats) {
@@ -303,6 +313,8 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
     setSavingTemplate(true);
     try {
       await ApiService.updateTemplate(template.trim());
+      setTemplate(template.trim());
+      setSavedTemplate(template.trim());
       Alert.alert('Succès', 'Modèle de mail de référence mis à jour pour Gemini !');
     } catch (err) {
       Alert.alert('Erreur', err instanceof Error ? err.message : 'Échec de la sauvegarde');
@@ -503,39 +515,14 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
             style={styles.input}
             value={serverUrl}
             onChangeText={setServerUrl}
-            placeholder="https://...trycloudflare.com ou http://192.168.x.y:3000"
+            placeholder="http://192.168.x.y:3000"
             placeholderTextColor={Colors.textMuted}
             autoCapitalize="none"
             autoCorrect={false}
           />
 
-          {/* Raccourcis d'URL (Tunnel Cloudflare 4G/5G, Wi-Fi local) */}
+          {/* Raccourci d'URL (Wi-Fi local) */}
           <View style={styles.presetsRow}>
-            {tunnelUrl ? (
-              <TouchableOpacity
-                style={[
-                  styles.presetChip,
-                  serverUrl === tunnelUrl && styles.presetChipActive,
-                ]}
-                onPress={() => setServerUrl(tunnelUrl)}
-                activeOpacity={0.7}
-              >
-                <Ionicons
-                  name="globe-outline"
-                  size={13}
-                  color={serverUrl === tunnelUrl ? '#FFFFFF' : Colors.accent}
-                />
-                <Text
-                  style={[
-                    styles.presetChipText,
-                    serverUrl === tunnelUrl && styles.presetChipTextActive,
-                  ]}
-                >
-                  Tunnel 4G/5G
-                </Text>
-              </TouchableOpacity>
-            ) : null}
-
             <TouchableOpacity
               style={[
                 styles.presetChip,
@@ -558,13 +545,6 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
                 Wi-Fi local (PC)
               </Text>
             </TouchableOpacity>
-          </View>
-
-          <View style={styles.tunnelInfoCard}>
-            <Ionicons name="information-circle-outline" size={16} color={Colors.accent} />
-            <Text style={styles.tunnelInfoText}>
-              <Text style={{ fontWeight: '700', color: Colors.text }}>Accès partout (4G/5G) :</Text> Utilisez le Tunnel Cloudflare pour joindre votre serveur en déplacement.
-            </Text>
           </View>
 
           <Text style={styles.fieldLabel}>Clé d'API statique (x-api-key)</Text>
@@ -1229,24 +1209,6 @@ const styles = StyleSheet.create({
   presetChipTextActive: {
     color: Colors.accent,
     fontWeight: '700',
-  },
-  tunnelInfoCard: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    backgroundColor: `${Colors.accent}15`,
-    borderColor: `${Colors.accent}40`,
-    borderWidth: 1,
-    borderRadius: 10,
-    padding: 10,
-    gap: 8,
-    marginTop: 10,
-    marginBottom: 6,
-  },
-  tunnelInfoText: {
-    flex: 1,
-    fontSize: 11,
-    color: Colors.textSecondary,
-    lineHeight: 16,
   },
   testActionsRow: {
     flexDirection: 'row',

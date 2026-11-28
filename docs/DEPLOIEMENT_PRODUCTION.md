@@ -18,7 +18,7 @@ Ce document détaille l'ensemble des procédures, configurations et commandes po
 ┌────────────────────────────────────────────────────────────────────────┐
 │                     SERVEUR DE PRODUCTION (VPS / CLOUD)                │
 │                                                                        │
-│  [Firewall UFW] : Ports 80 (HTTP) et 443 (HTTPS) ou Cloudflare Tunnel   │
+│  [Firewall UFW] : Ports 80 (HTTP) et 443 (HTTPS)                        │
 │                                                                        │
 │  ┌──────────────────────────────────────────────────────────────────┐  │
 │  │     REVERSE PROXY (Nginx / Caddy / Certbot SSL Let's Encrypt)     │  │

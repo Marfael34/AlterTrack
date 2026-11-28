@@ -12,6 +12,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { SwipeDownSheet } from './SwipeDownSheet';
 import { Colors } from '../constants/colors';
 import { useAuth } from '../context/AuthContext';
 import { useCvImport } from '../hooks/useCvImport';
@@ -235,7 +236,7 @@ export const EmailPreviewModal: React.FC<EmailPreviewModalProps> = ({
       onRequestClose={onClose}
     >
       <View style={styles.modalOverlay}>
-        <View style={styles.modalContainer}>
+        <SwipeDownSheet style={styles.modalContainer} onClose={onClose}>
           {/* Header */}
           <View style={styles.modalHeader}>
             <View style={{ flex: 1, paddingRight: 8 }}>
@@ -486,7 +487,7 @@ export const EmailPreviewModal: React.FC<EmailPreviewModalProps> = ({
                   </View>
                 )}
           </View>
-        </View>
+        </SwipeDownSheet>
       </View>
     </Modal>
   );

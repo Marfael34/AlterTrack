@@ -12,6 +12,11 @@ import { CreateCompanyDto } from './dto/create-company.dto';
 import { QueryCompanyDto } from './dto/query-company.dto';
 import { UpdateActivityDto } from './dto/update-activity.dto';
 import { UpdateCompanyDto } from './dto/update-company.dto';
+import {
+  CARD_RECENT_ACTIVITIES_COUNT,
+  RecentActivityRow,
+  attachRecentActivities,
+} from './recent-activities';
 
 @Injectable()
 export class CompaniesService {
@@ -253,12 +258,39 @@ export class CompaniesService {
       this.prisma.company.count({ where }),
     ]);
 
+    const recentRows = await this.findRecentActivityRows(
+      items.map((c) => c.id),
+    );
+
     return {
-      items,
+      items: attachRecentActivities(items, recentRows),
       total,
       limit: query.limit,
       offset: query.offset,
     };
+  }
+
+  /**
+   * Derniers événements de plusieurs entreprises en une seule requête
+   * (évite une requête par carte de la liste).
+   */
+  private async findRecentActivityRows(
+    companyIds: string[],
+  ): Promise<RecentActivityRow[]> {
+    if (companyIds.length === 0) return [];
+    return this.prisma.$queryRaw<RecentActivityRow[]>`
+      SELECT "id", "companyId", "type", "title", "performedAt"
+      FROM (
+        SELECT "id", "companyId", "type", "title", "performedAt",
+          ROW_NUMBER() OVER (
+            PARTITION BY "companyId"
+            ORDER BY "performedAt" DESC, "createdAt" DESC
+          ) AS "rank"
+        FROM "CompanyActivity"
+        WHERE "companyId" IN (${Prisma.join(companyIds)})
+      ) AS "ranked"
+      WHERE "rank" <= ${CARD_RECENT_ACTIVITIES_COUNT}
+    `;
   }
 
   async findOne(id: string, userId?: string) {

@@ -25,7 +25,6 @@ import { useAuth } from '../context/AuthContext';
 import { AlertService as Alert } from '../services/alert.service';
 import { ApiService } from '../services/api.service';
 import { FilterStorageService } from '../services/filterStorage.service';
-import { StorageService } from '../services/storage.service';
 import { LocationService, ReferencePoint } from '../services/location.service';
 import { Company, CompanyStats, STATUS_LABELS, Status } from '../types/company';
 
@@ -264,45 +263,19 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
     try {
       setConnectionError(false);
       const backendSortBy = sortBy === 'distance' ? 'updatedAt' : sortBy;
-      let companiesRes, statsRes, citiesRes;
-
-      try {
-        [companiesRes, statsRes, citiesRes] = await Promise.all([
-          ApiService.getCompanies({
-            statuses: selectedStatuses.length > 0 ? selectedStatuses : undefined,
-            cities: selectedCities.length > 0 ? selectedCities : undefined,
-            search: searchQuery.trim() || undefined,
-            sortBy: backendSortBy,
-            sortOrder,
-            limit: 500,
-            offset: 0,
-          }),
-          ApiService.getCompanyStats(),
-          ApiService.getCities(),
-        ]);
-      } catch (firstErr) {
-        // Fallback automatique : si la première tentative échoue, tenter avec le dernier Tunnel URL Cloudflare
-        const currentStored = await StorageService.getServerUrl();
-        const fallbackTunnel = StorageService.getTunnelUrl();
-        if (fallbackTunnel && currentStored !== fallbackTunnel) {
-          await StorageService.setServerUrl(fallbackTunnel);
-          [companiesRes, statsRes, citiesRes] = await Promise.all([
-            ApiService.getCompanies({
-              statuses: selectedStatuses.length > 0 ? selectedStatuses : undefined,
-              cities: selectedCities.length > 0 ? selectedCities : undefined,
-              search: searchQuery.trim() || undefined,
-              sortBy: backendSortBy,
-              sortOrder,
-              limit: 500,
-              offset: 0,
-            }),
-            ApiService.getCompanyStats(),
-            ApiService.getCities(),
-          ]);
-        } else {
-          throw firstErr;
-        }
-      }
+      const [companiesRes, statsRes, citiesRes] = await Promise.all([
+        ApiService.getCompanies({
+          statuses: selectedStatuses.length > 0 ? selectedStatuses : undefined,
+          cities: selectedCities.length > 0 ? selectedCities : undefined,
+          search: searchQuery.trim() || undefined,
+          sortBy: backendSortBy,
+          sortOrder,
+          limit: 500,
+          offset: 0,
+        }),
+        ApiService.getCompanyStats(),
+        ApiService.getCities(),
+      ]);
 
       setCompanies(companiesRes.items);
       setTotalCount(companiesRes.total);
@@ -939,10 +912,6 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             style={styles.reconnectBtn}
             onPress={async () => {
               setRefreshing(true);
-              const tunnel = StorageService.getTunnelUrl();
-              if (tunnel) {
-                await StorageService.setServerUrl(tunnel);
-              }
               await loadData();
             }}
             activeOpacity={0.8}

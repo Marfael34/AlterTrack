@@ -24,6 +24,7 @@ import { CompanyActivityTimeline } from '../components/CompanyActivityTimeline';
 import { EditActivityModal } from '../components/EditActivityModal';
 import { Colors } from '../constants/colors';
 import { useAuth } from '../context/AuthContext';
+import { useDiscardChangesGuard } from '../hooks/useDiscardChangesGuard';
 import { AlertService as Alert } from '../services/alert.service';
 import { ApiService } from '../services/api.service';
 import { LocationService, ReferencePoint } from '../services/location.service';
@@ -36,6 +37,9 @@ interface CompanyDetailScreenProps {
   refPoint?: ReferencePoint | null;
   onUpdateRefPoint?: (point: ReferencePoint | null) => void;
 }
+
+/** Domaine des adresses factices des fiches enregistrées sans e-mail. */
+const NO_EMAIL_DOMAIN = '@sans-email.altertrack';
 
 const ALL_STATUSES: Status[] = [
   'AUTO_SEND',
@@ -67,7 +71,7 @@ export const CompanyDetailScreen: React.FC<CompanyDetailScreenProps> = ({
     typeof initialCompany.longitude === 'number' ? initialCompany.longitude : undefined,
   );
   const [email, setEmail] = useState(
-    initialCompany.email?.endsWith('@sans-email.altertrack')
+    initialCompany.email?.endsWith(NO_EMAIL_DOMAIN)
       ? ''
       : initialCompany.email || '',
   );
@@ -75,6 +79,19 @@ export const CompanyDetailScreen: React.FC<CompanyDetailScreenProps> = ({
   const [notes, setNotes] = useState(initialCompany.notes || '');
   const [status, setStatus] = useState<Status>(initialCompany.status);
   const [saving, setSaving] = useState(false);
+
+  // Comparé à la dernière version enregistrée (`company`), avec les mêmes
+  // normalisations que l'enregistrement (trim, champs vides, e-mail factice).
+  const savedEmail = company.email?.endsWith(NO_EMAIL_DOMAIN) ? '' : company.email || '';
+  const isDirty =
+    name.trim() !== company.name ||
+    address.trim() !== (company.address || '') ||
+    city.trim() !== (company.city || '') ||
+    email.trim() !== savedEmail ||
+    phone.trim() !== (company.phone || '') ||
+    notes.trim() !== (company.notes || '') ||
+    status !== company.status;
+  const { leaveWithoutConfirm } = useDiscardChangesGuard(isDirty);
   const [sendingFollowUp, setSendingFollowUp] = useState(false);
   const [sendingInitial, setSendingInitial] = useState(false);
   const [refPoint, setRefPoint] = useState<ReferencePoint | null>(propRefPoint || null);
@@ -214,7 +231,7 @@ export const CompanyDetailScreen: React.FC<CompanyDetailScreenProps> = ({
 
   const handleOpenGmailApp = async () => {
     const targetEmail = email.trim() || company.email;
-    if (!targetEmail || targetEmail.endsWith('@sans-email.altertrack')) {
+    if (!targetEmail || targetEmail.endsWith(NO_EMAIL_DOMAIN)) {
       Alert.alert(
         'Adresse e-mail requise',
         'Veuillez renseigner une adresse e-mail valide pour cette entreprise.',
@@ -260,7 +277,7 @@ export const CompanyDetailScreen: React.FC<CompanyDetailScreenProps> = ({
     const emailToSave =
       email.trim() ||
       company.email ||
-      `contact.${company.id.slice(0, 8)}@sans-email.altertrack`;
+      `contact.${company.id.slice(0, 8)}${NO_EMAIL_DOMAIN}`;
 
     setSaving(true);
     try {
@@ -275,11 +292,17 @@ export const CompanyDetailScreen: React.FC<CompanyDetailScreenProps> = ({
         notes: notes.trim() || undefined,
       });
 
-      if (status !== company.status) {
-        await ApiService.updateCompanyStatus(company.id, status);
-      }
+      // La fiche enregistrée doit refléter le statut final, sinon elle
+      // paraîtrait encore modifiée après l'enregistrement.
+      const saved =
+        status !== company.status
+          ? await ApiService.updateCompanyStatus(company.id, status)
+          : updated;
 
-      setCompany(updated);
+      setCompany(saved);
+      // Un e-mail vidé n'est pas enregistré (l'ancien est conservé) : le champ
+      // affiche de nouveau la valeur réellement en base.
+      setEmail(saved.email?.endsWith(NO_EMAIL_DOMAIN) ? '' : saved.email || '');
       onUpdated();
       void loadActivities();
       Alert.alert(
@@ -306,7 +329,7 @@ export const CompanyDetailScreen: React.FC<CompanyDetailScreenProps> = ({
 
   const handleSendInitial = () => {
     const targetEmail = email.trim() || company.email;
-    if (!targetEmail || targetEmail.endsWith('@sans-email.altertrack')) {
+    if (!targetEmail || targetEmail.endsWith(NO_EMAIL_DOMAIN)) {
       Alert.alert(
         'Adresse e-mail requise',
         'Veuillez d\'abord renseigner une adresse e-mail valide pour cette entreprise.',
@@ -494,7 +517,7 @@ export const CompanyDetailScreen: React.FC<CompanyDetailScreenProps> = ({
             try {
               await ApiService.deleteCompany(company.id);
               onUpdated();
-              onBack();
+              leaveWithoutConfirm();
             } catch (err) {
               Alert.alert('Erreur', err instanceof Error ? err.message : 'Échec de la suppression');
             }

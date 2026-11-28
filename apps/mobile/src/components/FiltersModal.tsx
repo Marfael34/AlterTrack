@@ -9,6 +9,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { SwipeDownSheet } from './SwipeDownSheet';
 import { Colors } from '../constants/colors';
 import { CompanyStats, STATUS_LABELS, Status } from '../types/company';
 import { CityItem } from './CityFilterBar';
@@ -121,357 +122,359 @@ export const FiltersModal: React.FC<FiltersModalProps> = ({
       onRequestClose={onClose}
     >
       <SafeAreaView style={styles.safeArea}>
-        {/* Header */}
-        <View style={styles.header}>
-          <TouchableOpacity style={styles.closeBtn} onPress={onClose} activeOpacity={0.7}>
-            <Ionicons name="close" size={24} color={Colors.text} />
-          </TouchableOpacity>
-          <View style={styles.headerTitleContainer}>
-            <Text style={styles.headerTitle}>Filtres & Tri</Text>
-            <Text style={styles.headerSubtitle}>Toutes les options réunies sur une page</Text>
+        <SwipeDownSheet style={styles.sheetFill} onClose={onClose}>
+          {/* Header */}
+          <View style={styles.header}>
+            <TouchableOpacity style={styles.closeBtn} onPress={onClose} activeOpacity={0.7}>
+              <Ionicons name="close" size={24} color={Colors.text} />
+            </TouchableOpacity>
+            <View style={styles.headerTitleContainer}>
+              <Text style={styles.headerTitle}>Filtres & Tri</Text>
+              <Text style={styles.headerSubtitle}>Toutes les options réunies sur une page</Text>
+            </View>
+            <TouchableOpacity
+              style={styles.resetBtn}
+              onPress={handleReset}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.resetBtnText}>Réinitialiser</Text>
+            </TouchableOpacity>
           </View>
-          <TouchableOpacity
-            style={styles.resetBtn}
-            onPress={handleReset}
-            activeOpacity={0.7}
-          >
-            <Text style={styles.resetBtnText}>Réinitialiser</Text>
-          </TouchableOpacity>
-        </View>
 
-        <ScrollView
-          style={styles.content}
-          contentContainerStyle={styles.contentContainer}
-          showsVerticalScrollIndicator={false}
-        >
-          {/* Section 1 : Statuts (Multi-sélection) */}
-          <View style={styles.section}>
-            <View style={styles.sectionHeader}>
-              <View style={styles.sectionTitleRow}>
-                <Ionicons name="flag-outline" size={16} color={Colors.primary} />
-                <Text style={styles.sectionTitle}>Statuts de candidature</Text>
-              </View>
-              <View style={styles.sectionHeaderRight}>
-                {draftStatuses.length > 0 ? (
-                  <TouchableOpacity
-                    onPress={() => setDraftStatuses([])}
-                    style={styles.clearMiniBtn}
-                    activeOpacity={0.7}
+          <ScrollView
+            style={styles.content}
+            contentContainerStyle={styles.contentContainer}
+            showsVerticalScrollIndicator={false}
+          >
+            {/* Section 1 : Statuts (Multi-sélection) */}
+            <View style={styles.section}>
+              <View style={styles.sectionHeader}>
+                <View style={styles.sectionTitleRow}>
+                  <Ionicons name="flag-outline" size={16} color={Colors.primary} />
+                  <Text style={styles.sectionTitle}>Statuts de candidature</Text>
+                </View>
+                <View style={styles.sectionHeaderRight}>
+                  {draftStatuses.length > 0 ? (
+                    <TouchableOpacity
+                      onPress={() => setDraftStatuses([])}
+                      style={styles.clearMiniBtn}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={styles.clearMiniBtnText}>Tous</Text>
+                    </TouchableOpacity>
+                  ) : null}
+                  <Text
+                    style={
+                      draftStatuses.length > 0
+                        ? styles.sectionActiveBadge
+                        : styles.sectionMutedBadge
+                    }
                   >
-                    <Text style={styles.clearMiniBtnText}>Tous</Text>
-                  </TouchableOpacity>
-                ) : null}
-                <Text
-                  style={
-                    draftStatuses.length > 0
-                      ? styles.sectionActiveBadge
-                      : styles.sectionMutedBadge
-                  }
+                    {draftStatuses.length > 0
+                      ? `${draftStatuses.length} sélectionné${draftStatuses.length > 1 ? 's' : ''}`
+                      : 'Tous'}
+                  </Text>
+                </View>
+              </View>
+
+              <View style={styles.chipsGrid}>
+                {/* Option Tous les statuts */}
+                <TouchableOpacity
+                  style={[
+                    styles.statusChip,
+                    draftStatuses.length === 0 && styles.statusChipActiveAll,
+                  ]}
+                  onPress={() => setDraftStatuses([])}
+                  activeOpacity={0.7}
                 >
-                  {draftStatuses.length > 0
-                    ? `${draftStatuses.length} sélectionné${draftStatuses.length > 1 ? 's' : ''}`
-                    : 'Tous'}
-                </Text>
+                  <Ionicons
+                    name={
+                      draftStatuses.length === 0
+                        ? 'checkmark-circle'
+                        : 'ellipse-outline'
+                    }
+                    size={15}
+                    color={
+                      draftStatuses.length === 0 ? Colors.primary : Colors.textMuted
+                    }
+                  />
+                  <Text
+                    style={[
+                      styles.chipLabel,
+                      draftStatuses.length === 0 && styles.chipLabelActive,
+                    ]}
+                  >
+                    Tous les statuts
+                  </Text>
+                  <View
+                    style={[
+                      styles.countPill,
+                      draftStatuses.length === 0 && styles.countPillActive,
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.countPillText,
+                        draftStatuses.length === 0 && styles.countPillTextActive,
+                      ]}
+                    >
+                      {totalCount}
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+
+                {/* Statuts individuels multi-sélectionnables */}
+                {ALL_STATUSES.map((st) => {
+                  const isSelected = draftStatuses.includes(st);
+                  const count = stats ? stats[st] || 0 : 0;
+                  const color = Colors.status[st];
+
+                  return (
+                    <TouchableOpacity
+                      key={st}
+                      style={[
+                        styles.statusChip,
+                        isSelected && {
+                          backgroundColor: `${color}25`,
+                          borderColor: color,
+                        },
+                      ]}
+                      onPress={() => handleToggleStatus(st)}
+                      activeOpacity={0.7}
+                    >
+                      <Ionicons
+                        name={isSelected ? 'checkbox' : 'square-outline'}
+                        size={16}
+                        color={isSelected ? color : Colors.textMuted}
+                      />
+                      <View style={[styles.statusDot, { backgroundColor: color }]} />
+                      <Text
+                        style={[
+                          styles.chipLabel,
+                          isSelected && { color: color, fontWeight: '700' },
+                        ]}
+                        numberOfLines={1}
+                      >
+                        {STATUS_LABELS[st]}
+                      </Text>
+                      {count > 0 && (
+                        <View
+                          style={[
+                            styles.countPill,
+                            isSelected && { backgroundColor: color },
+                          ]}
+                        >
+                          <Text
+                            style={[
+                              styles.countPillText,
+                              isSelected && { color: '#FFFFFF' },
+                            ]}
+                          >
+                            {count}
+                          </Text>
+                        </View>
+                      )}
+                    </TouchableOpacity>
+                  );
+                })}
               </View>
             </View>
 
-            <View style={styles.chipsGrid}>
-              {/* Option Tous les statuts */}
-              <TouchableOpacity
-                style={[
-                  styles.statusChip,
-                  draftStatuses.length === 0 && styles.statusChipActiveAll,
-                ]}
-                onPress={() => setDraftStatuses([])}
-                activeOpacity={0.7}
-              >
-                <Ionicons
-                  name={
-                    draftStatuses.length === 0
-                      ? 'checkmark-circle'
-                      : 'ellipse-outline'
-                  }
-                  size={15}
-                  color={
-                    draftStatuses.length === 0 ? Colors.primary : Colors.textMuted
-                  }
-                />
+            {/* Section 2 : Villes */}
+            <View style={styles.section}>
+              <View style={styles.sectionHeader}>
+                <View style={styles.sectionTitleRow}>
+                  <Ionicons name="location-outline" size={16} color={Colors.accent} />
+                  <Text style={styles.sectionTitle}>Localisation / Villes</Text>
+                </View>
                 <Text
-                  style={[
-                    styles.chipLabel,
-                    draftStatuses.length === 0 && styles.chipLabelActive,
-                  ]}
+                  style={
+                    draftCities.length > 0
+                      ? styles.sectionActiveBadgeCity
+                      : styles.sectionMutedBadge
+                  }
                 >
-                  Tous les statuts
+                  {draftCities.length > 0
+                    ? `${draftCities.length} sélectionnée${draftCities.length > 1 ? 's' : ''}`
+                    : 'Toutes'}
                 </Text>
-                <View
+              </View>
+
+              <View style={styles.chipsGrid}>
+                <TouchableOpacity
                   style={[
-                    styles.countPill,
-                    draftStatuses.length === 0 && styles.countPillActive,
+                    styles.cityChip,
+                    draftCities.length === 0 && styles.cityChipActiveAll,
                   ]}
+                  onPress={() => setDraftCities([])}
+                  activeOpacity={0.7}
                 >
+                  <Ionicons
+                    name={
+                      draftCities.length === 0
+                        ? 'checkmark-circle'
+                        : 'ellipse-outline'
+                    }
+                    size={14}
+                    color={
+                      draftCities.length === 0 ? Colors.accent : Colors.textMuted
+                    }
+                  />
                   <Text
                     style={[
-                      styles.countPillText,
-                      draftStatuses.length === 0 && styles.countPillTextActive,
+                      styles.chipLabel,
+                      draftCities.length === 0 && styles.chipLabelActive,
                     ]}
                   >
-                    {totalCount}
+                    Toutes les villes
                   </Text>
-                </View>
-              </TouchableOpacity>
+                </TouchableOpacity>
 
-              {/* Statuts individuels multi-sélectionnables */}
-              {ALL_STATUSES.map((st) => {
-                const isSelected = draftStatuses.includes(st);
-                const count = stats ? stats[st] || 0 : 0;
-                const color = Colors.status[st];
+                {cities.map((c) => {
+                  const isSelected = draftCities.some(
+                    (item) => item.toLowerCase() === c.city.toLowerCase(),
+                  );
 
-                return (
-                  <TouchableOpacity
-                    key={st}
-                    style={[
-                      styles.statusChip,
-                      isSelected && {
-                        backgroundColor: `${color}25`,
-                        borderColor: color,
-                      },
-                    ]}
-                    onPress={() => handleToggleStatus(st)}
-                    activeOpacity={0.7}
-                  >
-                    <Ionicons
-                      name={isSelected ? 'checkbox' : 'square-outline'}
-                      size={16}
-                      color={isSelected ? color : Colors.textMuted}
-                    />
-                    <View style={[styles.statusDot, { backgroundColor: color }]} />
-                    <Text
+                  return (
+                    <TouchableOpacity
+                      key={c.city}
                       style={[
-                        styles.chipLabel,
-                        isSelected && { color: color, fontWeight: '700' },
+                        styles.cityChip,
+                        isSelected && styles.cityChipActive,
                       ]}
-                      numberOfLines={1}
+                      onPress={() => handleToggleCity(c.city)}
+                      activeOpacity={0.7}
                     >
-                      {STATUS_LABELS[st]}
-                    </Text>
-                    {count > 0 && (
+                      <Ionicons
+                        name={isSelected ? 'checkbox' : 'square-outline'}
+                        size={14}
+                        color={isSelected ? Colors.accent : Colors.textMuted}
+                      />
+                      <Text
+                        style={[
+                          styles.chipLabel,
+                          isSelected && styles.cityChipLabelActive,
+                        ]}
+                        numberOfLines={1}
+                      >
+                        {c.city}
+                      </Text>
                       <View
                         style={[
                           styles.countPill,
-                          isSelected && { backgroundColor: color },
+                          isSelected && styles.cityCountPillActive,
                         ]}
                       >
                         <Text
                           style={[
                             styles.countPillText,
-                            isSelected && { color: '#FFFFFF' },
+                            isSelected && styles.cityCountPillTextActive,
                           ]}
                         >
-                          {count}
+                          {c.count}
                         </Text>
                       </View>
-                    )}
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-          </View>
-
-          {/* Section 2 : Villes */}
-          <View style={styles.section}>
-            <View style={styles.sectionHeader}>
-              <View style={styles.sectionTitleRow}>
-                <Ionicons name="location-outline" size={16} color={Colors.accent} />
-                <Text style={styles.sectionTitle}>Localisation / Villes</Text>
-              </View>
-              <Text
-                style={
-                  draftCities.length > 0
-                    ? styles.sectionActiveBadgeCity
-                    : styles.sectionMutedBadge
-                }
-              >
-                {draftCities.length > 0
-                  ? `${draftCities.length} sélectionnée${draftCities.length > 1 ? 's' : ''}`
-                  : 'Toutes'}
-              </Text>
-            </View>
-
-            <View style={styles.chipsGrid}>
-              <TouchableOpacity
-                style={[
-                  styles.cityChip,
-                  draftCities.length === 0 && styles.cityChipActiveAll,
-                ]}
-                onPress={() => setDraftCities([])}
-                activeOpacity={0.7}
-              >
-                <Ionicons
-                  name={
-                    draftCities.length === 0
-                      ? 'checkmark-circle'
-                      : 'ellipse-outline'
-                  }
-                  size={14}
-                  color={
-                    draftCities.length === 0 ? Colors.accent : Colors.textMuted
-                  }
-                />
-                <Text
-                  style={[
-                    styles.chipLabel,
-                    draftCities.length === 0 && styles.chipLabelActive,
-                  ]}
-                >
-                  Toutes les villes
-                </Text>
-              </TouchableOpacity>
-
-              {cities.map((c) => {
-                const isSelected = draftCities.some(
-                  (item) => item.toLowerCase() === c.city.toLowerCase(),
-                );
-
-                return (
-                  <TouchableOpacity
-                    key={c.city}
-                    style={[
-                      styles.cityChip,
-                      isSelected && styles.cityChipActive,
-                    ]}
-                    onPress={() => handleToggleCity(c.city)}
-                    activeOpacity={0.7}
-                  >
-                    <Ionicons
-                      name={isSelected ? 'checkbox' : 'square-outline'}
-                      size={14}
-                      color={isSelected ? Colors.accent : Colors.textMuted}
-                    />
-                    <Text
-                      style={[
-                        styles.chipLabel,
-                        isSelected && styles.cityChipLabelActive,
-                      ]}
-                      numberOfLines={1}
-                    >
-                      {c.city}
-                    </Text>
-                    <View
-                      style={[
-                        styles.countPill,
-                        isSelected && styles.cityCountPillActive,
-                      ]}
-                    >
-                      <Text
-                        style={[
-                          styles.countPillText,
-                          isSelected && styles.cityCountPillTextActive,
-                        ]}
-                      >
-                        {c.count}
-                      </Text>
-                    </View>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-          </View>
-
-          {/* Section 3 : Tri */}
-          <View style={styles.section}>
-            <View style={styles.sectionHeader}>
-              <View style={styles.sectionTitleRow}>
-                <Ionicons name="swap-vertical-outline" size={16} color={Colors.brandGreen} />
-                <Text style={styles.sectionTitle}>Ordre d'affichage</Text>
+                    </TouchableOpacity>
+                  );
+                })}
               </View>
             </View>
 
-            <View style={styles.sortList}>
-              {[
-                {
-                  id: 'updatedAt',
-                  label: 'Dernière modification (Plus récentes d’abord)',
-                  icon: 'time-outline',
-                  order: 'desc' as const,
-                },
-                {
-                  id: 'distance',
-                  label: 'Distance (Plus proches de mon adresse d’abord)',
-                  icon: 'compass-outline',
-                  order: 'asc' as const,
-                },
-                {
-                  id: 'name',
-                  label: 'Nom de l’entreprise (A → Z)',
-                  icon: 'business-outline',
-                  order: 'asc' as const,
-                },
-                {
-                  id: 'city',
-                  label: 'Ville (A → Z)',
-                  icon: 'map-outline',
-                  order: 'asc' as const,
-                },
-              ].map((opt) => {
-                const isSelected = draftSortBy === opt.id;
+            {/* Section 3 : Tri */}
+            <View style={styles.section}>
+              <View style={styles.sectionHeader}>
+                <View style={styles.sectionTitleRow}>
+                  <Ionicons name="swap-vertical-outline" size={16} color={Colors.brandGreen} />
+                  <Text style={styles.sectionTitle}>Ordre d'affichage</Text>
+                </View>
+              </View>
 
-                return (
-                  <TouchableOpacity
-                    key={opt.id}
-                    style={[
-                      styles.sortOption,
-                      isSelected && styles.sortOptionActive,
-                    ]}
-                    onPress={() => {
-                      setDraftSortBy(
-                        opt.id as 'updatedAt' | 'name' | 'city' | 'distance',
-                      );
-                      setDraftSortOrder(opt.order);
-                    }}
-                    activeOpacity={0.7}
-                  >
-                    <View style={styles.sortOptionLeft}>
+              <View style={styles.sortList}>
+                {[
+                  {
+                    id: 'updatedAt',
+                    label: 'Dernière modification (Plus récentes d’abord)',
+                    icon: 'time-outline',
+                    order: 'desc' as const,
+                  },
+                  {
+                    id: 'distance',
+                    label: 'Distance (Plus proches de mon adresse d’abord)',
+                    icon: 'compass-outline',
+                    order: 'asc' as const,
+                  },
+                  {
+                    id: 'name',
+                    label: 'Nom de l’entreprise (A → Z)',
+                    icon: 'business-outline',
+                    order: 'asc' as const,
+                  },
+                  {
+                    id: 'city',
+                    label: 'Ville (A → Z)',
+                    icon: 'map-outline',
+                    order: 'asc' as const,
+                  },
+                ].map((opt) => {
+                  const isSelected = draftSortBy === opt.id;
+
+                  return (
+                    <TouchableOpacity
+                      key={opt.id}
+                      style={[
+                        styles.sortOption,
+                        isSelected && styles.sortOptionActive,
+                      ]}
+                      onPress={() => {
+                        setDraftSortBy(
+                          opt.id as 'updatedAt' | 'name' | 'city' | 'distance',
+                        );
+                        setDraftSortOrder(opt.order);
+                      }}
+                      activeOpacity={0.7}
+                    >
+                      <View style={styles.sortOptionLeft}>
+                        <Ionicons
+                          name={opt.icon as any}
+                          size={16}
+                          color={isSelected ? Colors.brandGreen : Colors.textSecondary}
+                        />
+                        <Text
+                          style={[
+                            styles.sortOptionLabel,
+                            isSelected && styles.sortOptionLabelActive,
+                          ]}
+                        >
+                          {opt.label}
+                        </Text>
+                      </View>
                       <Ionicons
-                        name={opt.icon as any}
-                        size={16}
-                        color={isSelected ? Colors.brandGreen : Colors.textSecondary}
+                        name={isSelected ? 'radio-button-on' : 'radio-button-off'}
+                        size={20}
+                        color={isSelected ? Colors.brandGreen : Colors.borderLight}
                       />
-                      <Text
-                        style={[
-                          styles.sortOptionLabel,
-                          isSelected && styles.sortOptionLabelActive,
-                        ]}
-                      >
-                        {opt.label}
-                      </Text>
-                    </View>
-                    <Ionicons
-                      name={isSelected ? 'radio-button-on' : 'radio-button-off'}
-                      size={20}
-                      color={isSelected ? Colors.brandGreen : Colors.borderLight}
-                    />
-                  </TouchableOpacity>
-                );
-              })}
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
             </View>
-          </View>
-        </ScrollView>
+          </ScrollView>
 
-        {/* Footer avec Bouton d'application */}
-        <View style={styles.footer}>
-          <TouchableOpacity
-            style={styles.applyButton}
-            onPress={handleApply}
-            activeOpacity={0.85}
-          >
-            <Ionicons name="checkmark-sharp" size={18} color="#FFFFFF" />
-            <Text style={styles.applyButtonText}>
-              Appliquer les filtres
-              {activeFiltersCount > 0 ? ` (${activeFiltersCount} actif${activeFiltersCount > 1 ? 's' : ''})` : ''}
-            </Text>
-          </TouchableOpacity>
-        </View>
+          {/* Footer avec Bouton d'application */}
+          <View style={styles.footer}>
+            <TouchableOpacity
+              style={styles.applyButton}
+              onPress={handleApply}
+              activeOpacity={0.85}
+            >
+              <Ionicons name="checkmark-sharp" size={18} color="#FFFFFF" />
+              <Text style={styles.applyButtonText}>
+                Appliquer les filtres
+                {activeFiltersCount > 0 ? ` (${activeFiltersCount} actif${activeFiltersCount > 1 ? 's' : ''})` : ''}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </SwipeDownSheet>
       </SafeAreaView>
     </Modal>
   );
@@ -481,6 +484,9 @@ const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
     backgroundColor: Colors.background,
+  },
+  sheetFill: {
+    flex: 1,
   },
   header: {
     flexDirection: 'row',

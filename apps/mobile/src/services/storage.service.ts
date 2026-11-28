@@ -1,15 +1,13 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 import Constants from 'expo-constants';
-import tunnelConfig from '../constants/tunnelUrl.json';
 
 const SERVER_URL_KEY = 'altertrack_server_url';
 const API_KEY_KEY = 'altertrack_api_key';
 
-// Sur Web (navigateur sur le PC hôte) : localhost:3000 ou URL de production
-// Sur Mobile : Priorité à l'URL de production si définie, sinon tunnel HTTPS distant, sinon Wi-Fi local
+// Sur Web (navigateur sur le PC hôte) : localhost:3000 ou URL du .env.
+// Sur mobile en dev : API locale du PC (même Wi-Fi). En production : Render.
 const PROD_API_URL = process.env.EXPO_PUBLIC_API_URL?.trim().replace(/\/+$/, '') || '';
-const DEFAULT_TUNNEL_URL = tunnelConfig?.url || '';
 const DEFAULT_LOCAL_WIFI_URL = 'http://192.168.1.27:3000';
 const DEFAULT_WEB_URL = PROD_API_URL || 'http://localhost:3000';
 const RENDER_PRODUCTION_URL = 'https://altertrack.onrender.com';
@@ -25,14 +23,20 @@ function getDevHostApiUrl(): string | null {
   const hostUri = Constants.expoConfig?.hostUri; // ex: "192.168.1.26:8081"
   const host = hostUri?.split(':')[0];
   if (!host || !/^\d{1,3}(\.\d{1,3}){3}$/.test(host)) {
-    return null; // mode --tunnel (*.exp.direct) : pas d'IP exploitable
+    return null; // pas d'IP exploitable (ex. Metro lancé sur localhost)
   }
   return `http://${host}:3000`;
+}
+
+/** Anciennes URL de tunnel Cloudflare (supprimé) encore enregistrées sur l'appareil. */
+function isLegacyTunnelUrl(url: string): boolean {
+  return url.includes('trycloudflare.com');
 }
 
 function isUsableDevUrl(url: string | null): url is string {
   return (
     !!url &&
+    !isLegacyTunnelUrl(url) &&
     !url.includes('localhost') &&
     !url.includes('127.0.0.1') &&
     !url.includes('onrender.com')
@@ -55,12 +59,8 @@ async function checkUrlReachable(url: string, timeoutMs: number = 600): Promise<
 }
 
 export const StorageService = {
-  getTunnelUrl(): string {
-    return DEFAULT_TUNNEL_URL;
-  },
-
   getLocalWifiUrl(): string {
-    return DEFAULT_LOCAL_WIFI_URL;
+    return getDevHostApiUrl() || DEFAULT_LOCAL_WIFI_URL;
   },
 
   getProductionUrl(): string {
@@ -76,22 +76,30 @@ export const StorageService = {
     try {
       const value = await AsyncStorage.getItem(SERVER_URL_KEY);
 
-      // EN DÉVELOPPEMENT (Expo Go) : priorité au .env, puis à l'URL saisie dans l'app,
-      // puis à l'IP du PC déduite de Metro. On n'écrase jamais le stockage avec Render.
+      // EN DÉVELOPPEMENT (Expo Go, local uniquement) : priorité au .env (IP Wi-Fi
+      // du PC), puis à l'URL saisie dans l'app, puis à l'IP du PC déduite de Metro.
+      // On n'écrase jamais le stockage avec Render.
       if (__DEV__) {
         if (PROD_API_URL) return PROD_API_URL;
         if (isUsableDevUrl(value)) return value;
-        return getDevHostApiUrl() || DEFAULT_TUNNEL_URL || DEFAULT_LOCAL_WIFI_URL;
+        return getDevHostApiUrl() || DEFAULT_LOCAL_WIFI_URL;
       }
 
       // EN PRODUCTION : URL enregistrée par l'utilisateur, sinon Render
-      if (value && !value.includes('localhost') && !value.includes('127.0.0.1')) {
+      if (
+        value &&
+        !value.includes('localhost') &&
+        !value.includes('127.0.0.1') &&
+        !isLegacyTunnelUrl(value)
+      ) {
         return value;
       }
       await AsyncStorage.setItem(SERVER_URL_KEY, RENDER_PRODUCTION_URL);
       return RENDER_PRODUCTION_URL;
     } catch {
-      return __DEV__ ? PROD_API_URL || getDevHostApiUrl() || DEFAULT_LOCAL_WIFI_URL : RENDER_PRODUCTION_URL;
+      return __DEV__
+        ? PROD_API_URL || getDevHostApiUrl() || DEFAULT_LOCAL_WIFI_URL
+        : RENDER_PRODUCTION_URL;
     }
   },
 

@@ -6,6 +6,8 @@ import { CALL_FOLLOW_UP_DELAY_DAYS } from '../constants/followUp';
 import { Company } from '../types/company';
 import { StatusBadge } from './StatusBadge';
 import { LocationService } from '../services/location.service';
+import { formatRelativeDay } from '../utils/relativeDate';
+import { getActivityTypeConfig } from './CompanyActivityTimeline';
 
 interface CompanyCardProps {
   company: Company;
@@ -63,6 +65,14 @@ export const CompanyCard: React.FC<CompanyCardProps> = ({
     return (parts[0][0] + parts[1][0]).toUpperCase();
   };
 
+  const recentActivities = company.recentActivities ?? [];
+  const recentActivitiesLabel =
+    recentActivities.length > 0
+      ? recentActivities
+          .map((a) => `${a.title}, ${formatRelativeDay(a.performedAt)}`)
+          .join(' ; ')
+      : 'Aucun événement';
+
   const initials = getInitials(company.name);
   const statusColor = Colors.status[company.status] || Colors.primary;
 
@@ -78,7 +88,7 @@ export const CompanyCard: React.FC<CompanyCardProps> = ({
       onLongPress={onLongPress}
       activeOpacity={0.75}
       accessibilityRole="button"
-      accessibilityLabel={`Entreprise ${company.name}, statut ${company.status}`}
+      accessibilityLabel={`Entreprise ${company.name}, statut ${company.status}. Derniers événements : ${recentActivitiesLabel}`}
     >
       <View style={styles.mainRow}>
         {selectable && (
@@ -178,6 +188,28 @@ export const CompanyCard: React.FC<CompanyCardProps> = ({
               "{company.notes}"
             </Text>
           ) : null}
+
+          {/* Derniers événements de l'historique (EF-2) */}
+          <View style={styles.recentActivities}>
+            {recentActivities.length > 0 ? (
+              recentActivities.map((activity) => {
+                const config = getActivityTypeConfig(activity.type);
+                return (
+                  <View key={activity.id} style={styles.recentActivityRow}>
+                    <Ionicons name={config.icon} size={12} color={config.color} />
+                    <Text style={styles.recentActivityTitle} numberOfLines={1}>
+                      {activity.title}
+                    </Text>
+                    <Text style={styles.recentActivityDate}>
+                      {formatRelativeDay(activity.performedAt)}
+                    </Text>
+                  </View>
+                );
+              })
+            ) : (
+              <Text style={styles.noActivityText}>Aucun événement</Text>
+            )}
+          </View>
 
           {/* Footer métadonnées & Action rapide */}
           <View style={styles.footerRow}>
@@ -393,6 +425,30 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
     marginBottom: 6,
     lineHeight: 16,
+  },
+  recentActivities: {
+    gap: 3,
+    marginTop: 2,
+    marginBottom: 2,
+  },
+  recentActivityRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  recentActivityTitle: {
+    flex: 1,
+    color: Colors.textSecondary,
+    fontSize: 12,
+  },
+  recentActivityDate: {
+    color: Colors.textMuted,
+    fontSize: 11,
+  },
+  noActivityText: {
+    color: Colors.textMuted,
+    fontSize: 12,
+    fontStyle: 'italic',
   },
   footerRow: {
     flexDirection: 'row',
