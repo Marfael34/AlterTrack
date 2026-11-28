@@ -2,7 +2,7 @@
   "expo": {
     "name": "AlterTrack",
     "slug": "altertrack",
-    "version": "1.4.0",
+    "version": "1.6.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "scheme": "altertrack",
@@ -35,7 +35,7 @@
         "backgroundColor": "#0B0F19",
         "foregroundImage": "./assets/android-icon-foreground.png"
       },
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": true
     },
     "ios": {
       "supportsTablet": true,

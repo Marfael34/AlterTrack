@@ -7,7 +7,7 @@ Ce guide vous accompagne pas à pas pour déployer l'application web **AlterTrac
 ## 📋 Architecture & Fonctionnement sur Netlify
 
 * **Application Web Frontend (Expo / React Native Web) :** Déployée et distribuée mondialement sur le CDN haute performance de Netlify avec certificat SSL HTTPS automatique gratuit.
-* **Backend API (NestJS + PostgreSQL) :** Tourne sur votre serveur (Docker, PC local via Tunnel/DuckDNS, VPS, Render ou Railway). L'application web communique directement avec cette API via requêtes HTTPS sécurisées avec CORS activé.
+* **Backend API (NestJS + PostgreSQL) :** Tourne sur votre serveur (Docker, VPS, Render ou Railway). L'application web communique directement avec cette API via requêtes HTTPS sécurisées avec CORS activé.
 
 ---
 

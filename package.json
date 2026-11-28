@@ -7,6 +7,7 @@
     "apps/*"
   ],
   "scripts": {
+    "dev": "bash scripts/dev-local.sh",
     "build": "npm --prefix apps/mobile run build:web",
     "build:web": "npm --prefix apps/mobile run build:web",
     "mobile:build": "npm --prefix apps/mobile run build:web",
@@ -16,12 +17,9 @@
     "api:test": "npm --prefix apps/api run test",
     "api:lint": "npm --prefix apps/api run lint",
     "mobile:start": "npm --prefix apps/mobile run start",
-    "mobile:tunnel": "npm --prefix apps/mobile run start -- --tunnel",
     "mobile:web": "npm --prefix apps/mobile run web",
-    "docker:up": "docker compose up -d && node scripts/tunnel.js",
-    "docker:down": "docker compose down",
-    "tunnel": "node scripts/tunnel.js",
-    "tunnel:watch": "node scripts/tunnel-watchdog.js"
+    "docker:up": "docker compose up -d",
+    "docker:down": "docker compose down"
   },
   "keywords": [
     "nest",

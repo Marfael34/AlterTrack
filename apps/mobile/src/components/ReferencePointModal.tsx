@@ -12,6 +12,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { SwipeDownSheet } from './SwipeDownSheet';
 import { Colors } from '../constants/colors';
 import { AlertService as Alert } from '../services/alert.service';
 import { GeocodeResult, LocationService, ReferencePoint } from '../services/location.service';
@@ -141,7 +142,7 @@ export const ReferencePointModal: React.FC<ReferencePointModalProps> = ({
     >
       <View style={styles.modalOverlay}>
         <SafeAreaView style={styles.safeArea}>
-          <View style={styles.modalCard}>
+          <SwipeDownSheet style={styles.modalCard} onClose={onClose}>
             {/* Header */}
             <View style={styles.header}>
               <View style={styles.titleRow}>
@@ -278,7 +279,7 @@ export const ReferencePointModal: React.FC<ReferencePointModalProps> = ({
                 </>
               )}
             </TouchableOpacity>
-          </View>
+          </SwipeDownSheet>
         </SafeAreaView>
       </View>
     </Modal>

@@ -29,7 +29,6 @@ export default function ServerConfigModal({
   onSave,
 }: ServerConfigModalProps) {
   const [serverUrl, setServerUrl] = useState(currentUrl);
-  const [tunnelUrl, setTunnelUrl] = useState<string | null>(null);
   const [localWifiUrl, setLocalWifiUrl] = useState<string | null>(null);
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<{
@@ -41,8 +40,6 @@ export default function ServerConfigModal({
     if (visible) {
       setServerUrl(currentUrl);
       setTestResult(null);
-      // Récupération des URLs de secours enregistrées
-      setTunnelUrl(StorageService.getTunnelUrl());
       setLocalWifiUrl(StorageService.getLocalWifiUrl());
     }
   }, [visible, currentUrl]);
@@ -123,45 +120,17 @@ export default function ServerConfigModal({
                 setServerUrl(text);
                 setTestResult(null);
               }}
-              placeholder="https://...trycloudflare.com ou http://192.168.x.y:3000"
+              placeholder="http://192.168.x.y:3000"
               placeholderTextColor={Colors.textMuted}
               autoCapitalize="none"
               autoCorrect={false}
             />
 
             {/* Quick Presets */}
-            {(tunnelUrl || localWifiUrl) && (
+            {localWifiUrl && (
               <>
                 <Text style={styles.subLabel}>Raccourcis rapides :</Text>
                 <View style={styles.presetsRow}>
-                  {tunnelUrl ? (
-                    <TouchableOpacity
-                      style={[
-                        styles.presetChip,
-                        serverUrl === tunnelUrl && styles.presetChipActive,
-                      ]}
-                      onPress={() => {
-                        setServerUrl(tunnelUrl);
-                        setTestResult(null);
-                      }}
-                      activeOpacity={0.7}
-                    >
-                      <Ionicons
-                        name="globe-outline"
-                        size={14}
-                        color={serverUrl === tunnelUrl ? '#FFFFFF' : Colors.brandCyan}
-                      />
-                      <Text
-                        style={[
-                          styles.presetChipText,
-                          serverUrl === tunnelUrl && styles.presetChipTextActive,
-                        ]}
-                      >
-                        Tunnel 4G/5G
-                      </Text>
-                    </TouchableOpacity>
-                  ) : null}
-
                   {localWifiUrl ? (
                     <TouchableOpacity
                       style={[

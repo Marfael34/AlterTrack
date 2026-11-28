@@ -11,6 +11,7 @@ import {
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { SwipeDownSheet } from './SwipeDownSheet';
 import { Colors } from '../constants/colors';
 import { CustomDatePicker } from './CustomDatePicker';
 
@@ -136,7 +137,7 @@ export const AddActivityModal: React.FC<AddActivityModalProps> = ({
       <TouchableWithoutFeedback onPress={onClose}>
         <View style={styles.overlay}>
           <TouchableWithoutFeedback onPress={() => {}}>
-            <View style={styles.modalCard}>
+            <SwipeDownSheet style={styles.modalCard} onClose={onClose}>
               {/* Header */}
               <View style={styles.header}>
                 <View style={styles.headerIconWrapper}>
@@ -254,7 +255,7 @@ export const AddActivityModal: React.FC<AddActivityModalProps> = ({
                   )}
                 </TouchableOpacity>
               </View>
-            </View>
+            </SwipeDownSheet>
           </TouchableWithoutFeedback>
         </View>
       </TouchableWithoutFeedback>

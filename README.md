@@ -108,23 +108,22 @@ docker compose ps
 docker compose logs -f api
 ```
 
-### 4. Lancement en développement local
+### 4. Lancement en développement local (Windows + WSL)
 
-**Démarrer l'API NestJS :**
-```bash
-cd apps/api
-npm install
-npx prisma migrate dev
-npm run start:dev
-```
+L'API et PostgreSQL tournent dans Docker (`docker compose up -d`). Pour lancer l'app sur le téléphone :
 
-**Démarrer l'Application Mobile Expo :**
 ```bash
 cd apps/mobile
-npm install
-npx expo start
+npm start
 ```
-Scannez le QR Code avec l'application Expo Go sur votre smartphone Android.
+
+`npm start` (voir `scripts/dev-local.sh`) :
+1. configure le réseau Windows pour le téléphone. Une fenêtre d'autorisation (UAC) s'ouvre au premier lancement et après un redémarrage ;
+2. vérifie que l'API répond ;
+3. écrit l'IP Wi-Fi du PC dans `apps/mobile/.env` ;
+4. lance Metro (`expo start --lan -c`).
+
+Sur le téléphone : même Wi-Fi que le PC, **VPN coupé**, puis scannez le QR code avec Expo Go. Depuis la racine du dépôt, `npm run dev` fait la même chose.
 
 ---
 

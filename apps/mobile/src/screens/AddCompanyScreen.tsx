@@ -17,6 +17,7 @@ import {
   KeyboardAwareCenteredScrollView,
 } from '../components/KeyboardAwareCenteredScrollView';
 import { Colors } from '../constants/colors';
+import { useDiscardChangesGuard } from '../hooks/useDiscardChangesGuard';
 import { AlertService as Alert } from '../services/alert.service';
 import { ApiService } from '../services/api.service';
 import { ReferencePoint } from '../services/location.service';
@@ -55,6 +56,11 @@ export const AddCompanyScreen: React.FC<AddCompanyScreenProps> = ({
   const [status, setStatus] = useState<Status>('AUTO_SEND');
   const [loading, setLoading] = useState(false);
   const [importing, setImporting] = useState(false);
+
+  const isDirty =
+    [name, address, city, email, phone, notes].some((value) => value.trim() !== '') ||
+    status !== 'AUTO_SEND';
+  const { leaveWithoutConfirm } = useDiscardChangesGuard(isDirty);
 
   const scrollViewRef = useRef<any>(null);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
@@ -111,7 +117,7 @@ export const AddCompanyScreen: React.FC<AddCompanyScreenProps> = ({
 
       Alert.alert('Succès', 'Fiche entreprise ajoutée avec succès !');
       onCreated();
-      onBack();
+      leaveWithoutConfirm();
     } catch (err) {
       Alert.alert('Erreur', err instanceof Error ? err.message : "Échec de l'ajout");
     } finally {
@@ -171,7 +177,7 @@ export const AddCompanyScreen: React.FC<AddCompanyScreenProps> = ({
             text: 'Super !',
             onPress: () => {
               onCreated();
-              onBack();
+              leaveWithoutConfirm();
             },
           },
         ]);

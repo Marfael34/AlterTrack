@@ -19,6 +19,14 @@ export interface CompanyActivity {
   createdAt: string;
 }
 
+/** Événement résumé affiché sur la carte de la liste (`GET /companies`). */
+export interface RecentActivity {
+  id: string;
+  type: string;
+  title: string;
+  performedAt: string;
+}
+
 export interface Company {
   id: string;
   name: string;
@@ -35,6 +43,7 @@ export interface Company {
   followUpSentAt?: string | null;
   lastMailId?: string | null;
   activities?: CompanyActivity[];
+  recentActivities?: RecentActivity[];
   createdAt: string;
   updatedAt: string;
 }

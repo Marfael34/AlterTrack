@@ -18,6 +18,7 @@ import {
   CenteredTextInput,
   KeyboardAwareCenteredScrollView,
 } from '../components/KeyboardAwareCenteredScrollView';
+import { SwipeDownSheet } from '../components/SwipeDownSheet';
 import { ReferencePointModal } from '../components/ReferencePointModal';
 import { Colors } from '../constants/colors';
 import { useAuth } from '../context/AuthContext';
@@ -523,7 +524,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
           style={styles.modalOverlay}
         >
-          <View style={styles.modalContainer}>
+          <SwipeDownSheet style={styles.modalContainer} onClose={() => setIsEditModalOpen(false)}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Modifier mon profil</Text>
               <TouchableOpacity
@@ -611,7 +612,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
                 </TouchableOpacity>
               </View>
             </KeyboardAwareCenteredScrollView>
-          </View>
+          </SwipeDownSheet>
         </KeyboardAvoidingView>
       </Modal>
 
